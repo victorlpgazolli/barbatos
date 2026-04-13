@@ -87,13 +87,15 @@
             <h2>MCP Server Setup</h2>
             <p>Add this to your <code>claude_desktop_config.json</code>:</p>
             <pre><code>{
-  "mcpServers": {
-    "barbatos-debugger": {
-      "command": "python3",
-      "args": ["/absolute/path/to/barbatos/mcp_server/server.py"]
-    }
-  }
-}</code></pre>
+                "mcpServers": {
+                    "barbatos-debugger": {
+                        "command": "python3",
+                        "args": ["/absolute/path/to/barbatos/mcp_server/server.py"]
+                    }
+                }
+            }</code></pre>
+            <br>
+            <p>Note: Ensure the <code>barbatos-bridge</code> is running (listening on port <code>8080</code>) before using the MCP tools.</p>
         </section>
     </div>
 

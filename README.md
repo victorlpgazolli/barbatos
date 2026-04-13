@@ -117,3 +117,5 @@ To use `barbatos` with **Claude Desktop**, add this to your `claude_desktop_conf
   }
 }
 ```
+
+*Note: Ensure the barbatos-bridge is running (listening on port 8080) before using the MCP tools.*

@@ -36,4 +36,4 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
-*Note: Ensure the barbatos TUI or `bridge.py` is running (listening on port 8080) before using the MCP tools.*
+*Note: Ensure the barbatos-bridge is running (listening on port 8080) before using the MCP tools.*
