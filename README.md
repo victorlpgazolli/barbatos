@@ -1,4 +1,4 @@
-# barbatos: Interactive Debug Kit
+# Barbatos
 
 <p align="center">
   <img src="https://img.shields.io/badge/Kotlin-Native-7f52ff?style=flat-square&logo=kotlin" alt="Kotlin Native">
@@ -9,8 +9,12 @@
 
 <p align="center">
   <b>Android Runtime Debugger & MCP Server.</b><br>
-  <i>Unified terminal interface for low-level instrumentation and AI-assisted state manipulation.</i>
+  <i>"Understanding the language of systems, revealing hidden states, and reconciling the gap between developer and machine."</i>
 </p>
+
+<div align="center">
+  <p>IMAGEM_AQUI_1</p>
+</div>
 
 ---
 
@@ -19,7 +23,8 @@
 *   **Terminal-First Experience:** ready to use in any terminal environment (local, SSH, WSL) without IDE plugins or complex setup.
 *   **Simple App Exploration:** quickly list classes, inspect objects, and understand app structure.
 *   **Real-time App Debugging:** modify field values on the fly and hook methods to see live execution flow.
-*   **AI-Assisted Debugging:** Use the built-in MCP Server to let LLMs (Claude/Gemini/etc...) debug your app.
+*   **AI-Assisted Debugging:** Use the built-in MCP Server to let LLMs (Claude/Gemini/Cursor) debug your app autonomously.
+* (soon) **Intercept Method Calls:** Modify return values or arguments of any method.
 
 ---
 
@@ -31,6 +36,22 @@
 *   **Method Hooking:** Intercept execution flow, inspect arguments, and capture return values.
 *   **Live Field Editing:** Modify primitive field values (String, Int, Boolean) in real-time to test hypotheses.
 *   **MCP Server:** Native Model Context Protocol support to connect your debugger to AI agents.
+
+---
+
+## AI-Driven Debugging (MCP Server)
+
+Barbatos provides native support for the Model Context Protocol (MCP). By connecting an AI agent to the Barbatos MCP Server, your LLM becomes an autonomous debugging assistant capable of direct runtime interaction. 
+
+### Example Agent Capabilities (experimental):
+
+*   **State Exploration:** "Locate the active `LoginState` instance and tell me the value of its `errorCode` field."
+*   **DI Troubleshooting:** "Search for `MyUseCase` instance in `MyViewModel` and see if it is the same one in `MyOtherViewModel`."
+*   **Method Hooking:** "Tell me the parameters passed to the `MyViewModel.fetchData` method every time it is called."
+*   **Live Edit:** "Change the `isPremium` boolean on the active `UserProfile` instance to `true`."
+*   **Root Cause Analysis:** "List all instances of `ApiError`, check their `message` field, and identify recurring failure patterns."
+* (soon) **Mock Behavior:** "Intercept the `fetchData` method in `MyViewModel` and modify its return to throw an exception when the `isActive` field is `false`."
+
 
 ---
 
@@ -96,16 +117,3 @@ To use `barbatos` with **Claude Desktop**, add this to your `claude_desktop_conf
   }
 }
 ```
-
----
-
-## Example Prompts
-
-Try these prompts with your AI agent after connecting the MCP Server:
-
-*   *"List all classes in the package `com.example.app` that contain 'UiState'."*
-*   *"Find all live instances of `LoginActivity` and inspect its fields."*
-*   *"Change the `username` field of the current `LoginFormBodyState` to 'admin'."*
-*   *"Hook the method `onLoginClicked` and tell me when it's called."*
-
----

@@ -46,27 +46,45 @@ section {
 }
 
 .hero h1 {
-    font-size: 3rem;
-    margin-bottom: 1.5rem;
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    letter-spacing: -1px;
 }
 
 .hero p {
     font-size: 1.25rem;
     color: var(--text-secondary);
     max-width: 800px;
-    margin: 0 auto 2rem;
+    margin: 0 auto;
+}
+
+.hero .quote {
+    font-size: 1.1rem;
+    color: #8b949e;
+    margin: 1.5rem auto 3rem;
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.section-desc {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
 }
 
 .placeholder-img {
-    background: var(--bg-secondary);
-    border: 2px dashed var(--border);
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 300px;
-    margin: 2rem 0;
+    height: 400px;
+    margin: 2rem auto 3rem;
     font-family: var(--font-mono);
+    max-width: 800px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
 .grid {
@@ -79,7 +97,23 @@ section {
     background: var(--bg-secondary);
     padding: 2rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+}
+
+.card h3 {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+}
+
+.card p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
 }
 
 .pipeline {
@@ -100,7 +134,7 @@ section {
     background: var(--bg-secondary);
     padding: 1rem;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 6px;
     text-align: center;
     font-family: var(--font-mono);
     font-size: 0.9rem;
@@ -113,19 +147,15 @@ section {
     font-size: 1.5rem;
 }
 
-.arrow {
-    color: var(--text-secondary);
-    font-weight: bold;
-}
-
 /* Installation Box */
 .install-box {
     background: var(--bg-secondary);
     padding: 2rem;
     border: 1px solid var(--border);
     border-radius: 8px;
-    margin-top: 1.5rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    max-width: 600px;
+    margin: 0 auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .install-box p {
@@ -137,7 +167,8 @@ section {
     border: 1px solid var(--primary);
     position: relative;
     cursor: pointer;
-    transition: transform 0.1s ease;
+    transition: transform 0.1s ease, background-color 0.2s ease;
+    border-radius: 6px;
 }
 
 .install-box pre:hover {
@@ -174,7 +205,7 @@ section {
 }
 
 .install-box code {
-    font-size: 1.1rem;
+    font-size: 1rem;
     color: var(--primary);
 }
 
@@ -182,60 +213,25 @@ section {
     font-size: 0.85rem;
     color: var(--text-secondary);
     margin-top: 1rem;
-}
-
-/* Tabs */
-.tabs {
-    margin-top: 2rem;
-}
-
-.tab-list {
-    display: flex;
-    list-style: none;
-    border-bottom: 1px solid var(--border);
-}
-
-.tab-item {
-    padding: 1rem 2rem;
-    cursor: pointer;
-    border: 1px solid transparent;
-    border-bottom: none;
-    color: var(--text-secondary);
-}
-
-.tab-item.active {
-    background: var(--bg-secondary);
-    border-color: var(--border);
-    color: var(--primary);
-    font-weight: bold;
-}
-
-.tab-content {
-    background: var(--bg-secondary);
-    padding: 2rem;
-    border: 1px solid var(--border);
-    border-top: none;
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
+    margin-bottom: 0;
 }
 
 code {
     font-family: var(--font-mono);
-    background: #000;
+    background: rgba(88, 166, 255, 0.1);
     padding: 0.2rem 0.4rem;
     border-radius: 3px;
     color: var(--primary);
+    font-size: 0.9em;
 }
 
 pre {
     background: #000;
-    padding: 1rem;
+    padding: 1.25rem;
     border-radius: 6px;
     overflow-x: auto;
     margin-top: 1rem;
+    border: 1px solid var(--border);
 }
 
 pre code {

@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>barbatos: Android Runtime Debugger</title>
+    <title>Barbatos: Android Runtime Debugger</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="hero">
         <div class="container">
-            <h1>barbatos - Interactive Debug Kit</h1>
-            <p>Android Runtime Debugger & MCP Server.<br>
-            Unified terminal interface for low-level instrumentation and AI-assisted state manipulation.</p>
+            <h1>Barbatos</h1>
+            <p>Android Runtime Debugger & MCP Server.</p>
+            <p class="quote"><i>"Understanding the language of systems, revealing hidden states, and reconciling the gap between developer and machine."</i></p>
             
+            <div class="placeholder-img">IMAGEM_AQUI_1</div>
+
             <div class="install-box">
                 <p>Quick Installation</p>
                 <pre id="copy-box"><code>curl -sSL https://barbatos.victorlpgazolli.dev/install.sh | bash</code><span class="copy-badge">Copy</span></pre>
@@ -22,6 +24,25 @@
     </div>
 
     <div class="container">
+        <section id="ai-driven">
+            <h2>AI-Driven Debugging</h2>
+            <p class="section-desc">Connect Barbatos to your AI agent via the Model Context Protocol (MCP) to automate runtime exploration and manipulation. Your AI assistant can seamlessly:</p>
+            <div class="grid">
+                <div class="card">
+                    <h3>State Exploration</h3>
+                    <p>"Locate the active <code>LoginState</code> instance and tell me the value of its <code>errorCode</code> field."</p>
+                </div>
+                <div class="card">
+                    <h3>Method Hooking</h3>
+                    <p>"Tell me the parameters passed to the <code>MyViewModel.fetchData</code> method every time it is called."</p>
+                </div>
+                <div class="card">
+                    <h3>Live Edit</h3>
+                    <p>"Change the <code>isPremium</code> boolean on the active <code>UserProfile</code> instance to <code>true</code> to test the UI state."</p>
+                </div>
+            </div>
+        </section>
+
         <section id="features">
             <h2>Core Capabilities</h2>
             <div class="grid">
@@ -38,8 +59,8 @@
                     <p>Intercept execution flow, inspect arguments, and capture return values live.</p>
                 </div>
                 <div class="card">
-                    <h3>MCP Server</h3>
-                    <p>Native Model Context Protocol support to connect your debugger to AI agents like Claude or Cursor.</p>
+                    <h3>Live Field Editing</h3>
+                    <p>Modify primitive field values (String, Int, Boolean) in real-time to test hypotheses.</p>
                 </div>
             </div>
         </section>
