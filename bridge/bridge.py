@@ -416,7 +416,7 @@ class FridaBridge:
     # Establishes connection to the remote Frida Gadget TCP server and conditionally loads the JavaScript agent
     def _connect_and_load_agent(self, pid):
         """Connects the Frida session and loads the agent only if necessary."""
-        logging.info(f"[inject] Connecting to remote Gadget at 127.0.0.1:27042... (device: {frida.get_usb_device()})")
+        logging.info(f"[inject] Connecting to remote Gadget at 127.0.0.1:27042... (target PID: {pid})")
         
         # Retry logic for attachment as the Gadget server might be finishing its startup
         max_retries = 10
@@ -430,8 +430,8 @@ class FridaBridge:
                     time.sleep(2)
                     continue
 
-                # Even if listening, wait a tiny bit more for Frida to be ready
-                time.sleep(1)
+                time.sleep(2)
+                
                 logging.info(f"[inject] Attachment attempt {i+1}/{max_retries}...")
                 
                 device_manager = frida.get_device_manager()
@@ -447,7 +447,9 @@ class FridaBridge:
             except Exception as e:
                 last_err = e
                 logging.warning(f"[inject] Attachment attempt {i+1} failed: {e}")
-                # If connection closed, it often means we need to wait a bit longer
+                # Log traceback for deeper investigation if it's not a simple connection refused
+                if "connection closed" in str(e).lower() or "timeout" in str(e).lower():
+                    logging.debug(traceback.format_exc())
                 time.sleep(2)
         
         if last_err:
@@ -506,6 +508,19 @@ class FridaBridge:
             # 3. Check if already listening
             self._update_progress("check_gadget", "running")
             is_listening = self._is_gadget_listening()
+            if is_listening:
+                logging.info("[*] Port 27042 is open. Testing if we can attach...")
+                try:
+                    device_manager = frida.get_device_manager()
+                    temp_device = device_manager.add_remote_device('127.0.0.1:27042')
+                    temp_session = temp_device.attach("Gadget")
+                    temp_session.detach()
+                    logging.info("[+] Gadget is healthy and attachable.")
+                except Exception as e:
+                    logging.warning(f"[-] Port 27042 is open but Gadget is not responding correctly: {e}")
+                    logging.warning("    This usually means the Gadget is misconfigured or stale. Will proceed with JDWP injection.")
+                    is_listening = False # Force injection
+            
             self._update_progress("check_gadget", "completed")
 
             if not is_listening:

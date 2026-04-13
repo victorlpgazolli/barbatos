@@ -532,12 +532,15 @@ def runtime_exec(jdwp, args):
         dstConfigLocation = "/data/data/" + packagename + "/frida-gadget.config"
         command = "cp " + tmpLocation + " " + dstLocation
         command_config = "cp " + tmpConfigLocation + " " + dstConfigLocation
+        
         logging.info("[*] Pushing Frida Gadget and config to device...")
         _push_gadget_config(args.serial)
-        logging.info("[*] Copying library from " + tmpLocation + " to " + dstLocation)
+        
+        logging.info("[*] Copying library to " + dstLocation)
         runtime_exec_payload(jdwp, tId, runtimeClass["refTypeId"], getRuntimeMeth["methodId"], command)
         time.sleep(2)
-        logging.info("[*] Copying config from " + tmpConfigLocation + " to " + dstConfigLocation)
+        
+        logging.info("[*] Copying config to " + dstConfigLocation)
         runtime_exec_payload(jdwp, tId, runtimeClass["refTypeId"], getRuntimeMeth["methodId"], command_config)
         time.sleep(2)
         logging.info("[*] Executing Runtime.load(" + dstLocation + ")")
@@ -766,7 +769,7 @@ def _push_gadget_config(serial):
             "type": "listen",
             "address": "127.0.0.1",
             "port": 27042,
-            "on_port_conflict": "fail",
+            "on_port_conflict": "replace",
             "on_load": "resume"
         }
     }
