@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>barbatos: Android Runtime Debugger</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="hero">
+        <div class="container">
+            <h1>barbatos - Interactive Debug Kit</h1>
+            <p>Android Runtime Debugger & MCP Server.<br>
+            Unified terminal interface for low-level instrumentation and AI-assisted state manipulation.</p>
+            
+            <div class="install-box">
+                <p>Quick Installation</p>
+                <pre id="copy-box"><code>curl -sSL https://barbatos.victorlpgazolli.dev/install.sh | bash</code><span class="copy-badge">Copy</span></pre>
+                <p class="small">Recommended for macOS (ARM64), Linux (x64/ARM64), and WSL.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section id="features">
+            <h2>Core Capabilities</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>Class Discovery</h3>
+                    <p>Real-time enumeration of loaded Java/Kotlin classes with package filtering.</p>
+                </div>
+                <div class="card">
+                    <h3>Deep Inspection</h3>
+                    <p>Recursive traversal of object hierarchies including Fields, Maps, and Collections.</p>
+                </div>
+                <div class="card">
+                    <h3>Method Hooking</h3>
+                    <p>Intercept execution flow, inspect arguments, and capture return values live.</p>
+                </div>
+                <div class="card">
+                    <h3>MCP Server</h3>
+                    <p>Native Model Context Protocol support to connect your debugger to AI agents like Claude or Cursor.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="architecture">
+            <h2>Architecture Pipeline</h2>
+            <div class="pipeline">
+                <div class="pipeline-group">
+                    <div class="step">Native TUI</div>
+                    <div class="step">MCP Client</div>
+                </div>
+                <div class="arrow">↓</div>
+                <div class="step">Python Bridge</div>
+                <div class="arrow">↓</div>
+                <div class="step">Frida JS Agent</div>
+                <div class="arrow">↓</div>
+                <div class="step">Android Runtime</div>
+                <div class="arrow">↓</div>
+                <div class="step">Target App</div>
+            </div>
+        </section>
+
+        <section id="mcp-setup">
+            <h2>MCP Server Setup</h2>
+            <p>Add this to your <code>claude_desktop_config.json</code>:</p>
+            <pre><code>{
+  "mcpServers": {
+    "barbatos-debugger": {
+      "command": "python3",
+      "args": ["/absolute/path/to/barbatos/mcp_server/server.py"]
+    }
+  }
+}</code></pre>
+        </section>
+    </div>
+
+    <script>
+        document.getElementById('copy-box').addEventListener('click', function() {
+            const code = this.querySelector('code').innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                const badge = this.querySelector('.copy-badge');
+                badge.innerText = 'Copied!';
+                badge.classList.add('copied');
+                setTimeout(() => {
+                    badge.innerText = 'Copy';
+                    badge.classList.remove('copied');
+                }, 2000);
+            });
+        });
+    </script>
+</body>
+</html>

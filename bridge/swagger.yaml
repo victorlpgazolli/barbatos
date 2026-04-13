@@ -1,0 +1,222 @@
+openapi: 3.0.3
+info:
+  title: barbatos JSON-RPC Bridge API
+  description: |
+    API for communication between the barbatos TUI and the Frida agent injected into Android.
+    Uses JSON-RPC 2.0 over HTTP POST.
+  version: 1.1.0
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local bridge server
+
+paths:
+  /ping:
+    get:
+      summary: Health check
+      description: Verifies if the Python bridge is up and running.
+      responses:
+        '200':
+          description: Bridge is operational
+          content:
+            application/json:
+              example: {"status": "pong"}
+
+  /rpc:
+    post:
+      summary: JSON-RPC 2.0 Endpoint
+      description: Main entry point for all debugger operations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RpcRequest'
+    
+      responses:
+        '200':
+          description: Successful execution of the RPC method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RpcResponse'
+        '500':
+          description: Internal bridge error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RpcError'
+
+components:
+  schemas:
+    RpcRequest:
+      type: object
+      required: [jsonrpc, method, id]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          type: integer
+          example: 1
+        method:
+          type: string
+          description: The name of the method to invoke.
+        params:
+          type: object
+          description: Method-specific parameters.
+
+    RpcResponse:
+      type: object
+      properties:
+        jsonrpc:
+          type: string
+          example: "2.0"
+        id:
+          type: integer
+          example: 1
+        result:
+          type: object
+          description: The return value of the method.
+
+    RpcError:
+      type: object
+      properties:
+        jsonrpc:
+          type: string
+          example: "2.0"
+        id:
+          type: integer
+          nullable: true
+        error:
+          type: object
+          properties:
+            status:
+              type: string
+              example: "unknown_error"
+            error_message:
+              type: string
+
+    # --- Method Specific Documentation ---
+
+    listClassesParams:
+      type: object
+      properties:
+        search_param:
+          type: string
+          default: ""
+          description: Filter classes by name (case-insensitive).
+        app_package:
+          type: string
+          default: ""
+          description: Package name to prioritize in the result list.
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 200
+
+    inspectClassParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+          example: "java.lang.String"
+
+    inspectInstanceParams:
+      type: object
+      required: [className, id]
+      properties:
+        className:
+          type: string
+        id:
+          type: string
+          description: HashCode or Frida handle of the instance.
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 50
+
+    setFieldValueParams:
+      type: object
+      required: [className, id, fieldName, type, newValue]
+      properties:
+        className:
+          type: string
+        id:
+          type: string
+        fieldName:
+          type: string
+        type:
+          type: string
+          enum: [int, string, boolean, float, long]
+        newValue:
+          type: string
+          description: New value as a string (will be parsed to the correct type).
+
+    injectGadgetFromScratchParams:
+      type: object
+      properties:
+        force:
+          type: boolean
+          default: false
+          description: Force a new injection even if a terminal state was reached.
+        with_logs:
+          type: boolean
+          default: false
+          description: Include the latest bridge logs in the response.
+        limit:
+          type: integer
+          default: 50
+          description: Maximum number of log lines to return.
+
+    injectJdwpParams:
+      type: object
+      required: [package_name]
+      properties:
+        cmd:
+          type: string
+          description: Optional shell command to run during JDWP break.
+        break_on:
+          type: string
+          default: "android.os.Handler.dispatchMessage"
+          description: Fully qualified method name to set the initial breakpoint.
+        package_name:
+          type: string
+
+    hookMethodParams:
+      type: object
+      required: [className, methodSig]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+          description: Full signature (e.g., "public void onCreate(android.os.Bundle)")
+
+# x-rpc-methods: Documentation for SDK/TUI developers
+x-rpc-methods:
+  listClasses:
+    description: Retrieves all loaded Java classes in the target process.
+    returns: Array of strings.
+  inspectClass:
+    description: Returns fields and methods of a class.
+    returns: "{staticAttributes: [], instanceAttributes: [], methods: []}"
+  countInstances:
+    description: Counts live instances of a class on the heap.
+    returns: Integer.
+  listInstances:
+    description: Returns handles/IDs of live instances.
+    returns: "Array of {id, handle, instance}"
+  inspectInstance:
+    description: Recursively explores an instance's fields.
+    returns: "Array of {name, value, type, childId?}"
+  injectGadgetFromScratch:
+    description: Orchestrates the JDWP -> Gadget -> Agent sequence.
+    returns: "{status: 'running'|'completed'|'error', steps: [], error_message: string?, logs: []?}"
+  getHookEvents:
+    description: Returns the latest method interception events collected by the agent.
+    returns: "Array of HookEvent objects."
