@@ -81,7 +81,7 @@ if [ "$OS" = "Darwin" ]; then
 fi
 
 # 6. Ensure executability
-chmod +x "$BIN_DIR/barbatos" "$BIN_DIR/barbatos-bridge"
+chmod +x "$BIN_DIR/barbatos" "$BIN_DIR/barbatos-bridge" "$BIN_DIR/barbatos-mcp"
 
 # 7. Configure PATH or create symbolic link in ~/.local/bin
 LOCAL_BIN="$HOME/.local/bin"
@@ -107,6 +107,7 @@ fi
 mkdir -p "$LOCAL_BIN"
 ln -sf "$BIN_DIR/barbatos" "$LOCAL_BIN/barbatos"
 ln -sf "$BIN_DIR/barbatos-bridge" "$LOCAL_BIN/barbatos-bridge"
+ln -sf "$BIN_DIR/barbatos-mcp" "$LOCAL_BIN/barbatos-mcp"
 echo -e "\n${GREEN}Success:${NC} Created symbolic links in $LOCAL_BIN."
 
 echo -e "\n${BLUE}==>${NC} Run 'barbatos' to start debugging!"

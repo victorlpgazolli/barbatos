@@ -52,6 +52,7 @@ jobs:
           zip -r ./barbatos-macos-${{ matrix.target }}.zip ./dist
           cp dist/barbatos barbatos-macos-${{ matrix.target }}-tui
           cp dist/barbatos-bridge barbatos-macos-${{ matrix.target }}-bridge
+          cp dist/barbatos-mcp barbatos-macos-${{ matrix.target }}-mcp
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v7
@@ -61,6 +62,7 @@ jobs:
             barbatos-macos-${{ matrix.target }}.zip
             barbatos-macos-${{ matrix.target }}-tui
             barbatos-macos-${{ matrix.target }}-bridge
+            barbatos-macos-${{ matrix.target }}-mcp
 
   build-linux:
     name: Build Linux ${{ matrix.target }}
@@ -118,6 +120,10 @@ jobs:
         if: matrix.arch == 'x86_64'
         run: make compile_bridge
 
+      - name: Compile MCP Server (Native x86_64)
+        if: matrix.arch == 'x86_64'
+        run: make compile_mcp
+
       - name: Compile Python Bridge (Docker ARM64)
         if: matrix.arch == 'aarch64'
         run: |
@@ -127,12 +133,21 @@ jobs:
             python:3.11-slim \
             bash -c "apt-get update && apt-get install -y binutils && pip install -r bridge/requirements.txt && cd bridge && pyinstaller bridge.spec"
 
+      - name: Compile MCP Server (Docker ARM64)
+        if: matrix.arch == 'aarch64'
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v ${{ github.workspace }}:/app -w /app \
+            python:3.11-slim \
+            bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && cd mcp_server && pyinstaller mcp.spec"
+
       - name: Package Artifacts
         run: |
           make prepare_release ARCH=${{ matrix.arch }}
           zip -r ./barbatos-linux-${{ matrix.target }}.zip ./dist
           cp dist/barbatos barbatos-linux-${{ matrix.target }}-tui
           cp dist/barbatos-bridge barbatos-linux-${{ matrix.target }}-bridge
+          cp dist/barbatos-mcp barbatos-linux-${{ matrix.target }}-mcp
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v7
@@ -142,6 +157,7 @@ jobs:
             barbatos-linux-${{ matrix.target }}.zip
             barbatos-linux-${{ matrix.target }}-tui
             barbatos-linux-${{ matrix.target }}-bridge
+            barbatos-linux-${{ matrix.target }}-mcp
 
   publish-artifacts:
     name: Publish Artifacts to GitHub Release
@@ -167,6 +183,7 @@ jobs:
             --generate-notes \
             artifacts/barbatos-*.zip \
             artifacts/barbatos-*-tui \
-            artifacts/barbatos-*-bridge
+            artifacts/barbatos-*-bridge \
+            artifacts/barbatos-*-mcp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
