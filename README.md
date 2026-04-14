@@ -132,6 +132,25 @@ Run the following command to automatically detect architecture and setup environ
 curl -sSL https://barbatos.victorlpgazolli.dev/install.sh | bash
 ```
 
+### **APT Repository (Debian/Ubuntu/WSL)**
+For Debian-based systems, you can use our APT repository to keep the tools up to date.
+
+1.  **Add the GPG key:**
+    ```bash
+    curl -s https://victorlpgazolli.github.io/barbatos/barbatos-repo.gpg | sudo apt-key add -
+    ```
+
+2.  **Add the repository:**
+    ```bash
+    echo "deb [arch=arm64] https://victorlpgazolli.github.io/barbatos/ stable main" | sudo tee /etc/apt/sources.list.d/barbatos.list
+    ```
+
+3.  **Install the components:**
+    ```bash
+    sudo apt update
+    sudo apt install barbatos barbatos-bridge barbatos-mcp
+    ```
+
 ### **MCP Server Setup**
 To use `barbatos` with **Claude Desktop**, add this to your `claude_desktop_config.json`:
 
