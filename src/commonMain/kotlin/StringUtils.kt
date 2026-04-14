@@ -37,4 +37,32 @@ object StringUtils {
         if (current.isNotBlank()) result.add(current.toString().trim())
         return result
     }
+
+    fun getRandomScrambleChar(): Char {
+        val chars = "!@#$%^&*()1234567890ABCDEF"
+        return chars.random()
+    }
+
+    fun formatClassName(className: String): String {
+        val lastDot = className.lastIndexOf('.')
+        val pkg = if (lastDot != -1) className.substring(0, lastDot) else ""
+        val name = if (lastDot != -1) className.substring(lastDot + 1) else className
+        return if (pkg.isNotEmpty()) "$name ($pkg)" else name
+    }
+
+    fun getScrambledText(old: String, new: String, progress: Double): String {
+        val maxLen = maxOf(old.length, new.length)
+        val pivot = (progress * (maxLen + 3)).toInt() - 1
+        val chars = "!@#$%^&*()1234567890ABCDEF"
+        
+        return buildString {
+            for (i in 0 until maxLen) {
+                when {
+                    i < pivot - 1 -> append(if (i < new.length) new[i] else ' ')
+                    i > pivot + 1 -> append(if (i < old.length) old[i] else ' ')
+                    else -> append(chars.random())
+                }
+            }
+        }
+    }
 }

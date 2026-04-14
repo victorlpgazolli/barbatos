@@ -44,7 +44,7 @@ object Terminal {
             memcpy(raw.ptr, orig.ptr, sizeOf<termios>().toULong())
 
             raw.enableRawModePlatformFlags()
-            raw.c_cc[VTIME] = 1u
+            raw.c_cc[VTIME] = 0u
 
             tcsetattr(STDIN_FILENO, TCSAFLUSH, raw.ptr)
         }

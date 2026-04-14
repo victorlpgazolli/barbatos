@@ -58,4 +58,42 @@ class StringUtilsTest {
         assertEquals(1, parts.size)
         assertEquals("value", parts[0])
     }
+
+    @Test
+    fun testGetScrambledTextProgress0() {
+        val old = "OLDTEXT"
+        val new = "NEWTEXT"
+        val result = StringUtils.getScrambledText(old, new, 0.0)
+        assertEquals(old.length, result.length)
+        // At 0.0, the first character is scrambled: pivot = -1, window = [-2, 0], i=0 in window
+        assertEquals(old.substring(1), result.substring(1))
+    }
+
+    @Test
+    fun testGetScrambledTextProgress1() {
+        val old = "OLDTEXT"
+        val new = "NEWTEXT"
+        val result = StringUtils.getScrambledText(old, new, 1.0)
+        assertEquals(new, result)
+    }
+
+    @Test
+    fun testGetScrambledTextProgressMid() {
+        val old = "OLDTEXT"
+        val new = "NEWTEXT"
+        val result = StringUtils.getScrambledText(old, new, 0.5)
+        assertEquals(old.length, result.length)
+        assertEquals(new.substring(0, 3), result.substring(0, 3))
+        assertEquals(old.substring(6, 7), result.substring(6, 7))
+    }
+
+    @Test
+    fun testGetScrambledTextDifferentLengths() {
+        val old = "SHORT"
+        val new = "LONGSTRING"
+        val result = StringUtils.getScrambledText(old, new, 0.5)
+        assertEquals(10, result.length)
+        assertEquals(new.substring(0, 4), result.substring(0, 4))
+        assertEquals("   ", result.substring(7, 10))
+    }
 }

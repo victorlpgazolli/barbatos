@@ -13,6 +13,7 @@ object Ansi {
     const val SAVE_CURSOR = "\u001b7"
     const val RESTORE_CURSOR = "\u001b8"
     const val CLEAR_LINE = "\u001b[K"
+    const val CLEAR_TO_BOTTOM = "\u001b[J"
     const val BRAND_BLUE = "\u001b[38;5;75m"
     const val STRIKETHROUGH = "\u001b[9m"
     const val ENABLE_MOUSE = "\u001b[?1000h\u001b[?1003h\u001b[?1006h"
@@ -547,14 +548,15 @@ object Renderer {
         )
 
         for (i in startIdx until endIdx) {
-            val className  = state.displayedClasses[i]
+            val className = state.displayedClasses[i]
+            val visualRowIndex = i - startIdx
+            val animation = state.classAnimations[visualRowIndex]
+            val now = currentTimeMillis()
+
             val isSelected = i == state.selectedClassIndex
             val prefix     = ListRenderer.selectionPrefix(isSelected, "  ")
 
-            val lastDot     = className.lastIndexOf('.')
-            val packagePart = if (lastDot != -1) className.substring(0, lastDot) else ""
-            val namePart    = if (lastDot != -1) className.substring(lastDot + 1) else className
-
+            // Colors
             val query           = state.lastSearchedParam
             val nameBaseColor   = if (isSelected) WHITE else LIGHT_GRAY
             val packageBaseColor = DIM_GRAY
@@ -586,6 +588,46 @@ object Renderer {
             val prefixVisible = ansiVisibleLength(prefix)
             val countVisible = ansiVisibleLength(countBadge)
             val availableLen = maxOf(0, termWidth - 1 - prefixVisible - countVisible)
+
+            if (animation != null) {
+                val progress = animation.getProgress(now)
+                if (animation.isFinished(now)) {
+                    state.classAnimations.remove(visualRowIndex)
+                } else {
+                    val scrambled = StringUtils.getScrambledText(animation.oldText, animation.newText, progress)
+                    val displayStr = if (scrambled.length > availableLen) {
+                        scrambled.substring(0, maxOf(0, availableLen - 3)) + "..."
+                    } else scrambled
+
+                    // Calculate dynamic split point for colors
+                    val oldSplit = animation.oldText.indexOf(" (").let { if (it == -1) animation.oldText.length else it }
+                    val newSplit = animation.newText.indexOf(" (").let { if (it == -1) animation.newText.length else it }
+                    val currentSplit = (oldSplit * (1.0 - progress) + newSplit * progress).toInt()
+
+                    buf.append(prefix)
+                    
+                    if (currentSplit > 0 && currentSplit < displayStr.length) {
+                        val namePartScrambled = displayStr.substring(0, currentSplit)
+                        val pkgPartScrambled = displayStr.substring(currentSplit)
+                        buf.append(highlight(namePartScrambled, nameBaseColor))
+                        buf.append(highlight(pkgPartScrambled, packageBaseColor))
+                    } else if (currentSplit <= 0) {
+                        // Entire string is package color
+                        buf.append(highlight(displayStr, packageBaseColor))
+                    } else {
+                        // Entire string is class color
+                        buf.append(highlight(displayStr, nameBaseColor))
+                    }
+                    
+                    buf.append(countBadge)
+                    buf.append(RESET).append("\n")
+                    continue
+                }
+            }
+
+            val lastDot     = className.lastIndexOf('.')
+            val packagePart = if (lastDot != -1) className.substring(0, lastDot) else ""
+            val namePart    = if (lastDot != -1) className.substring(lastDot + 1) else className
 
             val fullString = buildString {
                 append(namePart)

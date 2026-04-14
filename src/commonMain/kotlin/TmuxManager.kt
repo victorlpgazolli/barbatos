@@ -6,6 +6,8 @@ import platform.posix.popen
 import platform.posix.system
 
 object TmuxManager {
+    var extraArgs: String = ""
+
     fun checkTmux(): Boolean {
         val fp = popen("which tmux 2>/dev/null", "r") ?: return false
         val buffer = ByteArray(256)
@@ -18,13 +20,13 @@ object TmuxManager {
 
     fun createSession(name: String): Boolean {
         if (!checkTmux()) return false
-        val exitCode = system("tmux new-session -d -s $name $binaryPath --mode debug_entrypoint 2>/dev/null")
+        val exitCode = system("tmux new-session -d -s $name $binaryPath $extraArgs --mode debug_entrypoint 2>/dev/null")
         return exitCode == 0
     }
 
     fun appendInspectWindow(className: String): Boolean {
         if (!checkTmux()) return false
-        val exitCode = system("tmux split-window -h -p 70 $binaryPath --mode debug_inspect_class $className 2>/dev/null")
+        val exitCode = system("tmux split-window -h -p 70 $binaryPath $extraArgs --mode debug_inspect_class $className 2>/dev/null")
         return exitCode == 0
     }
 

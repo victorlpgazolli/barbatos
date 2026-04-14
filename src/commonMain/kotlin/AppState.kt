@@ -45,6 +45,17 @@ data class HookEvent(
     var count: Int = 1
 )
 
+data class ClassAnimationState(
+    val oldText: String,
+    val newText: String,
+    val startTime: Long
+) {
+    fun getProgress(now: Long): Double = 
+        ((now - startTime).toDouble() / 500.0).coerceIn(0.0, 1.0)
+    
+    fun isFinished(now: Long): Boolean = (now - startTime) >= 500
+}
+
 sealed class InspectRow {
     data class SectionStaticRow(val isExpanded: Boolean) : InspectRow()
     data class StaticAttributeRow(val attribute: String) : InspectRow()
@@ -133,7 +144,9 @@ data class AppState(
 
     var editingInstanceId: String = "",
     var editingAttribute: InstanceAttribute? = null,
-    var navigationStack: MutableList<AppMode> = mutableListOf()
+    var navigationStack: MutableList<AppMode> = mutableListOf(),
+    var classAnimations: MutableMap<Int, ClassAnimationState> = mutableMapOf(),
+    var experimentalListScramble: Boolean = false
 ) {
     fun pushMode(newMode: AppMode, force: Boolean = false) {
         if (force || mode != newMode) {

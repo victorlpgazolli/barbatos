@@ -18,6 +18,27 @@ fun onInputChanged(state: AppState, resetCtrlC: Boolean = true) {
     }
 }
 
+private var lastVisibleClasses: List<String> = emptyList()
+
+fun triggerClassAnimations(state: AppState, oldList: List<String>, newList: List<String>, now: Long) {
+    if (!state.experimentalListScramble) return
+    newList.forEachIndexed { index, newName ->
+        val oldName = oldList.getOrNull(index) ?: ""
+        val formattedOld = if (oldName.isNotEmpty()) StringUtils.formatClassName(oldName) else ""
+        val formattedNew = StringUtils.formatClassName(newName)
+        if (formattedOld != formattedNew) {
+            state.classAnimations[index] = ClassAnimationState(formattedOld, formattedNew, now)
+        }
+    }
+    // Cleanup animations for rows that are now empty
+    val keysToRemove = state.classAnimations.keys.filter { it >= newList.size }
+    keysToRemove.forEach { state.classAnimations.remove(it) }
+}
+
+private fun renderWithAnimation(state: AppState) {
+    Renderer.render(state)
+}
+
 fun loadAndSyncHooks(state: AppState, scope: CoroutineScope, packageName: String) {
     if (state.hooksLoaded) return
     state.hooksLoaded = true
@@ -41,6 +62,19 @@ fun main(args: Array<String>) {
         adbSerial = args[args.indexOf("--serial") + 1]
     }
 
+    val experimentalScramble = args.contains("--experimental-list-text-scramble")
+    
+    // Propagate args to tmux
+    val extraArgsBuilder = mutableListOf<String>()
+    if (adbSerial != null) {
+        extraArgsBuilder.add("--serial")
+        extraArgsBuilder.add(adbSerial)
+    }
+    if (experimentalScramble) {
+        extraArgsBuilder.add("--experimental-list-text-scramble")
+    }
+    TmuxManager.extraArgs = extraArgsBuilder.joinToString(" ")
+
     if (args.contains("--mode") && args.indexOf("--mode") + 1 < args.size) {
         val modeIdx = args.indexOf("--mode")
         val modeStr = args[modeIdx + 1]
@@ -61,7 +95,7 @@ fun main(args: Array<String>) {
         return
     }
 
-    val state = AppState(adbSerial = adbSerial, mode = initialMode)
+    val state = AppState(adbSerial = adbSerial, mode = initialMode, experimentalListScramble = experimentalScramble)
     if (args.contains("--mode")) {
         state.isSubPane = true
     }
@@ -154,14 +188,14 @@ fun main(args: Array<String>) {
     Terminal.enableRawMode()
     print(Ansi.ENABLE_MOUSE)
     Terminal.flush()
-    Renderer.render(state)
+    renderWithAnimation(state)
 
     while (state.running) {
         if (state.ctrlCPressed) {
             val elapsed = currentTimeMillis() - state.ctrlCTimestamp
             if (elapsed > 1500) {
                 state.ctrlCPressed = false
-                Renderer.render(state)
+                renderWithAnimation(state)
             }
         }
 
@@ -174,7 +208,7 @@ fun main(args: Array<String>) {
                 } else {
                     state.ctrlCPressed = true
                     state.ctrlCTimestamp = currentTimeMillis()
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -191,7 +225,7 @@ fun main(args: Array<String>) {
                                     RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled)
                                 }
                                 HookStore.save(state.appPackageName, state.activeHooks.toSet())
-                                Renderer.render(state)
+                                renderWithAnimation(state)
                             }
                         }
                         'i', 'I' -> {
@@ -209,7 +243,7 @@ fun main(args: Array<String>) {
                                 state.inspectInstancesExpanded = false
                                 state.selectedClassIndex = 0
                                 state.pushMode(AppMode.DEBUG_INSPECT_CLASS)
-                                Renderer.render(state)
+                                renderWithAnimation(state)
                                 scope.launch {
                                     val (result, error) = RpcClient.inspectClass(target.className)
                                     state.sharedInspectResult.value = result
@@ -220,19 +254,21 @@ fun main(args: Array<String>) {
                         }
                         'c', 'C' -> {
                             state.hookEvents.clear()
-                            Renderer.render(state)
+                            renderWithAnimation(state)
                         }
                     }
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && (key.c == ']')) {
+                    val oldList = state.displayedClasses.toList()
                     state.showSyntheticClasses = !state.showSyntheticClasses
                     state.displayedClasses = CommandExecutor.sortClasses(state.allFetchedClasses, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
                     state.selectedClassIndex = if (state.displayedClasses.isNotEmpty()) 0 else -1
-                    Renderer.render(state)
+                    triggerClassAnimations(state, oldList, state.displayedClasses, currentTimeMillis())
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && key.c == '\\') {
                     if (state.displayedClasses.isNotEmpty() && state.selectedClassIndex >= 0 && !state.isFetchingInstances) {
                         val selectedClass = state.displayedClasses[state.selectedClassIndex]
                         state.isFetchingInstances = true
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                         scope.launch {
                             val (res, err) = RpcClient.countInstances(selectedClass)
                             state.sharedInstanceCountResult.value = if (res != null) Pair(selectedClass, res) else null
@@ -243,7 +279,7 @@ fun main(args: Array<String>) {
                     state.pushMode(AppMode.DEBUG_HOOK_WATCH)
                     state.activeHooks.clear()
                     state.activeHooks.addAll(HookStore.load(state.appPackageName))
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS && (key.c == 'h' || key.c == 'H')) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty() && state.selectedClassIndex in rows.indices) {
@@ -266,7 +302,7 @@ fun main(args: Array<String>) {
                                 }
                             }
                             HookStore.save(state.appPackageName, state.activeHooks.toSet())
-                            Renderer.render(state)
+                            renderWithAnimation(state)
                         }
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS && (key.c == 'i' || key.c == 'I')) {
@@ -296,7 +332,7 @@ fun main(args: Array<String>) {
                             state.inspectInstancesExpanded = false
                             state.selectedClassIndex = 0
                             state.rpcError = null
-                            Renderer.render(state)
+                            renderWithAnimation(state)
                             scope.launch {
                                 val (result, error) = RpcClient.inspectClass(targetClassName)
                                 state.sharedInspectResult.value = result
@@ -319,7 +355,7 @@ fun main(args: Array<String>) {
                                 state.inputBuffer = currentValue
                                 state.cursorPosition = state.inputBuffer.length
                                 onInputChanged(state)
-                                Renderer.render(state)
+                                renderWithAnimation(state)
                             }
                         }
                     }
@@ -346,7 +382,7 @@ fun main(args: Array<String>) {
                             }
                             
                             state.inspectExpandedInstances[targetId] = null
-                            Renderer.render(state)
+                            renderWithAnimation(state)
                             scope.launch {
                                 val (attrs, err) = RpcClient.inspectInstance(targetClassName, targetId)
                                 if (err == null && attrs != null) {
@@ -367,7 +403,7 @@ fun main(args: Array<String>) {
                             state.inputBuffer.substring(state.cursorPosition)
                     state.cursorPosition++
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -377,7 +413,7 @@ fun main(args: Array<String>) {
                             state.inputBuffer.substring(state.cursorPosition)
                     state.cursorPosition--
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -392,7 +428,7 @@ fun main(args: Array<String>) {
                                         state.inputBuffer.substring(state.cursorPosition)
                     state.cursorPosition = newCursor
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -403,7 +439,7 @@ fun main(args: Array<String>) {
                     while (pos >= 0 && state.inputBuffer[pos].isLetterOrDigit()) pos--
                     state.cursorPosition = pos + 1
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -414,20 +450,20 @@ fun main(args: Array<String>) {
                     while (pos < state.inputBuffer.length && state.inputBuffer[pos].isLetterOrDigit()) pos++
                     state.cursorPosition = pos
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
             is KeyEvent.CmdLeft, is KeyEvent.CtrlA -> {
                 state.cursorPosition = 0
                 onInputChanged(state)
-                Renderer.render(state)
+                renderWithAnimation(state)
             }
 
             is KeyEvent.CmdRight, is KeyEvent.CtrlE -> {
                 state.cursorPosition = state.inputBuffer.length
                 onInputChanged(state)
-                Renderer.render(state)
+                renderWithAnimation(state)
             }
 
             is KeyEvent.CmdBackspace -> {
@@ -435,7 +471,7 @@ fun main(args: Array<String>) {
                     state.inputBuffer = state.inputBuffer.substring(state.cursorPosition)
                     state.cursorPosition = 0
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -444,16 +480,16 @@ fun main(args: Array<String>) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex + 1).coerceAtMost(hooks.size - 1)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     state.debugEntrypointIndex = (state.debugEntrypointIndex + 1).coerceAtMost(1)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEFAULT) {
                     if (state.suggestions.isNotEmpty()) {
                         state.selectedSuggestionIndex =
                             (state.selectedSuggestionIndex + 1).coerceAtMost(state.suggestions.size - 1)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     } else if (state.historyNavigationIndex > -1) {
                         state.historyNavigationIndex--
                         if (state.historyNavigationIndex < 0) {
@@ -463,20 +499,20 @@ fun main(args: Array<String>) {
                             state.inputBuffer = state.commandHistory[state.commandHistory.size - 1 - state.historyNavigationIndex]
                         }
                         state.cursorPosition = state.inputBuffer.length
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER) {
                     if (state.displayedClasses.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex + 1).coerceAtMost(state.displayedClasses.size - 1)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex + 1).coerceAtMost(rows.size - 1)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 }
             }
@@ -486,16 +522,16 @@ fun main(args: Array<String>) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex - 1).coerceAtLeast(0)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     state.debugEntrypointIndex = (state.debugEntrypointIndex - 1).coerceAtLeast(0)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEFAULT) {
                     if (state.suggestions.isNotEmpty()) {
                         state.selectedSuggestionIndex =
                             (state.selectedSuggestionIndex - 1).coerceAtLeast(0)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     } else if (state.commandHistory.isNotEmpty()) {
                         if (state.historyNavigationIndex == -1) {
                             state.savedInputBeforeHistory = state.inputBuffer
@@ -503,20 +539,20 @@ fun main(args: Array<String>) {
                         state.historyNavigationIndex = (state.historyNavigationIndex + 1).coerceAtMost(state.commandHistory.size - 1)
                         state.inputBuffer = state.commandHistory[state.commandHistory.size - 1 - state.historyNavigationIndex]
                         state.cursorPosition = state.inputBuffer.length
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER) {
                     if (state.displayedClasses.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex - 1).coerceAtLeast(0)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex - 1).coerceAtLeast(0)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 }
             }
@@ -527,12 +563,12 @@ fun main(args: Array<String>) {
                     state.inputBuffer = selected.name
                     state.cursorPosition = state.inputBuffer.length
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && state.displayedClasses.isNotEmpty() && state.selectedClassIndex >= 0) {
                     state.inputBuffer = state.displayedClasses[state.selectedClassIndex]
                     state.cursorPosition = state.inputBuffer.length
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -547,7 +583,7 @@ fun main(args: Array<String>) {
                             RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled)
                         }
                         HookStore.save(state.appPackageName, state.activeHooks.toSet())
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
                     val newValue = state.inputBuffer
@@ -556,7 +592,7 @@ fun main(args: Array<String>) {
                     state.inputBuffer = ""
                     state.cursorPosition = 0
                     state.popMode()
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                     
                     if (attr != null && instId.isNotEmpty()) {
                         scope.launch {
@@ -582,7 +618,7 @@ fun main(args: Array<String>) {
                     }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     CommandExecutor.handleDebugEntrypoint(state, scope)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEFAULT) {
                     val commandToExecute = if (state.suggestions.isNotEmpty() && state.selectedSuggestionIndex != -1) {
                         state.suggestions[state.selectedSuggestionIndex].name
@@ -594,7 +630,7 @@ fun main(args: Array<String>) {
                         state.inputBuffer = commandToExecute
                         state.cursorPosition = state.inputBuffer.length
                         onInputChanged(state)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     } else if (commandToExecute.isNotBlank()) {
                         HistoryStore.append(commandToExecute)
                         state.commandHistory.add(commandToExecute)
@@ -606,9 +642,9 @@ fun main(args: Array<String>) {
                         state.ctrlCPressed = false
                         state.historyNavigationIndex = -1
                         
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                         CommandExecutor.execute(commandToExecute, state, scope)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER) {
                     if (state.displayedClasses.isNotEmpty() && state.selectedClassIndex >= 0) {
@@ -629,7 +665,7 @@ fun main(args: Array<String>) {
                         state.rpcError = null
                         
                         state.pushMode(AppMode.DEBUG_INSPECT_CLASS)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                         
                         // Start fetching in background
                         scope.launch {
@@ -645,13 +681,13 @@ fun main(args: Array<String>) {
                         when (val row = rows[state.selectedClassIndex]) {
                             is InspectRow.SectionStaticRow -> {
                                 state.inspectStaticExpanded = !state.inspectStaticExpanded
-                                Renderer.render(state)
+                                renderWithAnimation(state)
                             }
                             is InspectRow.SectionInstancesRow -> {
                                 state.inspectInstancesExpanded = !state.inspectInstancesExpanded
                                 if (state.inspectInstancesExpanded && state.inspectInstancesList == null) {
                                     state.isFetchingInstancesList = true
-                                    Renderer.render(state)
+                                    renderWithAnimation(state)
                                     scope.launch {
                                         val (res, err) = RpcClient.listInstances(state.inspectTargetClassName)
                                         if (err == null && res != null) {
@@ -662,17 +698,17 @@ fun main(args: Array<String>) {
                                         }
                                     }
                                 } else {
-                                    Renderer.render(state)
+                                    renderWithAnimation(state)
                                 }
                             }
                             is InspectRow.InstanceRow -> {
                                 val id = row.instance.id
                                 if (state.inspectExpandedInstances.containsKey(id)) {
                                     state.inspectExpandedInstances.remove(id)
-                                    Renderer.render(state)
+                                    renderWithAnimation(state)
                                 } else {
                                     state.inspectExpandedInstances[id] = null
-                                    Renderer.render(state)
+                                    renderWithAnimation(state)
                                     scope.launch {
                                         val (attrs, err) = RpcClient.inspectInstance(state.inspectTargetClassName, id)
                                         if (err == null && attrs != null) {
@@ -702,10 +738,10 @@ fun main(args: Array<String>) {
                                     if (childId != null && childClassName != null) {
                                         if (state.inspectExpandedInstances.containsKey(childId)) {
                                             state.inspectExpandedInstances.remove(childId)
-                                            Renderer.render(state)
+                                            renderWithAnimation(state)
                                         } else {
                                             state.inspectExpandedInstances[childId] = null
-                                            Renderer.render(state)
+                                            renderWithAnimation(state)
                                             scope.launch {
                                                 val (attrs, err) = RpcClient.inspectInstance(childClassName, childId)
                                                 if (err == null && attrs != null) {
@@ -727,22 +763,22 @@ fun main(args: Array<String>) {
             is KeyEvent.ArrowLeft -> {
                 if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     state.hookLogScrollOffset = maxOf(0, state.hookLogScrollOffset - 5)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.cursorPosition > 0) {
                     state.cursorPosition--
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
             is KeyEvent.ArrowRight -> {
                 if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     state.hookLogScrollOffset += 5
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.cursorPosition < state.inputBuffer.length) {
                     state.cursorPosition++
                     onInputChanged(state)
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -751,7 +787,7 @@ fun main(args: Array<String>) {
                     state.inputBuffer = ""
                     state.cursorPosition = 0
                     state.popMode()
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS && state.inspectBackStack.isNotEmpty()) {
                     val prevClass = state.inspectBackStack.removeAt(state.inspectBackStack.size - 1)
                     state.inspectTargetClassName = prevClass
@@ -767,7 +803,7 @@ fun main(args: Array<String>) {
                     state.inspectInstancesExpanded = false
                     state.selectedClassIndex = 0
                     state.rpcError = null
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                     scope.launch {
                         val (result, error) = RpcClient.inspectClass(prevClass)
                         state.sharedInspectResult.value = result
@@ -779,7 +815,7 @@ fun main(args: Array<String>) {
                     if (prevMode == null && state.startedAsInspectPane) {
                         state.running = false
                     }
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
@@ -793,20 +829,27 @@ fun main(args: Array<String>) {
                         }
                         HookStore.save(state.appPackageName, state.activeHooks.toSet())
                         state.selectedHookIndex = state.selectedHookIndex.coerceAtMost(hooks.size - 1).coerceAtLeast(0)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 } else {
                     if (state.cursorPosition < state.inputBuffer.length) {
                         state.inputBuffer = state.inputBuffer.substring(0, state.cursorPosition) +
                                 state.inputBuffer.substring(state.cursorPosition + 1)
                         onInputChanged(state)
-                        Renderer.render(state)
+                        renderWithAnimation(state)
                     }
                 }
             }
 
             is KeyEvent.Timeout -> {
                 var needsRender = false
+
+                if (state.classAnimations.isNotEmpty()) {
+                    platform.posix.usleep(30000u)
+                    needsRender = true
+                } else {
+                    platform.posix.usleep(100000u)
+                }
 
                 val updatedLogs = state.sharedBridgeLogs.value
                 if (updatedLogs != null) {
@@ -856,7 +899,7 @@ fun main(args: Array<String>) {
                             // Re-apply active hooks to the new session
                             scope.launch { RpcClient.syncAllHooks(state.activeHooks) }
                             
-                            Renderer.render(state)
+                            renderWithAnimation(state)
                             CommandExecutor.proceedWithTmux(state)
                             state.mode = AppMode.DEBUG_ENTRYPOINT
                             needsRender = true
@@ -913,9 +956,11 @@ fun main(args: Array<String>) {
                     
                     val fetched = state.sharedFetchedClasses.value
                     if (fetched != null) {
+                        val oldList = state.displayedClasses.toList()
                         state.allFetchedClasses = fetched
                         state.displayedClasses = CommandExecutor.sortClasses(fetched, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
                         state.selectedClassIndex = if (state.displayedClasses.isNotEmpty()) 0 else -1
+                        triggerClassAnimations(state, oldList, state.displayedClasses, currentTimeMillis())
                         state.sharedFetchedClasses.value = null
                         state.isFetchingClasses = false
                         needsRender = true
@@ -999,7 +1044,7 @@ fun main(args: Array<String>) {
                 }
 
                 if (needsRender) {
-                    Renderer.render(state)
+                    renderWithAnimation(state)
                 }
             }
 
