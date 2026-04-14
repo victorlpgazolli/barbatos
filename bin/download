@@ -7,6 +7,10 @@ download_path="$ASDF_DOWNLOAD_PATH"
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
+if [ "$OS" = "darwin" ]; then
+    OS="macos"
+fi
+
 if [ "$ARCH" = "x86_64" ]; then
     ARCH="x64"
 elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
