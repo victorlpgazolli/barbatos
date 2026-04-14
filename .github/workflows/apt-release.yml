@@ -11,6 +11,7 @@ jobs:
     name: Build and Package (${{ matrix.target }})
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x86_64
@@ -144,18 +145,25 @@ jobs:
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          gpgconf --kill gpg-agent
+          gpg-connect-agent reloadagent /bye
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
 
       - name: Sign Debian Packages (debsign)
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
+          # Create a wrapper script for gpg to handle arguments and passphrase
+          cat <<EOF > gpg-wrapper.sh
+          #!/bin/bash
+          gpg --batch --pinentry-mode loopback --passphrase "\$GPG_PASSPHRASE" "\$@"
+          EOF
+          chmod +x gpg-wrapper.sh
+
           for changes in dist/deb/*.changes; do
-            debsign -p"gpg --batch --pinentry-mode loopback --passphrase $GPG_PASSPHRASE" \
-                    -k "$GPG_KEY_ID" \
-                    "$changes"
+            # Use absolute path for wrapper to be safe
+            debsign -p"$(realpath gpg-wrapper.sh)" -k "$GPG_KEY_ID" "$changes"
           done
 
       - name: Upload Debian Packages
