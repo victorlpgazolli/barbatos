@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-package:
     name: Build and Package (${{ matrix.target }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         include:
@@ -116,8 +116,7 @@ jobs:
 
       - name: Sign Debian Packages
         run: |
-          sudo add-apt-repository universe && sudo apt-get update
-          sudo apt-get install -y dpkg-sig
+          sudo apt-get update && sudo apt-get install -y dpkg-sig
           for deb in dist/deb/*.deb; do
             dpkg-sig --gpg-options "--passphrase ${{ secrets.GPG_PASSPHRASE }} --batch --pinentry-mode loopback" \
                      -k ${{ secrets.GPG_KEY_ID }} \
