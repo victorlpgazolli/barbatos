@@ -99,6 +99,11 @@ jobs:
             rm -rf "$PKG_DIR"
           done
 
+      - name: Install signing tools
+        run: |
+          sudo dpkg --remove-architecture arm64 || true
+          sudo apt-get update && sudo apt-get install -y devscripts
+
       - name: Generate .changes files
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
@@ -132,31 +137,25 @@ jobs:
               > dist/deb/${pkg%.deb}.changes
           done
 
-      - name: Install signing tools
-        run: sudo apt-get update && sudo apt-get install -y devscripts
-
-      - name: Import GPG Key and Preset Passphrase
+      - name: Import GPG Key and Configure Agent
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
-
-          echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
           gpgconf --kill gpg-agent
-
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          KEYGRIP=$(gpg --with-keygrip --list-secret-keys | awk '/Keygrip/ {print $3; exit}')
-          echo "$GPG_PASSPHRASE" | /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
 
       - name: Sign Debian Packages (debsign)
         env:
-          PGP_PROGRAM: gpg --batch --pinentry-mode=loopback
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
           for changes in dist/deb/*.changes; do
-            debsign -p "$PGP_PROGRAM" -k "$GPG_KEY_ID" "$changes"
+            debsign -p"gpg --batch --pinentry-mode loopback --passphrase $GPG_PASSPHRASE" \
+                    -k "$GPG_KEY_ID" \
+                    "$changes"
           done
 
       - name: Upload Debian Packages
@@ -196,11 +195,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
 
-      - name: Import GPG key
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+      - name: Import GPG key and Configure Agent
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
       - name: Update APT Repository
         env:
@@ -219,7 +222,7 @@ jobs:
         env:
           COMMIT_MESSAGE: "chore: update apt repository for release ${{ github.ref_name }}"
         run: |
-          cp -r ./dists ./web
+          cp -r apt_meta/dists ./web
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add ./web
