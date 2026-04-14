@@ -10,9 +10,10 @@ fi
 echo "Building Linux ARM64 ($BUILD_TYPE)..."
 
 HOST_ARCH=$(uname -m)
+HOST_OS=$(uname -s)
 
-if [ "$HOST_ARCH" = "aarch64" ]; then
-    echo "Running natively on ARM64. Using Makefile..."
+if [ "$HOST_ARCH" = "aarch64" ] && [ "$HOST_OS" = "Linux" ]; then
+    echo "Running natively on Linux ARM64. Using Makefile..."
     make install_dependencies
     if [ "$BUILD_TYPE" == "Debug" ]; then
         ./gradlew linkDebugExecutableLinuxArm64 --no-daemon
@@ -36,7 +37,7 @@ else
         python:3.11-slim \
         bash -c "apt-get update && apt-get install -y binutils && \
                  pip install -r bridge/requirements.txt && cd bridge && python3 -m PyInstaller bridge.spec && \
-                 cd ../mcp_server && pip install -r requirements.txt && cd mcp_server && python3 -m PyInstaller mcp.spec"
+                 cd ../mcp_server && pip install -r requirements.txt && python3 -m PyInstaller mcp.spec"
 fi
 
 # 5. Prepare Output
