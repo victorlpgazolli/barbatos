@@ -30,59 +30,32 @@ description: |
 grade: stable
 confinement: strict
 
-# Define architectures to build for
+# We define that we just want to package for these architectures
 architectures:
-  - build-on: [amd64, arm64]
+  - build-on: amd64
+    build-for: amd64
+  - build-on: amd64
+    build-for: arm64
 
 apps:
   barbatos:
     command: bin/barbatos
-    plugs:
-      - network
-      - network-bind
-      - adb-support
-      - home
+    plugs: [network, network-bind, adb-support, home]
   bridge:
     command: bin/barbatos-bridge
-    plugs:
-      - network
-      - network-bind
-      - adb-support
+    plugs: [network, network-bind, adb-support]
   mcp:
     command: bin/barbatos-mcp
-    plugs:
-      - network
+    plugs: [network]
 
 parts:
-  # The entire project is built via the unified script
-  barbatos-components:
-    plugin: nil
-    source: .
-    build-packages:
-      - openjdk-21-jdk-headless
-      - libcurl4-openssl-dev
-      - nodejs
-      - npm
-      - binutils
-      - python3-pip
-      - python3-venv
-    override-build: |
-      # Snapcraft runs parts independently in isolated environments.
-      # By calling our script, we build everything (TUI, Bridge, MCP) in one go
-      # and place it in the common dist/ folder.
-      
-      ARCH=$(uname -m)
-      if [ "$ARCH" = "x86_64" ]; then
-        ./scripts/build_linux_x64.sh
-      elif [ "$ARCH" = "aarch64" ]; then
-        ./scripts/build_linux_arm64.sh
-      else
-        echo "Unsupported architecture: $ARCH"
-        exit 1
-      fi
-      
-      # Install binaries into snap payload
-      mkdir -p $CRAFT_PART_INSTALL/bin
-      cp dist/barbatos $CRAFT_PART_INSTALL/bin/barbatos
-      cp dist/barbatos-bridge $CRAFT_PART_INSTALL/bin/barbatos-bridge
-      cp dist/barbatos-mcp $CRAFT_PART_INSTALL/bin/barbatos-mcp
+  # We just "dump" the pre-built binaries from our 'dist/' directory
+  binaries:
+    plugin: dump
+    source: dist/
+    organize:
+      barbatos: bin/barbatos
+      barbatos-bridge: bin/barbatos-bridge
+      barbatos-mcp: bin/barbatos-mcp
+    stage-packages:
+      - libcurl4
