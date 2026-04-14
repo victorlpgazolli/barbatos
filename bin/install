@@ -5,9 +5,21 @@ install_path="$ASDF_INSTALL_PATH"
 download_path="$ASDF_DOWNLOAD_PATH"
 
 mkdir -p "$install_path/bin"
-cp "$download_path/dist/barbatos" "$install_path/bin/barbatos"
-cp "$download_path/dist/barbatos-bridge" "$install_path/bin/barbatos-bridge"
-cp "$download_path/dist/barbatos-mcp" "$install_path/bin/barbatos-mcp"
+
+# We check for existence of each file as some older releases might not have all components
+if [ -f "$download_path/dist/barbatos" ]; then
+    cp "$download_path/dist/barbatos" "$install_path/bin/barbatos"
+fi
+
+if [ -f "$download_path/dist/barbatos-bridge" ]; then
+    cp "$download_path/dist/barbatos-bridge" "$install_path/bin/barbatos-bridge"
+fi
+
+# The MCP server was added recently, so we make it optional to avoid install failures on older versions
+if [ -f "$download_path/dist/barbatos-mcp" ]; then
+    cp "$download_path/dist/barbatos-mcp" "$install_path/bin/barbatos-mcp"
+fi
+
 chmod +x "$install_path/bin/"*
 
 echo "barbatos ${ASDF_INSTALL_VERSION} installation successful!"
