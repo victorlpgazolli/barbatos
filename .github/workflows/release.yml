@@ -201,7 +201,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release upload ${RELEASE_TAG} artifacts/barbatos-*.zip \
+          gh release upload ${RELEASE_TAG} \
             artifacts/barbatos-*.zip \
             artifacts/barbatos-*-tui \
             artifacts/barbatos-*-bridge \
