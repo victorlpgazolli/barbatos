@@ -1,0 +1,14 @@
+Format: 1.8
+Date: {{DATE}}
+Source: {{PACKAGE}}
+Binary: {{PACKAGE}}
+Architecture: {{ARCH}}
+Version: {{VERSION}}
+Distribution: stable
+Urgency: medium
+Maintainer: CI <ci@example.com>
+Changed-By: CI <ci@example.com>
+Description:
+ {{PACKAGE}} - auto-built package
+Files:
+ {{FILE_SIZE}} {{MD5}} {{SHA1}} {{SHA256}} {{FILENAME}}
