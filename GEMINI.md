@@ -2,12 +2,13 @@
 
 ## Project Overview
 
-`barbatos` (Interactive Debug Kit) is a **Kotlin Native TUI debugger** for Android apps, running on macOS ARM64. It provides an interactive terminal UI for live debugging via Frida, with no external TUI libraries — everything is built from scratch using POSIX `termios` and ANSI escape codes.
+`barbatos` (Interactive Debug Kit) is a **Kotlin Native TUI debugger** for Android apps. While primarily built for **macOS ARM64**, it supports **Linux (x64 and ARM64)** to ensure cross-platform compatibility. It provides an interactive terminal UI for live debugging via Frida, with no external TUI libraries — everything is built from scratch using POSIX `termios` and ANSI escape codes.
 
 The tool bridges:
 - **Kotlin Native binary** (`src/nativeMain/kotlin/`) — the TUI shell and state machine.
 - **Python bridge** (`bridge/bridge.py`) — Frida host-side, exposes a JSON-RPC HTTP server.
 - **Frida JS agent** (`bridge/agent.js`) — injected into the Android process, exports RPC functions.
+- **MCP Server** (`mcp_server/server.py`) — wraps the Python bridge's RPC calls into standardized tools for AI agents.
 
 tmux is used to manage debug sessions and side-by-side inspection panels.
 
@@ -30,11 +31,13 @@ Main.kt → AppState.kt (state machine)
 
 ### AppMode state machine
 
-Modes are defined in `AppState.kt` as an `AppMode` enum:
+Modes are defined in `AppState.kt` as an `AppMode` enum. Navigation is stack-based, utilizing `navigationStack`, `pushMode()`, and `popMode()` rather than simple state reassignment. The core modes include:
 - `DEFAULT` — command input with autocomplete and persistent history navigation.
 - `DEBUG_ENTRYPOINT` — menu after gadget install (inspect classes vs hook methods).
 - `DEBUG_CLASS_FILTER` — filterable class list from Frida with autofill package name.
 - `DEBUG_INSPECT_CLASS` — tree-based inspection of fields/methods and live instances.
+- `DEBUG_HOOK_WATCH` — live event logging and observation for intercepted method calls.
+- `DEBUG_EDIT_ATTRIBUTE` — UI mode for editing the value of a specific primitive attribute in an instance.
 
 ---
 
@@ -68,6 +71,9 @@ Target: `macosArm64`. Entry point: `main` in `Main.kt`. Binary base name: `barba
 ---
 
 ## Development Conventions
+
+### Language & Documentation
+**All code comments, commit messages, and documentation MUST be in English.** Portuguese or other languages are strictly prohibited to maintain codebase consistency.
 
 ### Async / non-blocking UI
 The main loop runs on the main thread. Network calls via Ktor must be launched in a background coroutine using `CoroutineScope(Dispatchers.Default)`. Results are passed back via `AtomicReference` fields on `AppState`, polled on `KeyEvent.Timeout` ticks (~100ms). **Never block the main loop.**
