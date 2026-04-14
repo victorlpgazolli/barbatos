@@ -16,6 +16,34 @@
   <p>IMAGEM_AQUI_1</p>
 </div>
 
+## Why the name "Barbatos?"
+
+The name is inspired by the mythological Barbatos, but in the context of Android debugging.
+
+>Barbatos is a spirit ([wikipedia](https://en.wikipedia.org/wiki/Barbatos)) that grants the ability to understand the spoken language of animals. He reveals hidden treasures that have been concealed by the enchantment of magicians, gives knowledge of past and future events, and reconciles disputes between friends and those who hold power.
+
+This project aims to grant the hability to understand deeply about an App, reveal hidden states in the heap, gives knowledge about changes of state (*only past and present tho*), and reconcile the gap between developers and machines (apps) by providing a more intuitive way to interact with them.
+
+## What is this project?
+here you will find 3 things: A TUI debugger ("barbatos"), a MCP server ("barbatos-mcp") and a core Http API ("barbatos-bridge") that its used by the TUI and MCP server.
+
+**The focus of this project is to bring Frida powerfullness closer to devs and vibe-coders without the need to know how Frida is setup and how it works.**
+
+## Why use Barbatos?
+
+#### "Why use Barbatos if you can use Frida directly?" 
+Frida has a trade-off, in one end you got a very powerful tool, and in the other you have to understand how to setup (if you dont got a rooted device), and interact with its API. For some people this isnt a problem at all, but it does have a learning curve.
+
+#### "And what about Objection?"
+Ok thats a pretty good question, objection its an abstraction of frida just like barbatos, and it got a lot more capabilities, battle tested... For most cases objection is enough. But objection inherited the Frida overhead, he assumes you already has frida setup... which sometimes its enough to not use it at all. Also, objection is more focused on pentesting and red teaming.
+
+unlike objection, barbatos was developed based on the assumption that the user know nothing about Frida to use, the only requirement is the app being debuggable, nothing more. Barbatos was designed with the mindset of being a debugging tool, so its more focused on that experience.
+
+#### "Nowadays you can use a frida-mcp to handle the complexity"
+Yes, all frida-mcp's (there are a few of them at this time) handles very smoothly actually, the only downside is that it also inherited the overhead of the user needing to know how to setup Frida, which again, can be a problem for some, but not for all.
+
+Barbatos is a TUI debugger designed to be frictionless, 0 setup needed. It handle all the overhead needed to use Frida in your app. Apart from that, it has the same purpose of provide Frida's power in a more user-friendly way.
+
 ---
 
 ## Main Use Cases
