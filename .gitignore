@@ -77,3 +77,10 @@ venv
 *bundle.js
 *.qcow2
 *.iso
+*.key
+*.keyid
+*.passphrase
+web/*.gpg
+!web/barbatos-repo.gpg
+*.deb
+web/pool/
