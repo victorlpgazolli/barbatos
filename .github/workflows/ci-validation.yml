@@ -36,6 +36,7 @@ jobs:
         run: |
           cd bridge
           pip install -r requirements.txt
+          pip install pytest
           
       - name: Run Bridge Unit Tests
         run: |
