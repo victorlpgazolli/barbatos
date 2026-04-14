@@ -116,7 +116,8 @@ jobs:
 
       - name: Sign Debian Packages
         run: |
-          sudo apt-get update && sudo apt-get install -y dpkg-sig
+          sudo add-apt-repository universe && sudo apt-get update
+          sudo apt-get install -y dpkg-sig
           for deb in dist/deb/*.deb; do
             dpkg-sig --gpg-options "--passphrase ${{ secrets.GPG_PASSPHRASE }} --batch --pinentry-mode loopback" \
                      -k ${{ secrets.GPG_KEY_ID }} \
