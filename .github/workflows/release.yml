@@ -7,9 +7,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  create_release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Create Release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${RELEASE_TAG} \
+            --title "Release ${RELEASE_TAG}" \
+            --generate-notes
   build-macos:
     name: Build macOS ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    needs: create_release
     strategy:
       matrix:
         include:
@@ -67,6 +86,7 @@ jobs:
   build-linux:
     name: Build Linux ${{ matrix.target }}
     runs-on: ubuntu-24.04
+    needs: create_release
     strategy:
       matrix:
         include:
@@ -176,14 +196,14 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Create Release
+      - name: Update Release with artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create ${{ github.ref_name }} \
-            --title "Release ${{ github.ref_name }}" \
-            --generate-notes \
+          gh release upload ${RELEASE_TAG} \
             artifacts/barbatos-*.zip \
             artifacts/barbatos-*-tui \
             artifacts/barbatos-*-bridge \
-            artifacts/barbatos-*-mcp
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            artifacts/barbatos-*-mcp \
+            --clobber

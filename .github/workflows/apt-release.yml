@@ -11,6 +11,7 @@ jobs:
     name: Build and Package (${{ matrix.target }})
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x86_64
@@ -63,7 +64,6 @@ jobs:
             make compile_mcp
           else
             make compile_binary ARCH=aarch64
-            # ARM64 Docker builds for PyInstaller
             docker run --rm --platform linux/arm64 \
               -v ${{ github.workspace }}:/app -w /app \
               python:3.11-slim \
@@ -82,56 +82,108 @@ jobs:
           else
             VERSION="0.0.0-snapshot"
           fi
-          
           mkdir -p dist/deb
-          
           for package in barbatos barbatos-bridge barbatos-mcp; do
-            # Create a temporary directory for packaging to avoid polluting the repo
             PKG_DIR="pkg_tmp_$package"
             mkdir -p "$PKG_DIR"
             cp -r packaging/debian/$package/* "$PKG_DIR/"
-            
-            # Ensure bin directory exists and copy binary
+
             mkdir -p "$PKG_DIR/usr/bin"
             cp "dist/$package" "$PKG_DIR/usr/bin/$package"
             chmod +x "$PKG_DIR/usr/bin/$package"
-            
-            # Update control file
+
             sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
             sed -i "s/Architecture: .*/Architecture: ${{ matrix.target }}/" "$PKG_DIR/DEBIAN/control"
-            
-            # Build the package
+
             DEB_FILE="dist/deb/${package}_${VERSION}_${{ matrix.target }}.deb"
             dpkg-deb --build "$PKG_DIR" "$DEB_FILE"
             rm -rf "$PKG_DIR"
           done
 
-      - name: Import GPG key
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
-          echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-
-      - name: Sign Debian Packages
-        run: |
-          sudo apt-get update && sudo apt-get install -y dpkg-sig
-          for deb in dist/deb/*.deb; do
-            dpkg-sig --gpg-options "--passphrase ${{ secrets.GPG_PASSPHRASE }} --batch --no-tty --pinentry-mode loopback" \
-                     -k ${{ secrets.GPG_KEY_ID }} \
-                     --sign builder "$deb"
-          done
-
-      - name: Upload Debian Packages
-        uses: actions/upload-artifact@v7
+      - name: Upload Unsigned Debian Packages
+        uses: actions/upload-artifact@v4
         with:
-          name: deb-packages-${{ matrix.target }}
+          name: unsigned-deb-packages-${{ matrix.target }}
           path: dist/deb/*.deb
 
-  publish-repo:
+  sign-packages:
     needs: build-and-package
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download unsigned artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: unsigned-deb-packages-*
+          merge-multiple: true
+          path: dist/deb
+
+      - name: Install signing tools
+        run: sudo apt-get update && sudo apt-get install -y dpkg-sig
+
+      - name: Import GPG Key and Configure Agent
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Sign Debian Packages (dpkg-sig)
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          for deb in dist/deb/*.deb; do
+            dpkg-sig --gpg-options "--batch --pinentry-mode loopback --passphrase \"$GPG_PASSPHRASE\"" \
+              -k "$GPG_KEY_ID" \
+              --sign builder "$deb"
+          done
+
+      - name: Generate .changes files
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="0.0.0-snapshot"
+          fi
+
+          for deb in dist/deb/*.deb; do
+            pkg=$(basename "$deb")
+            name="${pkg%%_*}"
+            ARCH=$(dpkg-deb -f "$deb" Architecture)
+            SIZE=$(stat -c "%s" "$deb")
+            MD5=$(md5sum "$deb" | cut -d' ' -f1)
+            SHA1=$(sha1sum "$deb" | cut -d' ' -f1)
+            SHA256=$(sha256sum "$deb" | cut -d' ' -f1)
+            DATE=$(date -R)
+
+            sed \
+              -e "s/{{DATE}}/$DATE/" \
+              -e "s/{{PACKAGE}}/$name/g" \
+              -e "s/{{ARCH}}/$ARCH/" \
+              -e "s/{{VERSION}}/$VERSION/" \
+              -e "s/{{FILE_SIZE}}/$SIZE/" \
+              -e "s/{{MD5}}/$MD5/" \
+              -e "s/{{SHA1}}/$SHA1/" \
+              -e "s/{{SHA256}}/$SHA256/" \
+              -e "s/{{FILENAME}}/$pkg/" \
+              packaging/debian/changes.template \
+              > dist/deb/${pkg%.deb}.changes
+          done
+
+      - name: Upload Signed Debian Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-deb-packages
+          path: dist/deb/*
+
+  publish-repo:
+    needs: sign-packages
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -139,15 +191,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          path: main
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
+          name: signed-deb-packages
           path: deb-packages
-          pattern: deb-packages-*
-          merge-multiple: true
 
       - name: Upload .deb packages to GitHub Release
         run: |
@@ -163,21 +212,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
 
-      - name: Import GPG key
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
-          echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+      - name: Import GPG key and Configure Agent
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
       - name: Update APT Repository
+        env:
+          PACKAGES_BASE_URL: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
         run: |
           sudo apt-get update && sudo apt-get install -y apt-utils
-          PACKAGES_BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
           mkdir -p apt_meta
-          bash main/scripts/update-apt-repo.sh \
+          bash scripts/update-apt-repo.sh \
             deb-packages \
             apt_meta \
             ${{ secrets.GPG_KEY_ID }} \
@@ -185,11 +236,12 @@ jobs:
             "$PACKAGES_BASE_URL"
 
       - name: Deploy to web/
+        env:
+          COMMIT_MESSAGE: "chore: update apt repository for release ${{ github.ref_name }}"
         run: |
-          cp -r apt_meta/dists main/web/
-          cd main
+          cp -r apt_meta/dists ./web
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add web/
-          git diff --cached --quiet || git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
+          git add ./web
+          git diff --cached --quiet || git commit -m "$COMMIT_MESSAGE"
           git push origin HEAD:master
