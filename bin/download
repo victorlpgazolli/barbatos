@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-ASDF_INSTALL_TYPE=$1
-ASDF_INSTALL_VERSION=$2
-ASDF_DOWNLOAD_PATH=$3
+version="$ASDF_INSTALL_VERSION"
+download_path="$ASDF_DOWNLOAD_PATH"
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -14,10 +13,11 @@ elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
     ARCH="arm64"
 fi
 
-URL="https://github.com/victorlpgazolli/barbatos/releases/download/v${ASDF_INSTALL_VERSION}/barbatos-${OS}-${ARCH}.zip"
+# ASSETS in GitHub are named: barbatos-macos-arm64.zip or barbatos-linux-x64.zip
+url="https://github.com/victorlpgazolli/barbatos/releases/download/v${version}/barbatos-${OS}-${ARCH}.zip"
 
-echo "Downloading barbatos v${ASDF_INSTALL_VERSION} for ${OS}-${ARCH}..."
-curl -fLo "${ASDF_DOWNLOAD_PATH}/barbatos.zip" "$URL"
-cd "${ASDF_DOWNLOAD_PATH}"
+echo "Downloading barbatos v${version} for ${OS}-${ARCH}..."
+curl -fLo "${download_path}/barbatos.zip" "$url"
+cd "${download_path}"
 unzip barbatos.zip
 rm barbatos.zip

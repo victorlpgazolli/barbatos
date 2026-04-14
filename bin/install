@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-ASDF_INSTALL_TYPE=$1
-ASDF_INSTALL_VERSION=$2
-ASDF_INSTALL_PATH=$3
-# ASDF_DOWNLOAD_PATH is provided as an environment variable
+install_path="$ASDF_INSTALL_PATH"
+download_path="$ASDF_DOWNLOAD_PATH"
 
-mkdir -p "$ASDF_INSTALL_PATH/bin"
-cp "$ASDF_DOWNLOAD_PATH/dist/barbatos" "$ASDF_INSTALL_PATH/bin/barbatos"
-cp "$ASDF_DOWNLOAD_PATH/dist/barbatos-bridge" "$ASDF_INSTALL_PATH/bin/barbatos-bridge"
-cp "$ASDF_DOWNLOAD_PATH/dist/barbatos-mcp" "$ASDF_INSTALL_PATH/bin/barbatos-mcp"
-chmod +x "$ASDF_INSTALL_PATH/bin/"*
+mkdir -p "$install_path/bin"
+cp "$download_path/dist/barbatos" "$install_path/bin/barbatos"
+cp "$download_path/dist/barbatos-bridge" "$install_path/bin/barbatos-bridge"
+cp "$download_path/dist/barbatos-mcp" "$install_path/bin/barbatos-mcp"
+chmod +x "$install_path/bin/"*
 
 echo "barbatos ${ASDF_INSTALL_VERSION} installation successful!"
