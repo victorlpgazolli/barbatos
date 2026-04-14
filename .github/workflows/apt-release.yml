@@ -72,7 +72,7 @@ jobs:
             docker run --rm --platform linux/arm64 \
               -v ${{ github.workspace }}:/app -w /app \
               python:3.11-slim \
-              bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && pyinstaller mcp.spec"
+              bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && cd mcp_server && pyinstaller mcp.spec"
           fi
           make prepare_release ARCH=${{ matrix.arch }}
 
@@ -111,6 +111,11 @@ jobs:
         run: |
           if [ -z "$GPG_PRIVATE_KEY" ]; then echo "GPG_PRIVATE_KEY is empty"; exit 1; fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
+          # Derivando o fingerprint da chave importada para setar o trust
+          FINGERPRINT=$(gpg --with-colons --list-keys "$GPG_KEY_ID" | grep "^pub" | cut -d: -f5)
+          if [ -n "$FINGERPRINT" ]; then
+            echo "$FINGERPRINT:6:" | gpg --import-ownertrust
+          fi
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -118,6 +123,7 @@ jobs:
 
       - name: Sign Debian Packages
         run: |
+          sudo add-apt-repository universe -y
           sudo apt-get update && sudo apt-get install -y dpkg-sig
           for deb in dist/deb/*.deb; do
             dpkg-sig --gpg-options "--passphrase ${{ secrets.GPG_PASSPHRASE }} --batch --no-tty --pinentry-mode loopback" \
@@ -168,6 +174,11 @@ jobs:
         run: |
           if [ -z "$GPG_PRIVATE_KEY" ]; then echo "GPG_PRIVATE_KEY is empty"; exit 1; fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
+          # Derivando o fingerprint da chave importada para setar o trust
+          FINGERPRINT=$(gpg --with-colons --list-keys "$GPG_KEY_ID" | grep "^pub" | cut -d: -f5)
+          if [ -n "$FINGERPRINT" ]; then
+            echo "$FINGERPRINT:6:" | gpg --import-ownertrust
+          fi
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
