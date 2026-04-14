@@ -82,3 +82,5 @@ venv
 *.passphrase
 packaging/*.gpg
 !packaging/barbatos-repo.gpg
+*.deb
+web/pool/

@@ -131,17 +131,13 @@ jobs:
     needs: build-and-package
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           path: main
-
-      - name: Checkout gh-pages
-        uses: actions/checkout@v6
-        with:
-          ref: gh-pages
-          path: repo
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -149,6 +145,24 @@ jobs:
           path: deb-packages
           pattern: deb-packages-*
           merge-multiple: true
+
+      - name: Upload .deb packages to GitHub Release
+        run: |
+          for i in $(seq 1 20); do
+            if gh release upload ${{ github.ref_name }} deb-packages/*.deb --clobber; then
+              echo "Upload succeeded."
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              echo "ERROR: Release not available after 20 attempts. Aborting."
+              exit 1
+            fi
+            echo "Release not ready yet, retrying in 30s... ($i/20)"
+            sleep 30
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
@@ -159,13 +173,34 @@ jobs:
       - name: Update APT Repository
         run: |
           sudo apt-get update && sudo apt-get install -y apt-utils
-          bash main/scripts/update-apt-repo.sh deb-packages repo ${{ secrets.GPG_KEY_ID }} "${{ secrets.GPG_PASSPHRASE }}"
+          PACKAGES_BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+          mkdir -p apt_meta
+          bash main/scripts/update-apt-repo.sh \
+            deb-packages \
+            apt_meta \
+            ${{ secrets.GPG_KEY_ID }} \
+            "${{ secrets.GPG_PASSPHRASE }}" \
+            "$PACKAGES_BASE_URL"
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy to web/
         run: |
-          cd repo
+          rm -rf main/web/dists
+          cp -r apt_meta/dists main/web/
+          cp main/packaging/barbatos-repo.gpg main/web/barbatos-repo.gpg
+          cd main
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "chore: update apt repository for release ${{ github.ref_name }}" || echo "No changes to commit"
-          git push origin gh-pages
+          git add web/
+          git diff --cached --quiet || git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
+          for attempt in 1 2 3; do
+            if git pull --rebase origin master && git push origin HEAD:master; then
+              echo "Push succeeded."
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "ERROR: Failed to push after 3 attempts."
+              exit 1
+            fi
+            echo "Push failed, retrying ($attempt/3)..."
+            sleep 5
+          done
