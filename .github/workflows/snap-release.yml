@@ -1,0 +1,58 @@
+name: Snap Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-snap:
+    name: Build Snap (${{ matrix.architecture }})
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        architecture: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU for multi-arch builds
+        if: matrix.architecture == 'arm64'
+        uses: docker/setup-qemu-action@v4
+
+      - name: Build Snap
+        uses: snapcore/action-build@v1
+        id: snapcraft
+        with:
+          path: .
+          # For arm64 on amd64 runners, snapcraft uses LXD/Multipass which might be tricky in CI
+          # But action-build handles the environment setup.
+        
+      - name: Upload Snap Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap-${{ matrix.architecture }}
+          path: ${{ steps.snapcraft.outputs.snap }}
+
+  publish-snap:
+    name: Publish Snap to Store
+    needs: build-snap
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all snaps
+        uses: actions/download-artifact@v4
+        with:
+          path: snaps
+          merge-multiple: true
+
+      - name: Publish to Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: snaps/*.snap
+          release: stable
