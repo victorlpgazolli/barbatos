@@ -148,7 +148,7 @@ jobs:
 
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           KEYGRIP=$(gpg --with-keygrip --list-secret-keys | awk '/Keygrip/ {print $3; exit}')
-          echo "$GPG_PASSPHRASE" | gpg-preset-passphrase --preset "$KEYGRIP"
+          echo "$GPG_PASSPHRASE" | /usr/lib/gnupg/gpg-preset-passphrase --preset "$KEYGRIP"
 
       - name: Sign Debian Packages (debsign)
         env:
