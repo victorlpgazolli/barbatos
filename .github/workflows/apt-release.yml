@@ -100,10 +100,49 @@ jobs:
             rm -rf "$PKG_DIR"
           done
 
+      - name: Upload Unsigned Debian Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-deb-packages-${{ matrix.target }}
+          path: dist/deb/*.deb
+
+  sign-packages:
+    needs: build-and-package
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download unsigned artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: unsigned-deb-packages-*
+          merge-multiple: true
+          path: dist/deb
+
       - name: Install signing tools
+        run: sudo apt-get update && sudo apt-get install -y dpkg-sig
+
+      - name: Import GPG Key and Configure Agent
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          sudo dpkg --remove-architecture arm64 || true
-          sudo apt-get update && sudo apt-get install -y devscripts
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+      - name: Sign Debian Packages (dpkg-sig)
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          for deb in dist/deb/*.deb; do
+            dpkg-sig --gpg-options "--batch --pinentry-mode loopback --passphrase \"$GPG_PASSPHRASE\"" \
+              -k "$GPG_KEY_ID" \
+              --sign builder "$deb"
+          done
 
       - name: Generate .changes files
         run: |
@@ -116,7 +155,6 @@ jobs:
           for deb in dist/deb/*.deb; do
             pkg=$(basename "$deb")
             name="${pkg%%_*}"
-
             ARCH=$(dpkg-deb -f "$deb" Architecture)
             SIZE=$(stat -c "%s" "$deb")
             MD5=$(md5sum "$deb" | cut -d' ' -f1)
@@ -138,42 +176,14 @@ jobs:
               > dist/deb/${pkg%.deb}.changes
           done
 
-      - name: Import GPG Key and Configure Agent
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.gnupg
-          chmod 700 ~/.gnupg
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          gpg-connect-agent reloadagent /bye
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          gpg --list-secret-keys --keyid-format LONG
-
-      - name: Sign Debian Packages (debsign)
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-        run: |
-          # Create a wrapper script for gpg to handle arguments and passphrase
-          cat <<EOF > gpg-wrapper.sh
-          #!/bin/bash
-          gpg --batch --pinentry-mode loopback --passphrase "\$GPG_PASSPHRASE" "\$@"
-          EOF
-          chmod +x gpg-wrapper.sh
-
-          for changes in dist/deb/*.changes; do
-            # Use absolute path for wrapper to be safe
-            debsign -p"$(realpath gpg-wrapper.sh)" -k "$GPG_KEY_ID" "$changes"
-          done
-
-      - name: Upload Debian Packages
-        uses: actions/upload-artifact@v7
+      - name: Upload Signed Debian Packages
+        uses: actions/upload-artifact@v4
         with:
-          name: deb-packages-${{ matrix.target }}
-          path: dist/deb/*.deb
+          name: signed-deb-packages
+          path: dist/deb/*
 
   publish-repo:
-    needs: build-and-package
+    needs: sign-packages
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -185,9 +195,8 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
+          name: signed-deb-packages
           path: deb-packages
-          pattern: deb-packages-*
-          merge-multiple: true
 
       - name: Upload .deb packages to GitHub Release
         run: |
