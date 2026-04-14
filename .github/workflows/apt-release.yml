@@ -135,21 +135,20 @@ jobs:
       - name: Install signing tools
         run: sudo apt-get update && sudo apt-get install -y devscripts
 
-      - name: Import GPG key
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
       - name: Import GPG Key and Preset Passphrase
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          KEYGRIP=$(gpg --with-keygrip --list-secret-keys | grep Keygrip | awk '{print $3}')
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
 
           echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
           gpgconf --kill gpg-agent
 
-          echo "$GPG_PASSPHRASE" | gpg-preset-passphrase --preset $KEYGRIP
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEYGRIP=$(gpg --with-keygrip --list-secret-keys | awk '/Keygrip/ {print $3; exit}')
+          echo "$GPG_PASSPHRASE" | gpg-preset-passphrase --preset "$KEYGRIP"
 
       - name: Sign Debian Packages (debsign)
         env:
