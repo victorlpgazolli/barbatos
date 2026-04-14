@@ -111,4 +111,3 @@ ln -sf "$BIN_DIR/barbatos-mcp" "$LOCAL_BIN/barbatos-mcp"
 echo -e "\n${GREEN}Success:${NC} Created symbolic links in $LOCAL_BIN."
 
 echo -e "\n${BLUE}==>${NC} Run 'barbatos' to start debugging!"
-NC} Run 'barbatos' to start debugging!"

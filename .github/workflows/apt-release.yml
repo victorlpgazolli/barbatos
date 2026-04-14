@@ -107,10 +107,13 @@ jobs:
           done
 
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
+          echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
       - name: Sign Debian Packages
         run: |
@@ -149,13 +152,9 @@ jobs:
       - name: Upload .deb packages to GitHub Release
         run: |
           for i in $(seq 1 20); do
-            if gh release upload ${{ github.ref_name }} deb-packages/*.deb --clobber; then
+            if gh release upload ${{ github.ref_name }} deb-packages/*.deb --clobber 2>/dev/null; then
               echo "Upload succeeded."
               break
-            fi
-            if [ "$i" -eq 20 ]; then
-              echo "ERROR: Release not available after 20 attempts. Aborting."
-              exit 1
             fi
             echo "Release not ready yet, retrying in 30s... ($i/20)"
             sleep 30
@@ -165,10 +164,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
 
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
+          echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
       - name: Update APT Repository
         run: |
@@ -184,23 +186,10 @@ jobs:
 
       - name: Deploy to web/
         run: |
-          rm -rf main/web/dists
           cp -r apt_meta/dists main/web/
-          cp main/packaging/barbatos-repo.gpg main/web/barbatos-repo.gpg
           cd main
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add web/
           git diff --cached --quiet || git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
-          for attempt in 1 2 3; do
-            if git pull --rebase origin master && git push origin HEAD:master; then
-              echo "Push succeeded."
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "ERROR: Failed to push after 3 attempts."
-              exit 1
-            fi
-            echo "Push failed, retrying ($attempt/3)..."
-            sleep 5
-          done
+          git push origin HEAD:master

@@ -4,5 +4,5 @@ Section: utils
 Priority: optional
 Architecture: all
 Depends: python3, nodejs, npm, frida
-Maintainer: Victor Gazolli <victor@example.com>
+Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
 Description: Frida bridge for Barbatos debugger

@@ -8,7 +8,7 @@ GPG_PASSPHRASE=$4
 PACKAGES_BASE_URL=$5
 
 if [ -z "$DEB_PACKAGES_DIR" ] || [ -z "$REPO_DIR" ] || [ -z "$GPG_KEY_ID" ] || [ -z "$PACKAGES_BASE_URL" ]; then
-    echo "Usage: $0 <deb-packages-dir> <repo-dir> <gpg-key-id> <gpg-passphrase|\"\"> <packages-base-url>"
+    echo "Usage: $0 <deb-packages-dir> <repo-dir> <gpg-key-id> [gpg-passphrase] <packages-base-url>"
     exit 1
 fi
 
@@ -19,7 +19,6 @@ mkdir -p "$REPO_DIR/dists/stable/main/binary-amd64"
 mkdir -p "$REPO_DIR/dists/stable/main/binary-arm64"
 
 POOL_TMP=$(mktemp -d)
-trap 'rm -rf "$POOL_TMP"' EXIT
 mkdir -p "$POOL_TMP/pool/main"
 cp "$DEB_PACKAGES_DIR"/*.deb "$POOL_TMP/pool/main/"
 
@@ -37,6 +36,7 @@ for arch in amd64 arm64; do
 done
 
 cd "$REPO_DIR_ABS"
+rm -rf "$POOL_TMP"
 
 for arch in amd64 arm64; do
     apt-ftparchive release "dists/stable/main/binary-$arch" > "dists/stable/main/binary-$arch/Release"

@@ -137,12 +137,14 @@ For Debian-based systems, you can use our APT repository to keep the tools up to
 
 1.  **Add the GPG key:**
     ```bash
-    curl -s https://victorlpgazolli.github.io/barbatos/barbatos-repo.gpg | sudo apt-key add -
+    curl -fsSL https://barbatos.victorlpgazolli.dev/barbatos-repo.gpg \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/barbatos.gpg
     ```
 
 2.  **Add the repository:**
     ```bash
-    echo "deb [arch=arm64] https://victorlpgazolli.github.io/barbatos/ stable main" | sudo tee /etc/apt/sources.list.d/barbatos.list
+    echo "deb [signed-by=/etc/apt/keyrings/barbatos.gpg] https://barbatos.victorlpgazolli.dev/ stable main" \
+      | sudo tee /etc/apt/sources.list.d/barbatos.list
     ```
 
 3.  **Install the components:**

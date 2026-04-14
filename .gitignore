@@ -80,7 +80,7 @@ venv
 *.key
 *.keyid
 *.passphrase
-packaging/*.gpg
-!packaging/barbatos-repo.gpg
+web/*.gpg
+!web/barbatos-repo.gpg
 *.deb
 web/pool/
