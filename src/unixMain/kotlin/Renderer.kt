@@ -22,12 +22,6 @@ object Ansi {
 }
 
 object Renderer {
-    private const val K_PURPLE = "\u001b[38;2;127;82;255m"
-    private const val K_VIOLET = "\u001b[38;2;155;81;224m"
-    private const val K_MAGENTA = "\u001b[38;2;195;69;204m"
-    private const val K_PINK = "\u001b[38;2;227;68;156m"
-
-    // Design system — color language
     private const val C_ORANGE   = "\u001b[38;5;208m"  // keywords / modifiers
     private const val C_PURPLE   = "\u001b[38;5;176m"  // field / attribute (soft purple like AS)
     private const val C_BLUE     = "\u001b[38;5;75m"   // object reference / Barbatos brand
@@ -57,18 +51,19 @@ object Renderer {
     private const val J_NUMBER = "\u001b[38;5;173m"
     private const val ITALIC = "\u001b[3m"
 
-    private const val K_VIOLET2 = "\u001b[38;2;185;75;214m"
-    private const val K_PURPLE2 = "\u001b[38;2;141;81;240m"
-
-    private const val LOGO = """
-${ITALIC}${K_PINK}▄██████   ▄████▄  ▄██████  ▄██████   ▄████▄  ████████ ▄██████▄ ▄██████▄$RESET
-${ITALIC}${K_MAGENTA}██   ███ ██    ██ ██    ██ ██   ███ ██    ██    ██    ██    ██ ██      $RESET
-${ITALIC}${K_VIOLET2}███████▀ ████████ ███████▀ ███████▀ ████████    ██    ██    ██ ▀█████▄ $RESET
-${ITALIC}${K_VIOLET}██   ███ ██    ██ ██████▄  ██   ███ ██    ██    ██    ██    ██      ███$RESET
-${ITALIC}${K_PURPLE2}███████▀ ██    ██ ██   ███ ███████▀ ██    ██    ██    ██▄▄▄▄██ ▄█████▀ $RESET
-${ITALIC}${K_PURPLE}▀▀▀▀▀▀   ▀▀    ▀▀ ▀▀    ▀▀ ▀▀▀▀▀▀   ▀▀    ▀▀    ▀▀     ▀▀▀▀▀▀  ▀▀▀▀▀ $RESET
-              $DIM_GRAY╭──[ ${WHITE}Spirit of Hidden Knowledge$DIM_GRAY ]──╮$RESET
-"""
+    private const val C_SKY_GRAY = "\u001b[38;5;240m"
+    private val SKY_BLUES = listOf(18, 19, 20, 21, 27, 33, 39, 45, 51)
+    private val SKY_LOGO_LINES = listOf(
+        """ __/\\\\\\\\\\\\\_________________________________/\\\________________________________________________________________        """,
+        """ _\/\\\/////////\\\______________________________\/\\\________________________________________________________________       """,
+        """  _\/\\\_______\/\\\______________________________\/\\\___________________________/\\\_________________________________      """,
+        """   _\/\\\\\\\\\\\\\\___/\\\\\\\\\_____/\\/\\\\\\\__\/\\\_________/\\\\\\\\\_____/\\\\\\\\\\\_____/\\\\\_____/\\\\\\\\\\_     """,
+        """    _\/\\\/////////\\\_\////////\\\___\/\\\/////\\\_\/\\\\\\\\\__\////////\\\___\////\\\////____/\\\///\\\__\/\\\//////__    """,
+        """     _\/\\\_______\/\\\___/\\\\\\\\\\__\/\\\___\///__\/\\\////\\\___/\\\\\\\\\\_____\/\\\_______/\\\__\//\\\_\/\\\\\\\\\\_   """,
+        """      _\/\\\_______\/\\\__/\\\/////\\\__\/\\\_________\/\\\__\/\\\__/\\\/////\\\_____\/\\\_/\\__\//\\\__/\\\__\////////\\\_  """,
+        """       _\/\\\\\\\\\\\\\/__\//\\\\\\\\/\\_\/\\\_________\/\\\\\\\\\__\//\\\\\\\\/\\____\//\\\\\____\///\\\\\/____/\\\\\\\\\\_ """,
+        """        _\/////////////_____\////////\//__\///__________\/////////____\////////\//______\/////_______\/////_____\//////////__"""
+    )
     private const val INSTRUCTIONS_TEXT = """
     
     Type your command and press Enter to execute it.
@@ -301,13 +296,33 @@ ${ITALIC}${K_PURPLE}▀▀▀▀▀▀   ▀▀    ▀▀ ▀▀    ▀▀ ▀�
     }
 
     private fun renderLogo(buf: StringBuilder) {
-        buf.append(Ansi.DIM)
-        for (line in LOGO.trimIndent().lines()) {
-            buf.append(" ")
-            buf.append(line)
+        for (line in SKY_LOGO_LINES) {
+            val trimmed = line.trimEnd()
+            val width = trimmed.length
+            for ((x, char) in line.withIndex()) {
+                when (char) {
+                    '_' -> {
+                        buf.append(C_SKY_GRAY).append(char).append(RESET)
+                    }
+                    ' ', '\n' -> {
+                        buf.append(char)
+                    }
+                    else -> {
+                        if (width > 0) {
+                            val idx = ((x.toDouble() / width) * (SKY_BLUES.size - 1)).toInt()
+                                .coerceIn(0, SKY_BLUES.size - 1)
+                            val colorCode = SKY_BLUES[idx]
+                            buf.append("\u001b[38;5;${colorCode}m").append(char).append(RESET)
+                        } else {
+                            buf.append(char)
+                        }
+                    }
+                }
+            }
             buf.append("\n")
         }
-        buf.append(Ansi.RESET)
+        buf.append("\n")
+        buf.append(C_SKY_GRAY).append("      [ BARBATOS - Android Runtime Debugger w/ MCP server support. ]").append(RESET).append("\n")
         buf.append("\n")
     }
 
