@@ -71,7 +71,7 @@ jobs:
             docker run --rm --platform linux/arm64 \
               -v ${{ github.workspace }}:/app -w /app \
               python:3.11-slim \
-              bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && cd mcp_server && pyinstaller mcp.spec"
+              bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && pyinstaller mcp.spec"
           fi
           make prepare_release ARCH=${{ matrix.arch }}
 
@@ -108,8 +108,12 @@ jobs:
 
       - name: Import GPG key
         run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then echo "GPG_PRIVATE_KEY is empty"; exit 1; fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
-          echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+          if [ -n "$GPG_KEY_ID" ]; then
+            # Ensure it's treated as a fingerprint/ID by GPG
+            echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+          fi
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -165,8 +169,12 @@ jobs:
 
       - name: Import GPG key
         run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then echo "GPG_PRIVATE_KEY is empty"; exit 1; fi
           echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --import
-          echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+          if [ -n "$GPG_KEY_ID" ]; then
+            # Ensure it's treated as a fingerprint/ID by GPG
+            echo "$GPG_KEY_ID:6:" | gpg --import-ownertrust
+          fi
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
