@@ -4,7 +4,7 @@ set -e
 ASDF_INSTALL_TYPE=$1
 ASDF_INSTALL_VERSION=$2
 ASDF_INSTALL_PATH=$3
-ASDF_DOWNLOAD_PATH=$4
+# ASDF_DOWNLOAD_PATH is provided as an environment variable
 
 mkdir -p "$ASDF_INSTALL_PATH/bin"
 cp "$ASDF_DOWNLOAD_PATH/dist/barbatos" "$ASDF_INSTALL_PATH/bin/barbatos"

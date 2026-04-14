@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-ASDF_INSTALL_VERSION=$1
-ASDF_DOWNLOAD_PATH=$2
+ASDF_INSTALL_TYPE=$1
+ASDF_INSTALL_VERSION=$2
+ASDF_DOWNLOAD_PATH=$3
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
