@@ -156,7 +156,7 @@ jobs:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
           for changes in dist/deb/*.changes; do
-            debsign -p"$PGP_PROGRAM" -k"$GPG_KEY_ID" "$changes"
+            debsign -p "$PGP_PROGRAM" -k "$GPG_KEY_ID" "$changes"
           done
 
       - name: Upload Debian Packages
