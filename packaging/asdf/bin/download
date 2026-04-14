@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+ASDF_INSTALL_VERSION=$1
+ASDF_DOWNLOAD_PATH=$2
+
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+
+if [ "$ARCH" = "x86_64" ]; then
+    ARCH="x64"
+elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+    ARCH="arm64"
+fi
+
+URL="https://github.com/victorlpgazolli/barbatos/releases/download/v${ASDF_INSTALL_VERSION}/barbatos-${OS}-${ARCH}.zip"
+
+echo "Downloading barbatos v${ASDF_INSTALL_VERSION} for ${OS}-${ARCH}..."
+curl -fLo "${ASDF_DOWNLOAD_PATH}/barbatos.zip" "$URL"
+cd "${ASDF_DOWNLOAD_PATH}"
+unzip barbatos.zip
+rm barbatos.zip
