@@ -1,0 +1,144 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ "master" ]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'bridge/**'
+      - 'mcp_server/**'
+      - '.github/workflows/ci-validation.yml'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Parts
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    outputs:
+      kotlin: ${{ steps.filter.outputs.kotlin }}
+      bridge: ${{ steps.filter.outputs.bridge }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Required to compare branches
+      - id: filter
+        run: |
+          # Get the list of changed files between the base and head of the PR
+          FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          
+          KOTLIN=$(echo "$FILES" | grep -E '^(src/|gradle/|build\.gradle\.kts|settings\.gradle\.kts)' || true)
+          BRIDGE=$(echo "$FILES" | grep -E '^bridge/' || true)
+          MCP=$(echo "$FILES" | grep -E '^mcp_server/' || true)
+          
+          if [ ! -z "$KOTLIN" ]; then echo "kotlin=true" >> $GITHUB_OUTPUT; fi
+          if [ ! -z "$BRIDGE" ]; then echo "bridge=true" >> $GITHUB_OUTPUT; fi
+          if [ ! -z "$MCP" ]; then echo "mcp=true" >> $GITHUB_OUTPUT; fi
+
+  kotlin-test-and-linux-build:
+    name: Kotlin (${{ matrix.target }})
+    needs: detect-changes
+    if: needs.detect-changes.outputs.kotlin == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - target: linkDebugExecutableLinuxX64
+            name: x64
+          - target: linkDebugExecutableLinuxArm64
+            name: ARM64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
+
+      - name: Run Kotlin Unit Tests
+        if: matrix.name == 'x64'
+        run: ./gradlew allTests --no-daemon
+
+      - name: Compile Linux ${{ matrix.name }} Binary
+        run: ./gradlew ${{ matrix.target }} --no-daemon
+
+  kotlin-macos-build:
+    name: Kotlin (macOS ARM64)
+    needs: [detect-changes, kotlin-test-and-linux-build]
+    if: needs.detect-changes.outputs.kotlin == 'true'
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Compile macOS ARM64 Binary
+        run: ./gradlew linkDebugExecutableMacosArm64 --no-daemon
+
+  bridge-validation:
+    name: Bridge Validation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.bridge == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bridge Dependencies
+        run: |
+          cd bridge
+          pip install -r requirements.txt
+          pip install pytest
+          
+      - name: Run Bridge Unit Tests
+        run: |
+          cd bridge
+          python3 -m pytest test_bridge.py
+          
+      - name: Validate Bridge Syntax
+        run: |
+          cd bridge
+          python3 -m py_compile bridge.py
+
+  mcp-validation:
+    name: MCP Validation
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mcp == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate MCP Syntax
+        run: |
+          cd mcp_server
+          python3 -m py_compile server.py
