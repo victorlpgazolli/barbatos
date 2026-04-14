@@ -55,15 +55,19 @@ object Renderer {
     private const val J_CLASS = "\u001b[97m"
     private const val J_METHOD = "\u001b[38;5;222m"
     private const val J_NUMBER = "\u001b[38;5;173m"
-    
+    private const val ITALIC = "\u001b[3m"
+
+    private const val K_VIOLET2 = "\u001b[38;2;185;75;214m"
+    private const val K_PURPLE2 = "\u001b[38;2;141;81;240m"
+
     private const val LOGO = """
-${K_MAGENTA}      ▄▄▄▄▄  ${K_MAGENTA}▄▄▄▄▄▄▄▄▄    ${K_PINK}▄▄▄▄    ▄▄▄▄ $RESET
-${K_MAGENTA}      █████  ${K_MAGENTA}██████████▄  ${K_PINK}█████ ▄████▀ $RESET
-${K_VIOLET}      █████  ${K_VIOLET}█████  █████ ${K_MAGENTA}█████████▀   $RESET
-${K_VIOLET}      █████  ${K_VIOLET}█████  █████ ${K_MAGENTA}█████▀████▄  $RESET
-${K_PURPLE}      █████  ${K_PURPLE}██████████▀  ${K_VIOLET}█████  ▀████ $RESET
-${K_PURPLE}      ▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀    ▀▀▀▀▀   ▀▀▀▀ $RESET
-        $DIM_GRAY╭──[ ${WHITE}Interactive Debug Kit$DIM_GRAY ]──╮$RESET
+${ITALIC}${K_PINK}▄██████   ▄████▄  ▄██████  ▄██████   ▄████▄  ████████ ▄██████▄ ▄██████▄$RESET
+${ITALIC}${K_MAGENTA}██   ███ ██    ██ ██    ██ ██   ███ ██    ██    ██    ██    ██ ██      $RESET
+${ITALIC}${K_VIOLET2}███████▀ ████████ ███████▀ ███████▀ ████████    ██    ██    ██ ▀█████▄ $RESET
+${ITALIC}${K_VIOLET}██   ███ ██    ██ ██████▄  ██   ███ ██    ██    ██    ██    ██      ███$RESET
+${ITALIC}${K_PURPLE2}███████▀ ██    ██ ██   ███ ███████▀ ██    ██    ██    ██▄▄▄▄██ ▄█████▀ $RESET
+${ITALIC}${K_PURPLE}▀▀▀▀▀▀   ▀▀    ▀▀ ▀▀    ▀▀ ▀▀▀▀▀▀   ▀▀    ▀▀    ▀▀     ▀▀▀▀▀▀  ▀▀▀▀▀ $RESET
+              $DIM_GRAY╭──[ ${WHITE}Spirit of Hidden Knowledge$DIM_GRAY ]──╮$RESET
 """
     private const val INSTRUCTIONS_TEXT = """
     
