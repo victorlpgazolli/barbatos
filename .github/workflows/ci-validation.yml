@@ -11,6 +11,7 @@ on:
       - 'settings.gradle.kts'
       - 'bridge/**'
       - 'mcp_server/**'
+      - '.github/workflows/ci-validation.yml'
 
 jobs:
   detect-changes:
