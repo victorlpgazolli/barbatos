@@ -1,0 +1,8 @@
+Package: barbatos-bridge
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3, nodejs, npm, frida
+Maintainer: Victor Gazolli <victor@example.com>
+Description: Frida bridge for Barbatos debugger

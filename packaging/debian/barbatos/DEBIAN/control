@@ -1,0 +1,7 @@
+Package: barbatos
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: arm64
+Maintainer: Victor Gazolli <victor@example.com>
+Description: Barbatos TUI Debugger for Android
