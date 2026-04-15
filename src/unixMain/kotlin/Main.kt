@@ -188,8 +188,9 @@ fun main(args: Array<String>) {
                                 val newHook = oldHook.copy(enabled = !oldHook.enabled)
                                 hooks[state.selectedHookIndex] = newHook
                                 scope.launch {
-                                    RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled)
+                                    RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled, newHook.implementation)
                                 }
+
                                 HookStore.save(state.appPackageName, state.activeHooks.toSet())
                                 Renderer.render(state)
                             }
@@ -562,8 +563,9 @@ fun main(args: Array<String>) {
                         val newHook = oldHook.copy(enabled = !oldHook.enabled)
                         hooks[state.selectedHookIndex] = newHook
                         scope.launch {
-                            RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled)
+                            RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled, newHook.implementation)
                         }
+
                         HookStore.save(state.appPackageName, state.activeHooks.toSet())
                         Renderer.render(state)
                     }

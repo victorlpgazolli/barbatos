@@ -761,21 +761,22 @@ object Renderer {
                         it.className == state.inspectTargetClassName && it.memberSignature == row.attribute
                     }
                     val isHooked = matchingHook != null
-                    val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
-                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen)
+                    val hookMarker = if (isHooked) "${C_ORANGE}[H] ${RESET}" else ""
+                    val hookMarkerLen = if (isHooked) 4 else 0
 
+                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hookMarkerLen)
                     val displayMember = if (memberName.length > maxLen) memberName.take(maxOf(0, maxLen - 3)) + "..." else memberName
 
                     val nameStr    = "${C_PURPLE}$displayMember${RESET}"
-                    val hookedStr  = if (isHooked) " ${C_ORANGE}[H]${RESET}" else " ${DIM_GRAY}H${RESET}"
 
-                    // Right-align the H hint: compute visible length
-                    val pad = maxOf(1, termWidth - prefixVisible - 2 - displayMember.length - hintLen)
+                    // Right-align padding calculation (no more hint on right)
+                    val pad = maxOf(1, termWidth - prefixVisible - 2 - hookMarkerLen - displayMember.length)
 
                     buf.append(prefix).append("  ")
+                        .append(hookMarker)
                         .append(nameStr)
                         .append(" ".repeat(pad))
-                        .append(hookedStr).append(RESET).append("\n")
+                        .append(RESET).append("\n")
                 }
                 is InspectRow.StaticMethodRow -> {
                     val memberName = StringUtils.extractMemberName(row.method)
@@ -785,11 +786,14 @@ object Renderer {
                     }
                     val isHooked = matchingHook != null
                     val isOverridden = matchingHook?.implementation != null
+                    
+                    val hookMarker = if (isHooked) "${C_ORANGE}[H] ${RESET}" else ""
+                    val hookMarkerLen = if (isHooked) 4 else 0
                     val overrideMarker = if (isOverridden) "${C_CYAN}[C] ${RESET}" else ""
                     val overrideMarkerLen = if (isOverridden) 4 else 0
 
-                    val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
-                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen - overrideMarkerLen)
+                    val markersLen = hookMarkerLen + overrideMarkerLen
+                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - markersLen)
                     
                     val displayMember: String
                     val displayParams: String
@@ -813,16 +817,15 @@ object Renderer {
 
                     val nameStr    = "${J_METHOD}$displayMember${RESET}"
                     val paramsStr  = if (displayParams.isNotEmpty() || params.isEmpty()) "${LIGHT_GRAY}($displayParams)${RESET}" else ""
-                    val hookedStr  = if (isHooked) " ${C_ORANGE}[H]${RESET}" else " ${DIM_GRAY}H${RESET}"
 
                     val visibleLen = displayMember.length + (if (displayParams.isNotEmpty() || params.isEmpty()) displayParams.length + 2 else 0)
-                    val pad = maxOf(1, termWidth - prefixVisible - 2 - overrideMarkerLen - visibleLen - hintLen)
+                    val pad = maxOf(1, termWidth - prefixVisible - 2 - markersLen - visibleLen)
 
                     buf.append(prefix).append("  ")
-                        .append(overrideMarker)
+                        .append(hookMarker).append(overrideMarker)
                         .append(nameStr).append(paramsStr)
                         .append(" ".repeat(pad))
-                        .append(hookedStr).append(RESET).append("\n")
+                        .append(RESET).append("\n")
                 }
                 is InspectRow.InstanceRow -> {
                     // Detect destroyed state from summary heuristic

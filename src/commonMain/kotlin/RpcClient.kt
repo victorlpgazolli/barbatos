@@ -692,7 +692,10 @@ object RpcClient {
         }
     }
 
-    suspend fun toggleHook(className: String, methodSig: String, enable: Boolean): Boolean {
+    suspend fun toggleHook(className: String, methodSig: String, enable: Boolean, implementation: String? = null): Boolean {
+        if (enable && implementation != null) {
+            return setMethodImplementation(className, methodSig, implementation)
+        }
         val method = if (enable) "hookMethod" else "unhookMethod"
         return try {
             val requestBody = JsonRpcHookRequest(method = method, params = HookParams(className, methodSig))

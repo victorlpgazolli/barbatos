@@ -354,6 +354,13 @@ object CommandExecutor {
             }
             fclose(file)
         }
+
+        // Only proceed if content actually changed
+        if (newContent.trim() == tsContent.trim()) {
+            remove(tsPath)
+            remove(dtsPath)
+            return
+        }
         
         // Extract body between first { and last }
         val firstBrace = newContent.indexOf('{')
@@ -370,6 +377,7 @@ object CommandExecutor {
                         if (hook != null) {
                             state.activeHooks.remove(hook)
                         }
+                        // Adding with enabled=true ensures it behaves as a hook too [H]
                         state.activeHooks.add(HookTarget(className, methodSig, HookType.METHOD, true, body))
                         HookStore.save(state.appPackageName, state.activeHooks.toSet())
                     }
