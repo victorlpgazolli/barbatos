@@ -269,6 +269,21 @@ data class JsonRpcHookRequest(
 )
 
 @Serializable
+data class SetMethodImplementationParams(
+    val className: String,
+    val methodSig: String,
+    val code: String
+)
+
+@Serializable
+data class JsonRpcRequestSetMethodImplementation(
+    val jsonrpc: String = "2.0",
+    val method: String,
+    val params: SetMethodImplementationParams,
+    val id: Int = 1
+)
+
+@Serializable
 data class JsonRpcHookEventsResponse(
     val jsonrpc: String,
     val result: List<HookEvent>? = null,
@@ -688,7 +703,6 @@ object RpcClient {
             response.status.value in 200..299
         } catch (e: Exception) { false }
     }
-
     suspend fun getHookEvents(): List<HookEvent> {
         return try {
             val requestBody = JsonRpcRequestSimple(method = "getHookEvents")
@@ -702,7 +716,32 @@ object RpcClient {
         } catch (e: Exception) { emptyList() }
     }
 
+    suspend fun setMethodImplementation(className: String, methodSig: String, code: String): Boolean {
+        return try {
+            val requestBody = JsonRpcRequestSetMethodImplementation(
+                method = "setMethodImplementation",
+                params = SetMethodImplementationParams(className, methodSig, code)
+            )
+
+            val response: HttpResponse = withTimeoutOrNull(10000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return false
+
+            response.status.value in 200..299
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun removeMethodImplementation(className: String, methodSig: String): Boolean {
+        return toggleHook(className, methodSig, false)
+    }
+
     suspend fun syncAllHooks(hooks: List<HookTarget>) {
+...
         hooks.filter { it.enabled }.forEach { hook ->
             toggleHook(hook.className, hook.memberSignature, true)
         }
