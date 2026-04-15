@@ -673,6 +673,55 @@ rpc.exports = {
         return events;
     },
 
+    setmethodimplementation: function(className, methodSig, code) {
+        Java.perform(function() {
+            try {
+                var targetClass = Java.use(className);
+                var beforeArgs = methodSig.split('(')[0].trim();
+                var parts = beforeArgs.split(' ');
+                var fullMethodPath = parts[parts.length - 1];
+                var dotParts = fullMethodPath.split('.');
+                var methodName = dotParts[dotParts.length - 1];
+                
+                if (targetClass[methodName] && targetClass[methodName].overloads) {
+                    var overload = targetClass[methodName].overloads[0]; 
+
+                    // Store original implementation if not already stored
+                    if (!activeHookImplementations[className + methodSig]) {
+                        activeHookImplementations[className + methodSig] = overload.implementation;
+                    }
+
+                    // Create the user function from the provided code
+                    // The code should be a function body that takes (context)
+                    var userFn = new Function('context', code);
+
+                    overload.implementation = function() {
+                        var self = this;
+                        var args = arguments;
+                        var context = {
+                            Java: Java,
+                            args: args,
+                            original: function() {
+                                return overload.apply(self, args);
+                            }
+                        };
+
+                        try {
+                            return userFn(context);
+                        } catch (e) {
+                            console.error("Error in custom implementation for " + methodSig + ": " + e);
+                            // Fallback to original implementation on error
+                            return overload.apply(self, args);
+                        }
+                    };
+                }
+            } catch (e) {
+                console.error("Set custom implementation failed: " + e);
+            }
+        });
+        return true;
+    },
+
     setfieldvalue: function(className, id, fieldName, type, newValue) {
         try {
             return Java.perform(function() {
