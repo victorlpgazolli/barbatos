@@ -37,6 +37,8 @@ def strip_ts_types(code):
     code = re.sub(r'\)\s*:\s*[a-zA-Z_][\w<>\[\]\s]*\s*\{', ') {', code)
     # Remove 'as Type'
     code = re.sub(r'\s+as\s+[a-zA-Z_][\w<>\[\]\s]*', '', code)
+    # Remove visibility and other modifiers
+    code = re.sub(r'\b(public|private|protected|readonly|static|async)\b\s+', '', code)
     return code
 
 # Configures environment variables so bundled Frida binaries can be located when running as a PyInstaller executable
