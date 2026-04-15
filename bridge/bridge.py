@@ -222,7 +222,7 @@ class FridaBridge:
             if self.serial:
                 adb_cmd.extend(["-s", self.serial])
             adb_cmd.extend(["shell", "dumpsys", "window", "|", "grep", "-E", "\"mCurrentFocus\"", "|", "xargs", "|", "cut", "-d' '", "-f3", "|", "cut", "-d'/'", "-f1"])
-            result = subprocess.run(adb_cmd, capture_output=True, text=True)
+            result = subprocess.run(adb_cmd, shell=True, capture_output=True, text=True)
             if result.returncode == 0:
                 package_name = result.stdout.strip()
                 logging.info(f"[_get_front_app_using_adb] Fallback got frontmost package: {package_name}")
@@ -238,7 +238,7 @@ class FridaBridge:
         if self.serial:
             adb_cmd.extend(["-s", self.serial])
         adb_cmd.extend(["shell", "pidof", package_name])
-        result = subprocess.run(" ".join(adb_cmd), capture_output=True, text=True)
+        result = subprocess.run(" ".join(adb_cmd), shell=True, capture_output=True, text=True)
         if result.returncode == 0:
             pid = int(result.stdout.strip())
             logging.info(f"[_get_front_app_pid_using_adb] Got PID {pid} for package {package_name} via adb fallback")
