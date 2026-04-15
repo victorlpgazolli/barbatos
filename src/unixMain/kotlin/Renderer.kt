@@ -232,16 +232,24 @@ object Renderer {
                 FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
-            AppMode.DEBUG_INSPECT_CLASS -> listOf(
-                FooterKey("↑↓", "Navigate"),
-                FooterKey("H", "Hook Static Method"),
-                FooterKey("E", "Override"),
-                FooterKey("W", "Navigate to Watch Menu"),
-                FooterKey("I", "Inspect child"),
-                FooterKey("E", "Edit Primitive Value"),
-                FooterKey("Esc", "Back"),
-                FooterKey("Ctrl+C", "Quit")
-            )
+            AppMode.DEBUG_INSPECT_CLASS -> {
+                val rows = state.buildInspectRows()
+                val selectedRow = rows.getOrNull(state.selectedClassIndex)
+                val eLabel = when (selectedRow) {
+                    is InspectRow.StaticMethodRow -> "Override"
+                    is InspectRow.InstanceAttributeRow, is InspectRow.StaticAttributeRow -> "Edit Value"
+                    else -> "Edit"
+                }
+                listOf(
+                    FooterKey("↑↓", "Navigate"),
+                    FooterKey("H", "Hook"),
+                    FooterKey("E", eLabel),
+                    FooterKey("W", "Watch"),
+                    FooterKey("I", "Inspect"),
+                    FooterKey("Esc", "Back"),
+                    FooterKey("Ctrl+C", "Quit")
+                )
+            }
             AppMode.DEBUG_HOOK_WATCH -> listOf(
                 FooterKey("↑↓", "Navigate Hooked Methods"),
                 FooterKey("←→", "Scroll Logs"),
@@ -748,9 +756,10 @@ object Renderer {
                 }
                 is InspectRow.StaticAttributeRow -> {
                     val memberName = StringUtils.extractMemberName(row.attribute)
-                    val isHooked   = state.activeHooks.any {
+                    val matchingHook = state.activeHooks.find {
                         it.className == state.inspectTargetClassName && it.memberSignature == row.attribute
                     }
+                    val isHooked = matchingHook != null
                     val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
                     val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen)
 
@@ -770,17 +779,16 @@ object Renderer {
                 is InspectRow.StaticMethodRow -> {
                     val memberName = StringUtils.extractMemberName(row.method)
                     val params     = StringUtils.extractParams(row.method)
-                    val isHooked   = state.activeHooks.any {
+                    val matchingHook = state.activeHooks.find {
                         it.className == state.inspectTargetClassName && it.memberSignature == row.method
                     }
-                    val isOverridden = state.activeHooks.any {
-                        it.className == state.inspectTargetClassName && it.memberSignature == row.method && it.implementation != null
-                    }
-                    val customStr = if (isOverridden) "${C_CYAN}[C] ${RESET}" else ""
-                    val customLen = if (isOverridden) 4 else 0
+                    val isHooked = matchingHook != null
+                    val isOverridden = matchingHook?.implementation != null
+                    val overrideMarker = if (isOverridden) "${C_CYAN}[C] ${RESET}" else ""
+                    val overrideMarkerLen = if (isOverridden) 4 else 0
 
                     val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
-                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen - customLen)
+                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen - overrideMarkerLen)
                     
                     val displayMember: String
                     val displayParams: String
@@ -807,10 +815,10 @@ object Renderer {
                     val hookedStr  = if (isHooked) " ${C_ORANGE}[H]${RESET}" else " ${DIM_GRAY}H${RESET}"
 
                     val visibleLen = displayMember.length + (if (displayParams.isNotEmpty() || params.isEmpty()) displayParams.length + 2 else 0)
-                    val pad = maxOf(1, termWidth - prefixVisible - 2 - customLen - visibleLen - hintLen)
+                    val pad = maxOf(1, termWidth - prefixVisible - 2 - overrideMarkerLen - visibleLen - hintLen)
 
                     buf.append(prefix).append("  ")
-                        .append(customStr)
+                        .append(overrideMarker)
                         .append(nameStr).append(paramsStr)
                         .append(" ".repeat(pad))
                         .append(hookedStr).append(RESET).append("\n")
