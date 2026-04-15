@@ -34,7 +34,8 @@ data class HookTarget(
     val className: String,
     val memberSignature: String,
     val type: HookType,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val implementation: String? = null
 )
 
 @Serializable
