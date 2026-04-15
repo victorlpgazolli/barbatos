@@ -705,13 +705,13 @@ rpc.exports = {
                     return events;
                     },
 
-                    setmethodimplementation: function(className, methodSig, code) {
-                    Java.perform(function() {
-                    try {
-                    var targetClass = Java.use(className);
-                    var methodName = parseMethodName(methodSig);
+    setmethodimplementation: function(className, methodSig, code) {
+        Java.perform(function() {
+            try {
+                var targetClass = Java.use(className);
+                var methodName = parseMethodName(methodSig);
 
-                    if (targetClass[methodName] && targetClass[methodName].overloads) {
+                if (targetClass[methodName] && targetClass[methodName].overloads) {
                     var overload = getOverload(targetClass, methodName, methodSig);
                     if (!overload) return;
 
@@ -732,24 +732,46 @@ rpc.exports = {
                             args: args,
                             original: function() {
                                 return overload.apply(self, args);
+                            },
+                            log: function(msg) {
+                                hookEvents.push({
+                                    timestamp: Date.now(),
+                                    target: { className: className, memberSignature: methodSig, type: "LOG" },
+                                    data: { message: String(msg) }
+                                });
                             }
                         };
 
                         try {
-                            return userFn(context);
+                            var ret = userFn(context);
+
+                            // Log event similar to regular hooks
+                            var argsObj = {};
+                            for (var i = 0; i < args.length; i++) {
+                                argsObj["arg" + i] = javaToString(args[i]);
+                            }
+                            var retStr = (ret === undefined) ? "void" : javaToString(ret);
+
+                            hookEvents.push({
+                                timestamp: Date.now(),
+                                target: { className: className, memberSignature: methodSig, type: "METHOD" },
+                                data: { args: JSON.stringify(argsObj), "return": retStr }
+                            });
+
+                            return ret;
                         } catch (e) {
                             console.error("Error in custom implementation for " + methodSig + ": " + e);
                             // Fallback to original implementation on error
                             return overload.apply(self, args);
                         }
                     };
-                    }
-                    } catch (e) {
-                    console.error("Set custom implementation failed: " + e);
-                    }
-                    });
-                    return true;
-                    },
+                }
+            } catch (e) {
+                console.error("Set custom implementation failed: " + e);
+            }
+        });
+        return true;
+    },
     setfieldvalue: function(className, id, fieldName, type, newValue) {
         try {
             return Java.perform(function() {
