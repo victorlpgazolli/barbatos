@@ -251,15 +251,16 @@ object Renderer {
                 )
             }
             AppMode.DEBUG_HOOK_WATCH -> listOf(
-                FooterKey("↑↓", "Navigate Hooked Methods"),
-                FooterKey("←→", "Scroll Logs"),
-                FooterKey("I", "Inspect Class"),
-                FooterKey("Space", "Toggle Hook"),
+                FooterKey("↑↓", "Select"),
+                FooterKey("E", "Edit Impl"),
+                FooterKey("←→", "Scroll"),
+                FooterKey("I", "Inspect"),
+                FooterKey("Space", "Toggle"),
                 FooterKey("Del", "Remove"),
-                FooterKey("C", "Clear Logs"),
-                FooterKey("Esc", "Back"),
-                FooterKey("Ctrl+C", "Quit")
+                FooterKey("C", "Clear"),
+                FooterKey("Esc", "Back")
             )
+
             AppMode.DEBUG_EDIT_ATTRIBUTE -> listOf(
                 FooterKey("Enter", "Save"),
                 FooterKey("Esc", "Cancel"),
@@ -948,12 +949,13 @@ object Renderer {
                 val isSelected = y == state.selectedHookIndex
                 val selMark    = if (isSelected) "› " else "  "
                 val statusMark = if (hook.enabled) "[${Ansi.GREEN}✓${RESET}] " else "[ ] "
+                val overrideMark = if (hook.implementation != null) "${C_CYAN}[C]${RESET} " else ""
                 val color      = if (hook.type == HookType.METHOD) J_METHOD else C_PURPLE
                 val name       = StringUtils.extractMemberName(hook.memberSignature)
                 val selColor   = if (isSelected) WHITE else DIM_GRAY
 
-                val cell = "$selColor$selMark$RESET$statusMark$color$name$RESET"
-                val visLen = 2 + 4 + name.length // 2 (selMark) + 4 ("[✓] ") + name
+                val cell = "$selColor$selMark$RESET$statusMark$overrideMark$color$name$RESET"
+                val visLen = 2 + 4 + (if (hook.implementation != null) 4 else 0) + name.length // 2 (selMark) + 4 ("[✓] ") + 4 ("[C] ") + name
                 buf.append(cell)
                 buf.append(" ".repeat(maxOf(0, leftWidth - visLen)))
             } else {
@@ -1015,8 +1017,8 @@ object Renderer {
             HookType.METHOD -> {
                 val args   = event.data["args"] ?: ""
                 val ret    = event.data["return"] ?: "void"
-                val badgeColor = J_METHOD
-                val badge = "${badgeColor}METHOD${RESET}"
+                val badgeColor = if (event.target.implementation != null) C_CYAN else J_METHOD
+                val badge = if (event.target.implementation != null) "${badgeColor}OVERRIDE${RESET}" else "${badgeColor}METHOD${RESET}"
                 val header = "${DIM_GRAY}$time${RESET}  $badge  ${WHITE}$memberName${RESET}$hashSuffix$countSuffix"
                 lines.add(header)
 

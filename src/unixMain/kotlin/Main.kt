@@ -222,7 +222,18 @@ fun main(args: Array<String>) {
                             state.hookEvents.clear()
                             Renderer.render(state)
                         }
-                    }
+                        'e', 'E' -> {
+                            val hooks = state.activeHooks
+                            if (state.selectedHookIndex in hooks.indices) {
+                                val target = hooks[state.selectedHookIndex]
+                                if (target.type == HookType.METHOD) {
+                                    CommandExecutor.executeMethodOverride(state, target.className, target.memberSignature, scope)
+                                    Renderer.render(state)
+                                }
+                            }
+                        }
+                        }
+
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && (key.c == ']')) {
                     state.showSyntheticClasses = !state.showSyntheticClasses
                     state.displayedClasses = CommandExecutor.sortClasses(state.allFetchedClasses, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
@@ -254,11 +265,15 @@ fun main(args: Array<String>) {
                             
                             val existing = state.activeHooks.find { it.className == state.inspectTargetClassName && it.memberSignature == signature }
                             if (existing != null) {
+                                // If it has implementation, maybe we just want to toggle it?
+                                // For now, let's follow the 'H' means 'Hook/Unhook' (Logging).
+                                // If the user wants to remove the whole thing, they can do it from Watch mode.
                                 state.activeHooks.remove(existing)
                                 scope.launch {
                                     RpcClient.toggleHook(state.inspectTargetClassName, signature, false)
                                 }
                             } else {
+                                // Add a new standard hook
                                 val target = HookTarget(state.inspectTargetClassName, signature, type)
                                 state.activeHooks.add(target)
                                 scope.launch {

@@ -319,9 +319,9 @@ object CommandExecutor {
              * - context.original(): Call the original implementation
              * - context.log(msg): Log a message to the Hook Watch view
              */
-            (context: BarbatosContext): any => {
-            $initialBody
-            }
+            export default (context: BarbatosContext): any => {
+                $initialBody
+            };
         """.trimIndent()
 
         val tsFile = fopen(tsPath, "w")
@@ -345,17 +345,17 @@ object CommandExecutor {
         print(Ansi.HIDE_CURSOR)
         Terminal.flush()
         
-        // Read back
+        // Read back using fopen
         val newContent = buildString {
-            val pipe = popen("cat $tsPath", "r") ?: return@buildString
+            val file = fopen(tsPath, "r") ?: return@buildString
             val buf = ByteArray(1024)
-            while (fgets(buf.refTo(0), buf.size, pipe) != null) {
+            while (fgets(buf.refTo(0), buf.size, file) != null) {
                 append(buf.toKString())
             }
-            pclose(pipe)
+            fclose(file)
         }
         
-        // Extract body between { and }
+        // Extract body between first { and last }
         val firstBrace = newContent.indexOf('{')
         val lastBrace = newContent.lastIndexOf('}')
         
