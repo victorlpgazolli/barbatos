@@ -1,31 +1,9 @@
-object Ansi {
-    const val RESET = "\u001b[0m"
-    const val WHITE = "\u001b[97m"
-    const val DIM = "\u001b[90m"
-    const val GREEN = "\u001b[92m"
-    const val YELLOW = "\u001b[93m"
-    const val BLUE = "\u001b[94m"
-    const val RED = "\u001b[91m"
-    const val CLEAR_SCREEN = "\u001b[2J"
-    const val CURSOR_HOME = "\u001b[H"
-    const val HIDE_CURSOR = "\u001b[?25l"
-    const val SHOW_CURSOR = "\u001b[?25h"
-    const val SAVE_CURSOR = "\u001b7"
-    const val RESTORE_CURSOR = "\u001b8"
-    const val CLEAR_LINE = "\u001b[K"
-    const val BRAND_BLUE = "\u001b[38;5;75m"
-    const val STRIKETHROUGH = "\u001b[9m"
-    const val ENABLE_MOUSE = "\u001b[?1000h\u001b[?1003h\u001b[?1006h"
-    const val DISABLE_MOUSE = "\u001b[?1006l\u001b[?1003l\u001b[?1000l"
-
-    fun moveTo(row: Int, col: Int): String = "\u001b[${row};${col}H"
-}
-
 object Renderer {
     private const val C_ORANGE   = "\u001b[38;5;208m"  // keywords / modifiers
     private const val C_PURPLE   = "\u001b[38;5;176m"  // field / attribute (soft purple like AS)
     private const val C_BLUE     = "\u001b[38;5;75m"   // object reference / Barbatos brand
     private const val C_GREEN    = "\u001b[38;5;71m"   // active instance / live count
+    private const val C_CYAN     = "\u001b[38;5;39m"   // custom implementation / override
     private const val C_DARK_GRAY = "\u001b[38;5;238m" // destroyed instances
     private const val C_MID_GRAY  = "\u001b[38;5;244m" // secondary text
     private const val C_SEP      = "\u001b[38;5;237m"  // separator lines
@@ -257,6 +235,7 @@ object Renderer {
             AppMode.DEBUG_INSPECT_CLASS -> listOf(
                 FooterKey("↑↓", "Navigate"),
                 FooterKey("H", "Hook Static Method"),
+                FooterKey("E", "Override"),
                 FooterKey("W", "Navigate to Watch Menu"),
                 FooterKey("I", "Inspect child"),
                 FooterKey("E", "Edit Primitive Value"),
@@ -794,8 +773,14 @@ object Renderer {
                     val isHooked   = state.activeHooks.any {
                         it.className == state.inspectTargetClassName && it.memberSignature == row.method
                     }
+                    val isOverridden = state.activeHooks.any {
+                        it.className == state.inspectTargetClassName && it.memberSignature == row.method && it.implementation != null
+                    }
+                    val customStr = if (isOverridden) "${C_CYAN}[C] ${RESET}" else ""
+                    val customLen = if (isOverridden) 4 else 0
+
                     val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
-                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen)
+                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen - customLen)
                     
                     val displayMember: String
                     val displayParams: String
@@ -822,9 +807,10 @@ object Renderer {
                     val hookedStr  = if (isHooked) " ${C_ORANGE}[H]${RESET}" else " ${DIM_GRAY}H${RESET}"
 
                     val visibleLen = displayMember.length + (if (displayParams.isNotEmpty() || params.isEmpty()) displayParams.length + 2 else 0)
-                    val pad = maxOf(1, termWidth - prefixVisible - 2 - visibleLen - hintLen)
+                    val pad = maxOf(1, termWidth - prefixVisible - 2 - customLen - visibleLen - hintLen)
 
                     buf.append(prefix).append("  ")
+                        .append(customStr)
                         .append(nameStr).append(paramsStr)
                         .append(" ".repeat(pad))
                         .append(hookedStr).append(RESET).append("\n")
@@ -1042,6 +1028,14 @@ object Renderer {
                     val retLines = formatValue(ret, 4, maxWidth)
                     lines.addAll(retLines)
                 }
+            }
+            HookType.LOG -> {
+                val message = event.data["message"] ?: ""
+                val badgeColor = C_MID_GRAY
+                val badge = "${badgeColor}LOG${RESET}"
+                val header = "${DIM_GRAY}$time${RESET}  $badge  ${WHITE}$memberName${RESET}$hashSuffix$countSuffix"
+                lines.add(header)
+                lines.add("  ${C_MID_GRAY}$message${RESET}")
             }
         }
 
