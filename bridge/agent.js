@@ -697,7 +697,7 @@ rpc.exports = {
 
                     overload.implementation = function() {
                         var self = this;
-                        var args = arguments;
+                        var args = Array.from(arguments);
                         var context = {
                             Java: Java,
                             args: args,

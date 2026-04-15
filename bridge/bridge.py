@@ -22,8 +22,8 @@ def strip_ts_types(code):
     Remove basic TypeScript type annotations and imports to make it valid JS for Frida.
     This is a simplified approach and might not handle all edge cases.
     """
-    # Remove 'import type ...'
-    code = re.sub(r'import\s+type\s+[\s\S]*?from\s+[\'"].*?[\'"];?', '', code)
+    # Remove all imports
+    code = re.sub(r'import\s+[\s\S]*?;', '', code)
     # Remove interfaces
     code = re.sub(r'interface\s+\w+\s*\{[\s\S]*?\}', '', code)
     # Remove type aliases
@@ -32,11 +32,11 @@ def strip_ts_types(code):
     # We look for a colon followed by a type name, but we need to be careful not to match object literals
     # or ternary operators.
     # Usually type annotations are followed by ',', ')', '=', or '{'
-    code = re.sub(r':\s*[a-zA-Z_][\w<>\[\]]*(\s*[,)=;{])', r'\1', code)
+    code = re.sub(r':\s*[a-zA-Z_][\w<>\[\]\s]*(\s*[,)=;{])', r'\1', code)
     # Remove return type annotations
-    code = re.sub(r'\)\s*:\s*[a-zA-Z_][\w<>\[\]]*\s*\{', ') {', code)
+    code = re.sub(r'\)\s*:\s*[a-zA-Z_][\w<>\[\]\s]*\s*\{', ') {', code)
     # Remove 'as Type'
-    code = re.sub(r'\s+as\s+[a-zA-Z_][\w<>\[\]]*', '', code)
+    code = re.sub(r'\s+as\s+[a-zA-Z_][\w<>\[\]\s]*', '', code)
     return code
 
 # Configures environment variables so bundled Frida binaries can be located when running as a PyInstaller executable
