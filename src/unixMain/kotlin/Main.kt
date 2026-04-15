@@ -233,7 +233,7 @@ fun main(args: Array<String>) {
                                 }
                             }
                         }
-                        }
+                    }
 
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && (key.c == ']')) {
                     state.showSyntheticClasses = !state.showSyntheticClasses
@@ -266,9 +266,6 @@ fun main(args: Array<String>) {
                             
                             val existing = state.activeHooks.find { it.className == state.inspectTargetClassName && it.memberSignature == signature }
                             if (existing != null) {
-                                // If it has implementation, maybe we just want to toggle it?
-                                // For now, let's follow the 'H' means 'Hook/Unhook' (Logging).
-                                // If the user wants to remove the whole thing, they can do it from Watch mode.
                                 state.activeHooks.remove(existing)
                                 scope.launch {
                                     RpcClient.toggleHook(state.inspectTargetClassName, signature, false)
