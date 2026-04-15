@@ -321,6 +321,9 @@ fun main(args: Array<String>) {
                                 onInputChanged(state)
                                 Renderer.render(state)
                             }
+                        } else if (row is InspectRow.StaticMethodRow) {
+                            CommandExecutor.executeMethodOverride(state, state.inspectTargetClassName, row.method, scope)
+                            Renderer.render(state)
                         }
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS && (key.c == 'R' || key.c == 'r')) {
