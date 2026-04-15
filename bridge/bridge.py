@@ -6,6 +6,7 @@ import shutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import frida
 import json
+import re
 import logging
 import threading
 import subprocess
@@ -15,6 +16,30 @@ import sys
 from jdwp_frida import run_jdwp
 
 logging.basicConfig(level=logging.INFO)
+
+def strip_ts_types(code):
+    """
+    Remove basic TypeScript type annotations and imports to make it valid JS for Frida.
+    This is a simplified approach and might not handle all edge cases.
+    """
+    # Remove all imports
+    code = re.sub(r'import\s+[\s\S]*?;', '', code)
+    # Remove interfaces
+    code = re.sub(r'interface\s+\w+\s*\{[\s\S]*?\}', '', code)
+    # Remove type aliases
+    code = re.sub(r'type\s+\w+\s*=\s*[\s\S]*?;', '', code)
+    # Remove type annotations like : string, : number, : any, : MyClass, : string[]
+    # We look for a colon followed by a type name, but we need to be careful not to match object literals
+    # or ternary operators.
+    # Usually type annotations are followed by ',', ')', '=', or '{'
+    code = re.sub(r':\s*[a-zA-Z_][\w<>\[\]\s]*(\s*[,)=;{])', r'\1', code)
+    # Remove return type annotations
+    code = re.sub(r'\)\s*:\s*[a-zA-Z_][\w<>\[\]\s]*\s*\{', ') {', code)
+    # Remove 'as Type'
+    code = re.sub(r'\s+as\s+[a-zA-Z_][\w<>\[\]\s]*', '', code)
+    # Remove visibility and other modifiers
+    code = re.sub(r'\b(public|private|protected|readonly|static|async)\b\s+', '', code)
+    return code
 
 # Configures environment variables so bundled Frida binaries can be located when running as a PyInstaller executable
 def setup_runtime_env():
@@ -853,6 +878,17 @@ class FridaBridge:
         elif method == "unhookMethod":
             self.get_session()
             return self.script.exports_sync.unhookmethod(params.get("className"), params.get("methodSig"))
+
+        elif method == "setMethodImplementation":
+            self.get_session()
+            code = params.get("code", "")
+            # Transpile TS-like code to plain JS
+            transpiled_code = strip_ts_types(code)
+            return self.script.exports_sync.setmethodimplementation(
+                params.get("className"), 
+                params.get("methodSig"), 
+                transpiled_code
+            )
 
         elif method == "getHookEvents":
             self.get_session()

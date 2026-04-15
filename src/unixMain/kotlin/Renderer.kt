@@ -1,31 +1,9 @@
-object Ansi {
-    const val RESET = "\u001b[0m"
-    const val WHITE = "\u001b[97m"
-    const val DIM = "\u001b[90m"
-    const val GREEN = "\u001b[92m"
-    const val YELLOW = "\u001b[93m"
-    const val BLUE = "\u001b[94m"
-    const val RED = "\u001b[91m"
-    const val CLEAR_SCREEN = "\u001b[2J"
-    const val CURSOR_HOME = "\u001b[H"
-    const val HIDE_CURSOR = "\u001b[?25l"
-    const val SHOW_CURSOR = "\u001b[?25h"
-    const val SAVE_CURSOR = "\u001b7"
-    const val RESTORE_CURSOR = "\u001b8"
-    const val CLEAR_LINE = "\u001b[K"
-    const val BRAND_BLUE = "\u001b[38;5;75m"
-    const val STRIKETHROUGH = "\u001b[9m"
-    const val ENABLE_MOUSE = "\u001b[?1000h\u001b[?1003h\u001b[?1006h"
-    const val DISABLE_MOUSE = "\u001b[?1006l\u001b[?1003l\u001b[?1000l"
-
-    fun moveTo(row: Int, col: Int): String = "\u001b[${row};${col}H"
-}
-
 object Renderer {
     private const val C_ORANGE   = "\u001b[38;5;208m"  // keywords / modifiers
     private const val C_PURPLE   = "\u001b[38;5;176m"  // field / attribute (soft purple like AS)
     private const val C_BLUE     = "\u001b[38;5;75m"   // object reference / Barbatos brand
     private const val C_GREEN    = "\u001b[38;5;71m"   // active instance / live count
+    private const val C_CYAN     = "\u001b[38;5;39m"   // custom implementation / override
     private const val C_DARK_GRAY = "\u001b[38;5;238m" // destroyed instances
     private const val C_MID_GRAY  = "\u001b[38;5;244m" // secondary text
     private const val C_SEP      = "\u001b[38;5;237m"  // separator lines
@@ -254,25 +232,35 @@ object Renderer {
                 FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
-            AppMode.DEBUG_INSPECT_CLASS -> listOf(
-                FooterKey("↑↓", "Navigate"),
-                FooterKey("H", "Hook Static Method"),
-                FooterKey("W", "Navigate to Watch Menu"),
-                FooterKey("I", "Inspect child"),
-                FooterKey("E", "Edit Primitive Value"),
-                FooterKey("Esc", "Back"),
-                FooterKey("Ctrl+C", "Quit")
-            )
+            AppMode.DEBUG_INSPECT_CLASS -> {
+                val rows = state.buildInspectRows()
+                val selectedRow = rows.getOrNull(state.selectedClassIndex)
+                val eLabel = when (selectedRow) {
+                    is InspectRow.StaticMethodRow -> "Override"
+                    is InspectRow.InstanceAttributeRow, is InspectRow.StaticAttributeRow -> "Edit Value"
+                    else -> "Edit"
+                }
+                listOf(
+                    FooterKey("↑↓", "Navigate"),
+                    FooterKey("H", "Hook"),
+                    FooterKey("E", eLabel),
+                    FooterKey("W", "Watch"),
+                    FooterKey("I", "Inspect"),
+                    FooterKey("Esc", "Back"),
+                    FooterKey("Ctrl+C", "Quit")
+                )
+            }
             AppMode.DEBUG_HOOK_WATCH -> listOf(
-                FooterKey("↑↓", "Navigate Hooked Methods"),
-                FooterKey("←→", "Scroll Logs"),
-                FooterKey("I", "Inspect Class"),
-                FooterKey("Space", "Toggle Hook"),
+                FooterKey("↑↓", "Select"),
+                FooterKey("E", "Edit Impl"),
+                FooterKey("←→", "Scroll"),
+                FooterKey("I", "Inspect"),
+                FooterKey("Space", "Toggle"),
                 FooterKey("Del", "Remove"),
-                FooterKey("C", "Clear Logs"),
-                FooterKey("Esc", "Back"),
-                FooterKey("Ctrl+C", "Quit")
+                FooterKey("C", "Clear"),
+                FooterKey("Esc", "Back")
             )
+
             AppMode.DEBUG_EDIT_ATTRIBUTE -> listOf(
                 FooterKey("Enter", "Save"),
                 FooterKey("Esc", "Cancel"),
@@ -769,33 +757,43 @@ object Renderer {
                 }
                 is InspectRow.StaticAttributeRow -> {
                     val memberName = StringUtils.extractMemberName(row.attribute)
-                    val isHooked   = state.activeHooks.any {
+                    val matchingHook = state.activeHooks.find {
                         it.className == state.inspectTargetClassName && it.memberSignature == row.attribute
                     }
-                    val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
-                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen)
+                    val isHooked = matchingHook != null
+                    val hookMarker = if (isHooked) "${C_ORANGE}[H] ${RESET}" else ""
+                    val hookMarkerLen = if (isHooked) 4 else 0
 
+                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hookMarkerLen)
                     val displayMember = if (memberName.length > maxLen) memberName.take(maxOf(0, maxLen - 3)) + "..." else memberName
 
                     val nameStr    = "${C_PURPLE}$displayMember${RESET}"
-                    val hookedStr  = if (isHooked) " ${C_ORANGE}[H]${RESET}" else " ${DIM_GRAY}H${RESET}"
 
-                    // Right-align the H hint: compute visible length
-                    val pad = maxOf(1, termWidth - prefixVisible - 2 - displayMember.length - hintLen)
+                    // Right-align padding calculation (no more hint on right)
+                    val pad = maxOf(1, termWidth - prefixVisible - 2 - hookMarkerLen - displayMember.length)
 
                     buf.append(prefix).append("  ")
+                        .append(hookMarker)
                         .append(nameStr)
                         .append(" ".repeat(pad))
-                        .append(hookedStr).append(RESET).append("\n")
+                        .append(RESET).append("\n")
                 }
                 is InspectRow.StaticMethodRow -> {
                     val memberName = StringUtils.extractMemberName(row.method)
                     val params     = StringUtils.extractParams(row.method)
-                    val isHooked   = state.activeHooks.any {
+                    val matchingHook = state.activeHooks.find {
                         it.className == state.inspectTargetClassName && it.memberSignature == row.method
                     }
-                    val hintLen = if (isHooked) 4 else 2  // " [H]" = 4, " H" = 2
-                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - hintLen)
+                    val isHooked = matchingHook != null
+                    val isOverridden = matchingHook?.implementation != null
+                    
+                    val hookMarker = if (isHooked) "${C_ORANGE}[H] ${RESET}" else ""
+                    val hookMarkerLen = if (isHooked) 4 else 0
+                    val overrideMarker = if (isOverridden) "${C_CYAN}[C] ${RESET}" else ""
+                    val overrideMarkerLen = if (isOverridden) 4 else 0
+
+                    val markersLen = hookMarkerLen + overrideMarkerLen
+                    val maxLen = maxOf(0, termWidth - 1 - prefixVisible - 2 - markersLen)
                     
                     val displayMember: String
                     val displayParams: String
@@ -819,15 +817,15 @@ object Renderer {
 
                     val nameStr    = "${J_METHOD}$displayMember${RESET}"
                     val paramsStr  = if (displayParams.isNotEmpty() || params.isEmpty()) "${LIGHT_GRAY}($displayParams)${RESET}" else ""
-                    val hookedStr  = if (isHooked) " ${C_ORANGE}[H]${RESET}" else " ${DIM_GRAY}H${RESET}"
 
                     val visibleLen = displayMember.length + (if (displayParams.isNotEmpty() || params.isEmpty()) displayParams.length + 2 else 0)
-                    val pad = maxOf(1, termWidth - prefixVisible - 2 - visibleLen - hintLen)
+                    val pad = maxOf(1, termWidth - prefixVisible - 2 - markersLen - visibleLen)
 
                     buf.append(prefix).append("  ")
+                        .append(hookMarker).append(overrideMarker)
                         .append(nameStr).append(paramsStr)
                         .append(" ".repeat(pad))
-                        .append(hookedStr).append(RESET).append("\n")
+                        .append(RESET).append("\n")
                 }
                 is InspectRow.InstanceRow -> {
                     // Detect destroyed state from summary heuristic
@@ -954,12 +952,13 @@ object Renderer {
                 val isSelected = y == state.selectedHookIndex
                 val selMark    = if (isSelected) "› " else "  "
                 val statusMark = if (hook.enabled) "[${Ansi.GREEN}✓${RESET}] " else "[ ] "
+                val overrideMark = if (hook.implementation != null) "${C_CYAN}[C]${RESET} " else ""
                 val color      = if (hook.type == HookType.METHOD) J_METHOD else C_PURPLE
                 val name       = StringUtils.extractMemberName(hook.memberSignature)
                 val selColor   = if (isSelected) WHITE else DIM_GRAY
 
-                val cell = "$selColor$selMark$RESET$statusMark$color$name$RESET"
-                val visLen = 2 + 4 + name.length // 2 (selMark) + 4 ("[✓] ") + name
+                val cell = "$selColor$selMark$RESET$statusMark$overrideMark$color$name$RESET"
+                val visLen = 2 + 4 + (if (hook.implementation != null) 4 else 0) + name.length // 2 (selMark) + 4 ("[✓] ") + 4 ("[C] ") + name
                 buf.append(cell)
                 buf.append(" ".repeat(maxOf(0, leftWidth - visLen)))
             } else {
@@ -1021,8 +1020,8 @@ object Renderer {
             HookType.METHOD -> {
                 val args   = event.data["args"] ?: ""
                 val ret    = event.data["return"] ?: "void"
-                val badgeColor = J_METHOD
-                val badge = "${badgeColor}METHOD${RESET}"
+                val badgeColor = if (event.target.implementation != null) C_CYAN else J_METHOD
+                val badge = if (event.target.implementation != null) "${badgeColor}OVERRIDE${RESET}" else "${badgeColor}METHOD${RESET}"
                 val header = "${DIM_GRAY}$time${RESET}  $badge  ${WHITE}$memberName${RESET}$hashSuffix$countSuffix"
                 lines.add(header)
 
@@ -1042,6 +1041,14 @@ object Renderer {
                     val retLines = formatValue(ret, 4, maxWidth)
                     lines.addAll(retLines)
                 }
+            }
+            HookType.LOG -> {
+                val message = event.data["message"] ?: ""
+                val badgeColor = C_MID_GRAY
+                val badge = "${badgeColor}LOG${RESET}"
+                val header = "${DIM_GRAY}$time${RESET}  $badge  ${WHITE}$memberName${RESET}$hashSuffix$countSuffix"
+                lines.add(header)
+                lines.add("  ${C_MID_GRAY}$message${RESET}")
             }
         }
 

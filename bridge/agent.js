@@ -6,6 +6,42 @@ var activeHookImplementations = {};
 var fieldPollingInterval = null;
 var monitoredFields = {};
 
+function parseMethodName(methodSig) {
+    var beforeArgs = methodSig.split('(')[0].trim();
+    var parts = beforeArgs.split(' ');
+    var fullMethodPath = parts[parts.length - 1];
+    var dotParts = fullMethodPath.split('.');
+    return dotParts[dotParts.length - 1];
+}
+
+function getOverload(targetClass, methodName, methodSig) {
+    if (!targetClass[methodName] || !targetClass[methodName].overloads) {
+        return null;
+    }
+
+    var argMatch = methodSig.match(/\((.*?)\)/);
+    if (!argMatch) {
+        return targetClass[methodName].overloads[0];
+    }
+
+    var paramsStr = argMatch[1].trim();
+    if (paramsStr === "") {
+        try {
+            return targetClass[methodName].overload();
+        } catch (e) {
+            return targetClass[methodName].overloads[0];
+        }
+    }
+
+    var params = paramsStr.split(',').map(function(s) { return s.trim(); });
+    try {
+        return targetClass[methodName].overload.apply(targetClass[methodName], params);
+    } catch (e) {
+        // Fallback to first overload if exact match fails
+        return targetClass[methodName].overloads[0];
+    }
+}
+
 function javaToString(obj) {
     if (obj === null || obj === undefined) return "null";
     try {
@@ -509,17 +545,14 @@ rpc.exports = {
         Java.perform(function() {
             try {
                 var targetClass = Java.use(className);
-                var beforeArgs = methodSig.split('(')[0].trim();
-                var parts = beforeArgs.split(' ');
-                var fullMethodPath = parts[parts.length - 1];
-                var dotParts = fullMethodPath.split('.');
-                var methodName = dotParts[dotParts.length - 1];
-                
+                var methodName = parseMethodName(methodSig);
+
                 if (targetClass[methodName] && targetClass[methodName].overloads) {
                     if (activeHookImplementations[className + methodSig]) {
                         return;
                     }
-                    var overload = targetClass[methodName].overloads[0]; 
+                    var overload = getOverload(targetClass, methodName, methodSig);
+                    if (!overload) return;
 
                     activeHookImplementations[className + methodSig] = overload.implementation;
                     overload.implementation = function() {
@@ -537,10 +570,10 @@ rpc.exports = {
                         });
                         return ret;
                     };
-                } else {
+                    } else {
                     // It's probably a field if it's not a method
                     if (monitoredFields[className + methodSig]) return;
-                    
+
                     var isStaticField = false;
                     try {
                         var clazz = Java.use(className);
@@ -592,7 +625,7 @@ rpc.exports = {
                         target: { className: className, memberSignature: methodSig, type: "FIELD" },
                         data: { value: "Watching for changes..." }
                     });
-                    
+
                     if (!fieldPollingInterval) {
                         fieldPollingInterval = setInterval(function() {
                             Java.perform(function() {
@@ -614,7 +647,7 @@ rpc.exports = {
                                             field.setAccessible(true);
                                             var val = field.get(null);
                                             var valStr = javaToString(val);
-                                            
+
                                             if (info.lastValue === undefined) {
                                                 info.lastValue = valStr;
                                             } else if (valStr !== info.lastValue) {
@@ -632,47 +665,113 @@ rpc.exports = {
                             });
                         }, 250);
                     }
-                }
-            } catch (e) {
-                console.error("Hook failed: " + e);
-            }
-        });
-        return true;
-    },
-    unhookmethod: function(className, methodSig) {
-        Java.perform(function() {
-            try {
-                var targetClass = Java.use(className);
-                var beforeArgs = methodSig.split('(')[0].trim();
-                var parts = beforeArgs.split(' ');
-                var fullMethodPath = parts[parts.length - 1];
-                var dotParts = fullMethodPath.split('.');
-                var methodName = dotParts[dotParts.length - 1];
-                
-                if (targetClass[methodName].overloads) {
+                    }
+                    } catch (e) {
+                    console.error("Hook failed: " + e);
+                    }
+                    });
+                    return true;
+                    },
+                    unhookmethod: function(className, methodSig) {
+                    Java.perform(function() {
+                    try {
+                    var targetClass = Java.use(className);
+                    var methodName = parseMethodName(methodSig);
+
+                    if (targetClass[methodName] && targetClass[methodName].overloads) {
                     if (activeHookImplementations.hasOwnProperty(className + methodSig)) {
-                        targetClass[methodName].overloads[0].implementation = null;
+                        var overload = getOverload(targetClass, methodName, methodSig);
+                        if (overload) {
+                            overload.implementation = null;
+                        }
                         delete activeHookImplementations[className + methodSig];
                     }
-                } else {
+                    } else {
                     delete monitoredFields[className + methodSig];
                     if (Object.keys(monitoredFields).length === 0 && fieldPollingInterval) {
                         clearInterval(fieldPollingInterval);
                         fieldPollingInterval = null;
                     }
+                    }
+                    } catch (e) {
+                    console.error("Unhook failed: " + e);
+                    }
+                    });
+                    return true;
+                    },
+                    gethookevents: function() {
+                    var events = hookEvents;
+                    hookEvents = [];
+                    return events;
+                    },
+
+    setmethodimplementation: function(className, methodSig, code) {
+        Java.perform(function() {
+            try {
+                var targetClass = Java.use(className);
+                var methodName = parseMethodName(methodSig);
+
+                if (targetClass[methodName] && targetClass[methodName].overloads) {
+                    var overload = getOverload(targetClass, methodName, methodSig);
+                    if (!overload) return;
+
+                    // Store original implementation if not already stored
+                    if (!activeHookImplementations[className + methodSig]) {
+                        activeHookImplementations[className + methodSig] = overload.implementation;
+                    }
+
+                    // Create the user function from the provided code
+                    // The code should be a function body that takes (context)
+                    var userFn = new Function('context', code);
+
+                    overload.implementation = function() {
+                        var self = this;
+                        var args = Array.from(arguments);
+                        var context = {
+                            Java: Java,
+                            args: args,
+                            original: function() {
+                                return overload.apply(self, args);
+                            },
+                            log: function(msg) {
+                                hookEvents.push({
+                                    timestamp: Date.now(),
+                                    target: { className: className, memberSignature: methodSig, type: "LOG" },
+                                    data: { message: String(msg) }
+                                });
+                            }
+                        };
+
+                        try {
+                            var ret = userFn(context);
+
+                            // Log event similar to regular hooks
+                            var argsObj = {};
+                            for (var i = 0; i < args.length; i++) {
+                                argsObj["arg" + i] = javaToString(args[i]);
+                            }
+                            var retStr = (ret === undefined) ? "void" : javaToString(ret);
+
+                            hookEvents.push({
+                                timestamp: Date.now(),
+                                target: { className: className, memberSignature: methodSig, type: "METHOD" },
+                                data: { args: JSON.stringify(argsObj), "return": retStr }
+                            });
+
+                            return ret;
+                        } catch (e) {
+                            console.error("Error in custom implementation for " + methodSig + ": " + e);
+                            // Fallback to original implementation on error
+                            return overload.apply(self, args);
+                        }
+                    };
                 }
             } catch (e) {
-                console.error("Unhook failed: " + e);
+                console.error("Set custom implementation failed: " + e);
             }
         });
         return true;
     },
-    gethookevents: function() {
-        var events = hookEvents;
-        hookEvents = [];
-        return events;
-    },
-
     setfieldvalue: function(className, id, fieldName, type, newValue) {
         try {
             return Java.perform(function() {

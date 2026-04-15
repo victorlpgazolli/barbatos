@@ -188,8 +188,9 @@ fun main(args: Array<String>) {
                                 val newHook = oldHook.copy(enabled = !oldHook.enabled)
                                 hooks[state.selectedHookIndex] = newHook
                                 scope.launch {
-                                    RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled)
+                                    RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled, newHook.implementation)
                                 }
+
                                 HookStore.save(state.appPackageName, state.activeHooks.toSet())
                                 Renderer.render(state)
                             }
@@ -222,7 +223,18 @@ fun main(args: Array<String>) {
                             state.hookEvents.clear()
                             Renderer.render(state)
                         }
+                        'e', 'E' -> {
+                            val hooks = state.activeHooks
+                            if (state.selectedHookIndex in hooks.indices) {
+                                val target = hooks[state.selectedHookIndex]
+                                if (target.type == HookType.METHOD) {
+                                    CommandExecutor.executeMethodOverride(state, target.className, target.memberSignature, scope)
+                                    Renderer.render(state)
+                                }
+                            }
+                        }
                     }
+
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && (key.c == ']')) {
                     state.showSyntheticClasses = !state.showSyntheticClasses
                     state.displayedClasses = CommandExecutor.sortClasses(state.allFetchedClasses, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
@@ -259,6 +271,7 @@ fun main(args: Array<String>) {
                                     RpcClient.toggleHook(state.inspectTargetClassName, signature, false)
                                 }
                             } else {
+                                // Add a new standard hook
                                 val target = HookTarget(state.inspectTargetClassName, signature, type)
                                 state.activeHooks.add(target)
                                 scope.launch {
@@ -321,6 +334,9 @@ fun main(args: Array<String>) {
                                 onInputChanged(state)
                                 Renderer.render(state)
                             }
+                        } else if (row is InspectRow.StaticMethodRow) {
+                            CommandExecutor.executeMethodOverride(state, state.inspectTargetClassName, row.method, scope)
+                            Renderer.render(state)
                         }
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS && (key.c == 'R' || key.c == 'r')) {
@@ -544,8 +560,9 @@ fun main(args: Array<String>) {
                         val newHook = oldHook.copy(enabled = !oldHook.enabled)
                         hooks[state.selectedHookIndex] = newHook
                         scope.launch {
-                            RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled)
+                            RpcClient.toggleHook(newHook.className, newHook.memberSignature, newHook.enabled, newHook.implementation)
                         }
+
                         HookStore.save(state.appPackageName, state.activeHooks.toSet())
                         Renderer.render(state)
                     }

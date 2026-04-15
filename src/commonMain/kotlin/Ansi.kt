@@ -1,0 +1,22 @@
+object Ansi {
+    const val RESET = "\u001b[0m"
+    const val WHITE = "\u001b[97m"
+    const val DIM = "\u001b[90m"
+    const val GREEN = "\u001b[92m"
+    const val YELLOW = "\u001b[93m"
+    const val BLUE = "\u001b[94m"
+    const val RED = "\u001b[91m"
+    const val CLEAR_SCREEN = "\u001b[2J"
+    const val CURSOR_HOME = "\u001b[H"
+    const val HIDE_CURSOR = "\u001b[?25l"
+    const val SHOW_CURSOR = "\u001b[?25h"
+    const val SAVE_CURSOR = "\u001b7"
+    const val RESTORE_CURSOR = "\u001b8"
+    const val CLEAR_LINE = "\u001b[K"
+    const val BRAND_BLUE = "\u001b[38;5;75m"
+    const val STRIKETHROUGH = "\u001b[9m"
+    const val ENABLE_MOUSE = "\u001b[?1000h\u001b[?1003h\u001b[?1006h"
+    const val DISABLE_MOUSE = "\u001b[?1006l\u001b[?1003l\u001b[?1000l"
+
+    fun moveTo(row: Int, col: Int): String = "\u001b[${row};${col}H"
+}

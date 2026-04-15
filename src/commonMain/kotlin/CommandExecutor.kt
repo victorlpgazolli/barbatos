@@ -10,11 +10,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import platform.posix.F_OK
 import platform.posix.access
+import platform.posix.fclose
 import platform.posix.fgets
+import platform.posix.fopen
+import platform.posix.fprintf
 import platform.posix.getenv
 import platform.posix.localtime
 import platform.posix.pclose
 import platform.posix.popen
+import platform.posix.remove
 import platform.posix.system
 import platform.posix.time
 import platform.posix.time_tVar
@@ -273,5 +277,116 @@ object CommandExecutor {
                 }
             }
         }
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    fun executeMethodOverride(state: AppState, className: String, methodSig: String, scope: CoroutineScope) {
+        val tempDir = "/tmp/barbatos"
+        system("mkdir -p $tempDir")
+        
+        val tsPath = "$tempDir/override.ts"
+        val dtsPath = "$tempDir/barbatos.d.ts"
+        
+        // Write d.ts
+        val dtsContent = """
+            declare interface BarbatosContext {
+                Java: any;
+                args: any[];
+                original: () => any;
+                log: (msg: any) => void;
+            }
+        """.trimIndent()
+        
+        val dtsFile = fopen(dtsPath, "w")
+        if (dtsFile != null) {
+            fprintf(dtsFile, "%s", dtsContent)
+            fclose(dtsFile)
+        }
+        
+        // Prepare initial TS content
+        val existingHook = state.activeHooks.find { it.className == className && it.memberSignature == methodSig }
+        val initialBody = existingHook?.implementation ?: "return context.original();"
+        
+        val tsContent = """
+            /// <reference path="./barbatos.d.ts" />
+            
+            /**
+             * Custom implementation for $methodSig
+             * 
+             * Available in 'context':
+             * - context.Java: Frida Java object
+             * - context.args: Array of arguments passed to the method
+             * - context.original(): Call the original implementation
+             * - context.log(msg): Log a message to the Hook Watch view
+             */
+            export default (context: BarbatosContext): any => {
+                $initialBody
+            };
+        """.trimIndent()
+
+        val tsFile = fopen(tsPath, "w")
+        if (tsFile != null) {
+            fprintf(tsFile, "%s", tsContent)
+            fclose(tsFile)
+        }
+        
+        // Disable TUI raw mode before launching editor
+        Terminal.disableRawMode()
+        print(Ansi.DISABLE_MOUSE)
+        print(Ansi.SHOW_CURSOR)
+        Terminal.flush()
+        
+        val editor = getenv("EDITOR")?.toKString() ?: "vi"
+        system("$editor $tsPath")
+        
+        // Re-enable TUI raw mode
+        Terminal.enableRawMode()
+        print(Ansi.ENABLE_MOUSE)
+        print(Ansi.HIDE_CURSOR)
+        Terminal.flush()
+        
+        // Read back using fopen
+        val newContent = buildString {
+            val file = fopen(tsPath, "r") ?: return@buildString
+            val buf = ByteArray(1024)
+            while (fgets(buf.refTo(0), buf.size, file) != null) {
+                append(buf.toKString())
+            }
+            fclose(file)
+        }
+
+        // Only proceed if content actually changed
+        if (newContent.trim() == tsContent.trim()) {
+            remove(tsPath)
+            remove(dtsPath)
+            return
+        }
+        
+        // Extract body between first { and last }
+        val firstBrace = newContent.indexOf('{')
+        val lastBrace = newContent.lastIndexOf('}')
+        
+        if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            val body = newContent.substring(firstBrace + 1, lastBrace).trim()
+            
+            if (body.isNotEmpty()) {
+                scope.launch {
+                    val success = RpcClient.setMethodImplementation(className, methodSig, body)
+                    if (success) {
+                        val hook = state.activeHooks.find { it.className == className && it.memberSignature == methodSig }
+                        if (hook != null) {
+                            state.activeHooks.remove(hook)
+                        }
+                        // Adding with enabled=true ensures it behaves as a hook too [H]
+                        state.activeHooks.add(HookTarget(className, methodSig, HookType.METHOD, true, body))
+                        HookStore.save(state.appPackageName, state.activeHooks.toSet())
+                    }
+                }
+            }
+        }
+        
+        // Cleanup
+        remove(tsPath)
+        remove(dtsPath)
     }
 }

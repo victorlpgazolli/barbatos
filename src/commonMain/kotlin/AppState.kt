@@ -27,14 +27,15 @@ data class ClassInspectionResult(
 )
 
 @Serializable
-enum class HookType { METHOD, FIELD }
+enum class HookType { METHOD, FIELD, LOG }
 
 @Serializable
 data class HookTarget(
     val className: String,
     val memberSignature: String,
     val type: HookType,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val implementation: String? = null
 )
 
 @Serializable
