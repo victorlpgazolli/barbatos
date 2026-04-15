@@ -741,7 +741,6 @@ object RpcClient {
     }
 
     suspend fun syncAllHooks(hooks: List<HookTarget>) {
-...
         hooks.filter { it.enabled }.forEach { hook ->
             toggleHook(hook.className, hook.memberSignature, true)
         }
