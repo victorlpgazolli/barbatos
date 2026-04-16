@@ -894,6 +894,18 @@ class FridaBridge:
             self.get_session()
             return self.script.exports_sync.gethookevents()
 
+        elif method == "runOnce":
+            self.get_session()
+            return self.script.exports_sync.runonce(
+                params.get("className"), 
+                params.get("methodSig"), 
+                params.get("code")
+            )
+
+        elif method == "getInstanceAddresses":
+            self.get_session()
+            return self.script.exports_sync.getinstanceaddresses(params.get("className"))
+
         else:
             raise Exception(f"Method {method} not found")
 

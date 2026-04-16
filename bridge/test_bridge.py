@@ -65,5 +65,23 @@ class TestFridaBridge(unittest.TestCase):
         self.assertIn("log2", buffer[0])
         self.assertIn("log3", buffer[1])
 
+    @patch('bridge.FridaBridge.get_session')
+    def test_handle_rpc_routing(self, mock_get_session):
+        # Mock script and exports
+        mock_script = MagicMock()
+        self.bridge.script = mock_script
+        mock_script.exports_sync.listclasses.return_value = ["java.lang.String"]
+        
+        # Test listClasses routing
+        result = self.bridge.handle_rpc("listClasses", {"search_param": "String"})
+        self.assertEqual(result, ["java.lang.String"])
+        mock_script.exports_sync.listclasses.assert_called_with("String")
+
+        # Test runOnce routing
+        mock_script.exports_sync.runonce.return_value = True
+        result = self.bridge.handle_rpc("runOnce", {"className": "A", "methodSig": "M", "code": "C"})
+        self.assertTrue(result)
+        mock_script.exports_sync.runonce.assert_called_with("A", "M", "C")
+
 if __name__ == '__main__':
     unittest.main()
