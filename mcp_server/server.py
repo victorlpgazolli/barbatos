@@ -163,5 +163,50 @@ async def barbatos_inject_jdwp(package_name: str, cmd: str = None, break_on: str
         "break_on": break_on
     })
 
+@mcp.tool()
+async def barbatos_unhook_method(class_name: str, method_sig: str) -> str:
+    """Removes an active method hook.
+    Args:
+        class_name: Full class name.
+        method_sig: Full method signature.
+    """
+    return await call_rpc("unhookMethod", {
+        "className": class_name,
+        "methodSig": method_sig
+    })
+
+@mcp.tool()
+async def barbatos_set_method_implementation(class_name: str, method_sig: str, code: str) -> str:
+    """Replaces a method's implementation with custom JavaScript.
+    Args:
+        class_name: Full class name.
+        method_sig: Full method signature.
+        code: JavaScript function body (accepts 'context').
+    """
+    return await call_rpc("setMethodImplementation", {
+        "className": class_name,
+        "methodSig": method_sig,
+        "code": code
+    })
+
+@mcp.tool()
+async def barbatos_get_instance_addresses(class_name: str) -> list | str:
+    """Returns memory addresses of all live instances of a class."""
+    return await call_rpc("getInstanceAddresses", {"className": class_name})
+
+@mcp.tool()
+async def barbatos_run_once(class_name: str, method_sig: str, code: str) -> str:
+    """Executes code once in the context of a class/method.
+    Args:
+        class_name: Target class.
+        method_sig: Target method signature.
+        code: JavaScript function body.
+    """
+    return await call_rpc("runOnce", {
+        "className": class_name,
+        "methodSig": method_sig,
+        "code": code
+    })
+
 if __name__ == "__main__":
     mcp.run()
