@@ -86,7 +86,7 @@ components:
           example: "2.0"
         id:
           type: integer
-          nullable: true
+          example: 1
         error:
           type: object
           properties:
@@ -179,11 +179,9 @@ components:
       properties:
         cmd:
           type: string
-          description: Optional shell command to run during JDWP break.
         break_on:
           type: string
           default: "android.os.Handler.dispatchMessage"
-          description: Fully qualified method name to set the initial breakpoint.
         package_name:
           type: string
 
@@ -196,6 +194,44 @@ components:
         methodSig:
           type: string
           description: Full signature (e.g., "public void onCreate(android.os.Bundle)")
+
+    getinstanceaddressesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    runOnceParams:
+      type: object
+      required: [className, methodSig, code]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+        code:
+          type: string
+
+    setMethodImplementationParams:
+      type: object
+      required: [className, methodSig, code]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+        code:
+          type: string
+
+    unhookMethodParams:
+      type: object
+      required: [className, methodSig]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
 
 # x-rpc-methods: Documentation for SDK/TUI developers
 x-rpc-methods:
@@ -220,3 +256,21 @@ x-rpc-methods:
   getHookEvents:
     description: Returns the latest method interception events collected by the agent.
     returns: "Array of HookEvent objects."
+  getpackagename:
+    description: Returns the current target's package name.
+  unhookMethod:
+    description: Removes an active hook.
+  setMethodImplementation:
+    description: Replaces a method's body with custom JS/TS.
+  getInstanceAddresses:
+    description: Lists raw memory addresses of instances.
+  runOnce:
+    description: Executes a one-time script in the context of a class/method.
+  prepareEnvironment:
+    description: Initial ADB setup.
+  checkOrPushGadget:
+    description: Ensures Frida Gadget is on device.
+  resetInjection:
+    description: Resets the injection state machine.
+  injectJdwp:
+    description: Direct JDWP injection trigger.
