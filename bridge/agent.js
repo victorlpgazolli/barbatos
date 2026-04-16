@@ -772,6 +772,21 @@ rpc.exports = {
         });
         return true;
     },
+    getinstanceaddresses: function(className) {
+        var addresses = [];
+        try {
+            Java.perform(function() {
+                Java.choose(className, {
+                    onMatch: function(inst) {
+                        try { addresses.push(inst.toString()); } catch(e) { addresses.push(className + "@?"); }
+                    },
+                    onComplete: function() {}
+                });
+            });
+        } catch(e) {}
+        addresses.reverse(); // newest-first heuristic
+        return addresses;
+    },
     runonce: function(className, methodSig, code) {
         var execResult = null;
         var execError = null;
@@ -780,48 +795,49 @@ rpc.exports = {
             Java.perform(function() {
                 var targetClass = Java.use(className);
                 var methodName = parseMethodName(methodSig);
+                var overload = getOverload(targetClass, methodName, methodSig);
+
+                // Collect all live instances, newest-first (reverse heuristic)
+                var allInstances = [];
+                try {
+                    Java.choose(className, {
+                        onMatch: function(inst) { allInstances.push(inst); },
+                        onComplete: function() {}
+                    });
+                } catch(e) {}
+                allInstances.reverse();
+
+                // Build per-instance wrapper with .original() bound to that instance
+                function makeWrapper(inst) {
+                    return {
+                        original: function() {
+                            if (!overload) return null;
+                            var captured = inst;
+                            Java.scheduleOnMainThread(function() {
+                                try { overload.call(captured); } catch(e) {}
+                            });
+                            return "scheduled";
+                        }
+                    };
+                }
+                var instanceWrappers = allInstances.map(makeWrapper);
+
+                // Fallback: if no instances, try static call
+                var topLevelOriginal = instanceWrappers.length > 0
+                    ? instanceWrappers[0].original.bind(instanceWrappers[0])
+                    : function() {
+                        try {
+                            if (overload) return overload.call(targetClass);
+                        } catch(e) {}
+                        return null;
+                    };
 
                 var userFn = new Function('context', code);
                 var context = {
                     Java: Java,
                     args: [],
-                    original: function() {
-                        try {
-                            var overload = getOverload(targetClass, methodName, methodSig);
-                            if (!overload) return null;
-
-                            // Find a live instance: check instanceCache first, then Java.choose
-                            var liveInstance = null;
-                            var keys = Object.keys(instanceCache);
-                            for (var k = 0; k < keys.length; k++) {
-                                try {
-                                    var cached = instanceCache[keys[k]];
-                                    if (cached && cached.getClass().getName() === className) {
-                                        liveInstance = cached;
-                                        break;
-                                    }
-                                } catch(e) {}
-                            }
-                            if (!liveInstance) {
-                                Java.choose(className, {
-                                    onMatch: function(inst) { liveInstance = inst; return 'stop'; },
-                                    onComplete: function() {}
-                                });
-                            }
-
-                            if (liveInstance) {
-                                // Run on main thread — ViewModel/UI methods require it
-                                var captured = liveInstance;
-                                Java.scheduleOnMainThread(function() {
-                                    try { overload.call(captured); } catch(e) {}
-                                });
-                                return "scheduled";
-                            }
-                            // Last resort: static / no-instance call
-                            return overload.call(targetClass);
-                        } catch(e) {}
-                        return null;
-                    },
+                    instances: instanceWrappers,
+                    original: topLevelOriginal,
                     log: function(msg) {
                         hookEvents.push({
                             timestamp: Date.now(),

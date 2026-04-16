@@ -1063,6 +1063,10 @@ class FridaBridge:
                 logging.info(f"[getHookEvents] script id={script_id}, returning {len(events)} events")
             return events
 
+        elif method == "getInstanceAddresses":
+            self.get_session()
+            return self.script.exports_sync.getinstanceaddresses(params.get("className", ""))
+
         elif method == "runOnce":
             self.get_session()
             code = params.get("code", "")

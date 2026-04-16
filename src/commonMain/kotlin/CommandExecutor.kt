@@ -287,10 +287,22 @@ object CommandExecutor {
         val tsPath = "$tempDir/exec.ts"
         val dtsPath = "$tempDir/barbatos.d.ts"
 
+        // Fetch live instances before opening editor (best-effort, empty on failure)
+        var instanceAddresses: List<String> = emptyList()
+        try {
+            instanceAddresses = kotlinx.coroutines.runBlocking {
+                RpcClient.getInstanceAddresses(className)
+            }
+        } catch (_: Exception) {}
+
         val dtsContent = """
+            declare interface BarbatosInstance {
+                original: () => any;
+            }
             declare interface BarbatosContext {
                 Java: any;
                 args: any[];
+                instances: BarbatosInstance[];
                 original: () => any;
                 log: (msg: any) => void;
             }
@@ -302,6 +314,19 @@ object CommandExecutor {
             fclose(dtsFile)
         }
 
+        val instanceComments = buildString {
+            if (instanceAddresses.isNotEmpty()) {
+                append("\n/* Available instances (newest → oldest):")
+                instanceAddresses.forEachIndexed { i, addr ->
+                    val marker = if (i == 0) "  ← most recent" else ""
+                    append("\n   context.instances[$i]  $addr$marker")
+                }
+                append("\n*/")
+            } else {
+                append("\n/* (no live instances found at time of opening) */")
+            }
+        }
+
         val tsContent = """
             /// <reference path="./barbatos.d.ts" />
 
@@ -309,15 +334,15 @@ object CommandExecutor {
              * One-shot execution for $methodSig
              * This code runs ONCE and is NOT saved to the hook's implementation.
              *
-             * Available in 'context':
-             * - context.Java: Frida Java object
-             * - context.args: Array of arguments (empty for manual calls)
-             * - context.original(): Call the original method
-             * - context.log(msg): Log a message to the Hook Watch view
+             * context.instances[0]  → most recent live instance
+             * context.original()    → shortcut for context.instances[0].original()
+             * context.log(msg)      → log to Hook Watch view
+             * context.Java          → Frida Java object
              */
             export default (context: BarbatosContext): any => {
-                return context.original();
+                return context.instances[0].original();
             };
+            $instanceComments
         """.trimIndent()
 
         val tsFile = fopen(tsPath, "w")
