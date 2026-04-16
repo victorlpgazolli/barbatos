@@ -280,6 +280,97 @@ object CommandExecutor {
     }
 
     @OptIn(ExperimentalForeignApi::class)
+    fun executeWatchedHook(state: AppState, className: String, methodSig: String, scope: CoroutineScope) {
+        val tempDir = "/tmp/barbatos"
+        system("mkdir -p $tempDir")
+
+        val tsPath = "$tempDir/exec.ts"
+        val dtsPath = "$tempDir/barbatos.d.ts"
+
+        val dtsContent = """
+            declare interface BarbatosContext {
+                Java: any;
+                args: any[];
+                original: () => any;
+                log: (msg: any) => void;
+            }
+        """.trimIndent()
+
+        val dtsFile = fopen(dtsPath, "w")
+        if (dtsFile != null) {
+            fprintf(dtsFile, "%s", dtsContent)
+            fclose(dtsFile)
+        }
+
+        val tsContent = """
+            /// <reference path="./barbatos.d.ts" />
+
+            /**
+             * One-shot execution for $methodSig
+             * This code runs ONCE and is NOT saved to the hook's implementation.
+             *
+             * Available in 'context':
+             * - context.Java: Frida Java object
+             * - context.args: Array of arguments (empty for manual calls)
+             * - context.original(): Call the original method
+             * - context.log(msg): Log a message to the Hook Watch view
+             */
+            export default (context: BarbatosContext): any => {
+                return context.original();
+            };
+        """.trimIndent()
+
+        val tsFile = fopen(tsPath, "w")
+        if (tsFile != null) {
+            fprintf(tsFile, "%s", tsContent)
+            fclose(tsFile)
+        }
+
+        Terminal.disableRawMode()
+        print(Ansi.DISABLE_MOUSE)
+        print(Ansi.SHOW_CURSOR)
+        Terminal.flush()
+
+        val editor = getenv("EDITOR")?.toKString() ?: "vi"
+        system("$editor $tsPath")
+
+        Terminal.enableRawMode()
+        print(Ansi.ENABLE_MOUSE)
+        print(Ansi.HIDE_CURSOR)
+        Terminal.flush()
+
+        val newContent = buildString {
+            val file = fopen(tsPath, "r") ?: return@buildString
+            val buf = ByteArray(1024)
+            while (fgets(buf.refTo(0), buf.size, file) != null) {
+                append(buf.toKString())
+            }
+            fclose(file)
+        }
+
+        if (newContent.trim() == tsContent.trim()) {
+            remove(tsPath)
+            remove(dtsPath)
+            return
+        }
+
+        val firstBrace = newContent.indexOf('{')
+        val lastBrace = newContent.lastIndexOf('}')
+
+        if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            val body = newContent.substring(firstBrace + 1, lastBrace).trim()
+            if (body.isNotEmpty()) {
+                scope.launch {
+                    RpcClient.runOnce(className, methodSig, body)
+                }
+            }
+        }
+
+        remove(tsPath)
+        remove(dtsPath)
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
     fun executeMethodOverride(state: AppState, className: String, methodSig: String, scope: CoroutineScope) {
         val tempDir = "/tmp/barbatos"
         system("mkdir -p $tempDir")

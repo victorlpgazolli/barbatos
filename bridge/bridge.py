@@ -203,7 +203,6 @@ class FridaBridge:
     def _get_device(self):
         try:
             if self.serial:
-                logging.info(f"[_get_device] Targeting specific device serial: {self.serial}")
                 return frida.get_device(self.serial, timeout=60)
             else:
                 return frida.get_usb_device(timeout=60)
@@ -500,6 +499,136 @@ class FridaBridge:
             raise e
 
     # =================================================================
+    # ROOT PATH HELPERS
+    # =================================================================
+
+    def _is_device_rooted(self):
+        """Check if the device is rooted by running 'which su' via ADB."""
+        adb_cmd = ["adb"]
+        if self.serial:
+            adb_cmd.extend(["-s", self.serial])
+        result = subprocess.run(
+            adb_cmd + ["shell", "which", "su"],
+            capture_output=True, text=True
+        )
+        is_rooted = result.returncode == 0 and result.stdout.strip() != ""
+        logging.info(f"[root] Device rooted: {is_rooted} (su path: {result.stdout.strip()!r})")
+        return is_rooted
+
+    def _is_app_debuggable(self, package_name):
+        """Check if the target app has debuggable=true in its manifest."""
+        adb_cmd = ["adb"]
+        if self.serial:
+            adb_cmd.extend(["-s", self.serial])
+        result = subprocess.run(
+            " ".join(adb_cmd + ["shell", "dumpsys", "package", package_name, "|", "grep", "-i", "debuggable"]),
+            shell=True, capture_output=True, text=True
+        )
+        is_debuggable = "true" in result.stdout.lower()
+        logging.info(f"[root] App '{package_name}' debuggable: {is_debuggable}")
+        return is_debuggable
+
+    def _ensure_frida_server_binary(self):
+        """Download frida-server matching the current frida version and push it to the device."""
+        adb_base = ["adb"]
+        if self.serial:
+            adb_base.extend(["-s", self.serial])
+
+        device_arch_raw = subprocess.run(
+            adb_base + ["shell", "uname", "-m"],
+            capture_output=True, text=True
+        ).stdout.strip().lower()
+
+        if "aarch64" in device_arch_raw:
+            device_arch = "arm64"
+        elif "arm" in device_arch_raw:
+            device_arch = "arm"
+        elif "x86_64" in device_arch_raw:
+            device_arch = "x86_64"
+        elif "i686" in device_arch_raw or "i386" in device_arch_raw:
+            device_arch = "x86"
+        else:
+            device_arch = "unknown"
+
+        frida_version = frida.__version__
+        logging.info(f"[frida-server] Version: {frida_version}, arch: {device_arch}")
+
+        cache_dir = os.path.expanduser("~/.cache/barbatos")
+        os.makedirs(cache_dir, exist_ok=True)
+        server_local = os.path.join(cache_dir, f"frida-server-{frida_version}-android-{device_arch}")
+
+        if not os.path.exists(server_local) or os.path.getsize(server_local) == 0:
+            download_url = (
+                f"https://github.com/frida/frida/releases/download/{frida_version}/"
+                f"frida-server-{frida_version}-android-{device_arch}.xz"
+            )
+            server_local_xz = server_local + ".xz"
+            logging.info(f"[frida-server] Downloading from {download_url}...")
+            try:
+                import urllib.request
+                urllib.request.urlretrieve(download_url, server_local_xz)
+                with lzma.open(server_local_xz) as f_in:
+                    with open(server_local, 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                os.remove(server_local_xz)
+                logging.info(f"[frida-server] Downloaded and extracted.")
+            except Exception as e:
+                if os.path.exists(server_local_xz):
+                    os.remove(server_local_xz)
+                raise Exception(f"[frida-server] Failed to download: {e}")
+
+        remote_path = "/data/local/tmp/barbatos-server"
+        logging.info(f"[frida-server] Pushing binary to {remote_path}...")
+        r = subprocess.run(
+            adb_base + ["push", server_local, remote_path],
+            capture_output=True, text=True
+        )
+        if r.returncode != 0:
+            raise Exception(f"[frida-server] adb push failed: {r.stderr}")
+        subprocess.run(adb_base + ["shell", "chmod", "755", remote_path], capture_output=True)
+        logging.info(f"[frida-server] Binary pushed and chmod done.")
+
+    def _start_frida_server(self):
+        """Kill any running instance and start frida-server as root via su -c."""
+        adb_base = ["adb"]
+        if self.serial:
+            adb_base.extend(["-s", self.serial])
+
+        remote_path = "/data/local/tmp/barbatos-server"
+
+        # Kill existing instances
+        subprocess.run(
+            " ".join(adb_base + ["shell", "su", "-c",
+                                  "'pkill -f barbatos-server 2>/dev/null; pkill -f frida-server 2>/dev/null; true'"]),
+            shell=True, capture_output=True
+        )
+        time.sleep(1)
+
+        logging.info(f"[frida-server] Starting as root...")
+        subprocess.Popen(
+            adb_base + ["shell", "su", "-c", f"{remote_path}"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        time.sleep(3)
+        logging.info(f"[frida-server] Started.")
+
+    def _load_agent_via_frida_server(self, pid):
+        """Attach to the target PID via USB (frida-server) and load the JS agent."""
+        logging.info(f"[root] Attaching to PID {pid} via USB frida-server...")
+        device = self._get_device()
+        self.session = device.attach(int(pid))
+        self.session._pid = int(pid)
+        logging.info(f"[root] Attached to PID {pid}.")
+
+        agent_path = get_resource_path('agent.bundle.js')
+        with open(agent_path, 'r', encoding='utf-8') as f:
+            source = f.read()
+
+        self.script = self.session.create_script(source)
+        self.script.load()
+        logging.info("[root] Agent loaded via frida-server.")
+
+    # =================================================================
     # MAIN ORCHESTRATOR FUNCTION
     # =================================================================
 
@@ -519,61 +648,94 @@ class FridaBridge:
             self.injection_progress["error_message"] = None
 
             logging.info("\n=== [ STARTING INJECTION SEQUENCE ] ===")
-            
+
             # 1. Identify Target
             self._update_progress("get_target", "running")
             package_name, pid = self._get_front_package_and_pid()
             self._update_progress("get_target", "completed")
 
-            # 2. Configure Forwards
-            self._update_progress("setup_adb", "running")
-            skipped_adb = self._setup_forwards_if_needed(pid)
-            self._update_progress("setup_adb", "skipped" if skipped_adb else "completed")
-            
-            # 3. Check if already listening
-            self._update_progress("check_gadget", "running")
-            is_listening = self._is_gadget_listening()
-            if is_listening:
-                logging.info("[*] Port 27042 is open. Testing if we can attach...")
-                try:
-                    device_manager = frida.get_device_manager()
-                    temp_device = device_manager.add_remote_device('127.0.0.1:27042')
-                    temp_session = temp_device.attach("Gadget")
-                    temp_session.detach()
-                    logging.info("[+] Gadget is healthy and attachable.")
-                except Exception as e:
-                    logging.warning(f"[-] Port 27042 is open but Gadget is not responding correctly: {e}")
-                    logging.warning("    This usually means the Gadget is misconfigured or stale. Will proceed with JDWP injection.")
-                    is_listening = False # Force injection
-            
-            self._update_progress("check_gadget", "completed")
+            # Detect environment to pick the right injection path
+            is_rooted = self._is_device_rooted()
+            is_debuggable = self._is_app_debuggable(package_name)
 
-            if not is_listening:
-                logging.info("[*] Gadget not detected. Proceeding with JDWP injection...")
-                
-                # 4. Push Gadget
-                self._update_progress("push_gadget", "running")
-                self._pushGadget()
-                self._update_progress("push_gadget", "completed")
-                
-                # 5. Inject via JDWP
-                self._update_progress("inject_jdwp", "running")
-                adb_clear_cmd = f"adb {'-s ' + self.serial if self.serial else ''} shell am clear-debug-app"
-                subprocess.run(adb_clear_cmd, shell=True, capture_output=True)
+            if is_rooted and not is_debuggable:
+                # ── ROOT PATH ────────────────────────────────────────────────
+                logging.info("[*] Root device + non-debuggable app → Root Path (frida-server).")
+                self.injection_progress["steps"] = [
+                    {"id": "get_target",     "title": "Identify target application",      "status": "completed"},
+                    {"id": "prepare_server", "title": "Prepare frida-server on device",   "status": "pending"},
+                    {"id": "start_server",   "title": "Start frida-server as root",       "status": "pending"},
+                    {"id": "load_agent",     "title": "Attach to process and load agent", "status": "pending"},
+                ]
 
-                self._inject_with_retry(package_name)
-                time.sleep(2)
-                self._update_progress("inject_jdwp", "completed")
+                self._update_progress("prepare_server", "running")
+                self._ensure_frida_server_binary()
+                self._update_progress("prepare_server", "completed")
+
+                self._update_progress("start_server", "running")
+                self._start_frida_server()
+                self._update_progress("start_server", "completed")
+
+                self._update_progress("load_agent", "running")
+                self._load_agent_via_frida_server(pid)
+                self._update_progress("load_agent", "completed")
+
+            elif not is_debuggable and not is_rooted:
+                raise Exception(
+                    f"App '{package_name}' is not debuggable and the device is not rooted. "
+                    "Cannot inject: enable developer options on the device or use a rooted device."
+                )
+
             else:
-                logging.info("[*] Gadget already listening. Skipping JDWP injection.")
-                self._update_progress("push_gadget", "skipped")
-                self._update_progress("inject_jdwp", "skipped")
+                # ── GADGET PATH (existing logic) ─────────────────────────────
+                logging.info("[*] Debuggable app detected → Gadget Path (JDWP).")
 
-            # 6. Load Agent
-            self._update_progress("load_agent", "running")
-            self._connect_and_load_agent(pid)
-            self._update_progress("load_agent", "completed")
-            
+                # 2. Configure Forwards
+                self._update_progress("setup_adb", "running")
+                skipped_adb = self._setup_forwards_if_needed(pid)
+                self._update_progress("setup_adb", "skipped" if skipped_adb else "completed")
+
+                # 3. Check if already listening
+                self._update_progress("check_gadget", "running")
+                is_listening = self._is_gadget_listening()
+                if is_listening:
+                    logging.info("[*] Port 27042 is open. Testing if we can attach...")
+                    try:
+                        device_manager = frida.get_device_manager()
+                        temp_device = device_manager.add_remote_device('127.0.0.1:27042')
+                        temp_session = temp_device.attach("Gadget")
+                        temp_session.detach()
+                        logging.info("[+] Gadget is healthy and attachable.")
+                    except Exception as e:
+                        logging.warning(f"[-] Port 27042 open but Gadget not responding: {e}")
+                        logging.warning("    Will proceed with JDWP injection.")
+                        is_listening = False
+
+                self._update_progress("check_gadget", "completed")
+
+                if not is_listening:
+                    logging.info("[*] Gadget not detected. Proceeding with JDWP injection...")
+
+                    self._update_progress("push_gadget", "running")
+                    self._pushGadget()
+                    self._update_progress("push_gadget", "completed")
+
+                    self._update_progress("inject_jdwp", "running")
+                    adb_clear_cmd = f"adb {'-s ' + self.serial if self.serial else ''} shell am clear-debug-app"
+                    subprocess.run(adb_clear_cmd, shell=True, capture_output=True)
+                    self._inject_with_retry(package_name)
+                    time.sleep(2)
+                    self._update_progress("inject_jdwp", "completed")
+                else:
+                    logging.info("[*] Gadget already listening. Skipping JDWP injection.")
+                    self._update_progress("push_gadget", "skipped")
+                    self._update_progress("inject_jdwp", "skipped")
+
+                # 6. Load Agent
+                self._update_progress("load_agent", "running")
+                self._connect_and_load_agent(pid)
+                self._update_progress("load_agent", "completed")
+
             logging.info("=== [ INJECTION SEQUENCE COMPLETED ] ===\n")
 
         except Exception as e:
@@ -591,10 +753,12 @@ class FridaBridge:
 
     # Returns the active Frida session, creating a new attachment and script load if the current one is invalid
     def get_session(self):
+        # Wait OUTSIDE the lock — inject_gadget_from_scratch's finally block also acquires
+        # self._lock to clear is_injecting_gadget, so holding it here causes a deadlock.
+        while self.is_injecting_gadget:
+            logging.info("Waiting for gadget injection to complete...")
+            time.sleep(1)
         with self._lock:
-            while self.is_injecting_gadget:
-                logging.info("Waiting for gadget injection to complete...")
-                time.sleep(1)
             device = self._get_device()
             front_app = self._get_front_app(device)
             if not front_app:
@@ -603,9 +767,10 @@ class FridaBridge:
             if self.session:
                 try:
                     if not self.session.is_detached and getattr(self.session, "_pid", None) == front_app.pid:
+                        logging.debug(f"[get_session] Reusing existing session (script id={id(self.script)})")
                         return self.session
-                except:
-                    pass
+                except Exception as e:
+                    logging.info(f"[get_session] Existing session invalid ({e}), re-attaching")
 
             logging.info(f"[get_session] Attaching to {front_app.identifier} (PID: {front_app.pid})")
             self.session = device.attach(front_app.pid)
@@ -892,7 +1057,25 @@ class FridaBridge:
 
         elif method == "getHookEvents":
             self.get_session()
-            return self.script.exports_sync.gethookevents()
+            script_id = id(self.script)
+            events = self.script.exports_sync.gethookevents()
+            if events:
+                logging.info(f"[getHookEvents] script id={script_id}, returning {len(events)} events")
+            return events
+
+        elif method == "runOnce":
+            self.get_session()
+            code = params.get("code", "")
+            transpiled_code = strip_ts_types(code)
+            script_id = id(self.script)
+            logging.info(f"[runOnce] script id={script_id}, class={params.get('className')}, method={params.get('methodSig')}")
+            result = self.script.exports_sync.runonce(
+                params.get("className"),
+                params.get("methodSig"),
+                transpiled_code
+            )
+            logging.info(f"[runOnce] returned: {result}, script id still={id(self.script)}")
+            return result
 
         else:
             raise Exception(f"Method {method} not found")

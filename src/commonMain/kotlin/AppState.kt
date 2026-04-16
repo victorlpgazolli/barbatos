@@ -27,7 +27,7 @@ data class ClassInspectionResult(
 )
 
 @Serializable
-enum class HookType { METHOD, FIELD, LOG }
+enum class HookType { METHOD, FIELD, LOG, EXEC }
 
 @Serializable
 data class HookTarget(

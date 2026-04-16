@@ -772,6 +772,84 @@ rpc.exports = {
         });
         return true;
     },
+    runonce: function(className, methodSig, code) {
+        var execResult = null;
+        var execError = null;
+
+        try {
+            Java.perform(function() {
+                var targetClass = Java.use(className);
+                var methodName = parseMethodName(methodSig);
+
+                var userFn = new Function('context', code);
+                var context = {
+                    Java: Java,
+                    args: [],
+                    original: function() {
+                        try {
+                            var overload = getOverload(targetClass, methodName, methodSig);
+                            if (!overload) return null;
+
+                            // Find a live instance: check instanceCache first, then Java.choose
+                            var liveInstance = null;
+                            var keys = Object.keys(instanceCache);
+                            for (var k = 0; k < keys.length; k++) {
+                                try {
+                                    var cached = instanceCache[keys[k]];
+                                    if (cached && cached.getClass().getName() === className) {
+                                        liveInstance = cached;
+                                        break;
+                                    }
+                                } catch(e) {}
+                            }
+                            if (!liveInstance) {
+                                Java.choose(className, {
+                                    onMatch: function(inst) { liveInstance = inst; return 'stop'; },
+                                    onComplete: function() {}
+                                });
+                            }
+
+                            if (liveInstance) {
+                                // Run on main thread — ViewModel/UI methods require it
+                                var captured = liveInstance;
+                                Java.scheduleOnMainThread(function() {
+                                    try { overload.call(captured); } catch(e) {}
+                                });
+                                return "scheduled";
+                            }
+                            // Last resort: static / no-instance call
+                            return overload.call(targetClass);
+                        } catch(e) {}
+                        return null;
+                    },
+                    log: function(msg) {
+                        hookEvents.push({
+                            timestamp: Date.now(),
+                            target: { className: className, memberSignature: methodSig, type: "EXEC" },
+                            data: { message: String(msg) }
+                        });
+                    }
+                };
+
+                try {
+                    execResult = userFn(context);
+                } catch(e) {
+                    execError = e.toString();
+                }
+            });
+        } catch(e) {
+            execError = e.toString();
+        }
+
+        var retStr = (execResult !== null && execResult !== undefined) ? javaToString(execResult) : "void";
+        hookEvents.push({
+            timestamp: Date.now(),
+            target: { className: className, memberSignature: methodSig, type: "EXEC" },
+            data: execError ? { error: execError } : { result: retStr }
+        });
+
+        return true;
+    },
     setfieldvalue: function(className, id, fieldName, type, newValue) {
         try {
             return Java.perform(function() {
