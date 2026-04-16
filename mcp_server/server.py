@@ -125,5 +125,43 @@ async def barbatos_get_hook_events() -> list | str:
     """Returns the latest method interception events collected by the agent."""
     return await call_rpc("getHookEvents", {})
 
+@mcp.tool()
+async def barbatos_get_package_name() -> str:
+    """Returns the current target's package name."""
+    return await call_rpc("getpackagename")
+
+@mcp.tool()
+async def barbatos_prepare_environment() -> dict | str:
+    """Initial ADB setup (port forwards, etc.)."""
+    return await call_rpc("prepareEnvironment")
+
+@mcp.tool()
+async def barbatos_check_or_push_gadget() -> dict | str:
+    """Ensures Frida Gadget is on device."""
+    return await call_rpc("checkOrPushGadget")
+
+@mcp.tool()
+async def barbatos_reset_injection() -> dict | str:
+    """Resets the injection state machine."""
+    return await call_rpc("resetInjection")
+
+@mcp.tool()
+async def barbatos_inject_gadget_from_scratch(force: bool = False, with_logs: bool = False, limit: int = 50) -> dict | str:
+    """Orchestrates the full injection sequence (JDWP -> Gadget -> Agent)."""
+    return await call_rpc("injectGadgetFromScratch", {
+        "force": force,
+        "with_logs": with_logs,
+        "limit": limit
+    })
+
+@mcp.tool()
+async def barbatos_inject_jdwp(package_name: str, cmd: str = None, break_on: str = "android.os.Handler.dispatchMessage") -> dict | str:
+    """Directly triggers JDWP injection."""
+    return await call_rpc("injectJdwp", {
+        "package_name": package_name,
+        "cmd": cmd,
+        "break_on": break_on
+    })
+
 if __name__ == "__main__":
     mcp.run()
