@@ -124,6 +124,20 @@ components:
           type: string
           example: "java.lang.String"
 
+    countInstancesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    listInstancesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
     inspectInstanceParams:
       type: object
       required: [className, id]
@@ -195,7 +209,7 @@ components:
           type: string
           description: Full signature (e.g., "public void onCreate(android.os.Bundle)")
 
-    getinstanceaddressesParams:
+    getInstanceAddressesParams:
       type: object
       required: [className]
       properties:
@@ -250,9 +264,10 @@ x-rpc-methods:
   inspectInstance:
     description: Recursively explores an instance's fields.
     returns: "Array of {name, value, type, childId?}"
-  injectGadgetFromScratch:
-    description: Orchestrates the JDWP -> Gadget -> Agent sequence.
-    returns: "{status: 'running'|'completed'|'error', steps: [], error_message: string?, logs: []?}"
+  setFieldValue:
+    description: Modifies a primitive field of an instance.
+  hookMethod:
+    description: Intercepts method calls and logs events.
   getHookEvents:
     description: Returns the latest method interception events collected by the agent.
     returns: "Array of HookEvent objects."
@@ -272,5 +287,8 @@ x-rpc-methods:
     description: Ensures Frida Gadget is on device.
   resetInjection:
     description: Resets the injection state machine.
+  injectGadgetFromScratch:
+    description: Orchestrates the JDWP -> Gadget -> Agent sequence.
+    returns: "{status: 'running'|'completed'|'error', steps: [], error_message: string?, logs: []?}"
   injectJdwp:
     description: Direct JDWP injection trigger.
