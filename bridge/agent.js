@@ -772,6 +772,100 @@ rpc.exports = {
         });
         return true;
     },
+    getinstanceaddresses: function(className) {
+        var addresses = [];
+        try {
+            Java.perform(function() {
+                Java.choose(className, {
+                    onMatch: function(inst) {
+                        try { addresses.push(inst.toString()); } catch(e) { addresses.push(className + "@?"); }
+                    },
+                    onComplete: function() {}
+                });
+            });
+        } catch(e) {}
+        addresses.reverse(); // newest-first heuristic
+        return addresses;
+    },
+    runonce: function(className, methodSig, code) {
+        var execResult = null;
+        var execError = null;
+
+        try {
+            Java.perform(function() {
+                var targetClass = Java.use(className);
+                var methodName = parseMethodName(methodSig);
+                var overload = getOverload(targetClass, methodName, methodSig);
+
+                // Collect all live instances, newest-first (reverse heuristic)
+                var allInstances = [];
+                try {
+                    Java.choose(className, {
+                        onMatch: function(inst) { allInstances.push(inst); },
+                        onComplete: function() {}
+                    });
+                } catch(e) {}
+                allInstances.reverse();
+
+                // Build per-instance wrapper with .original() bound to that instance
+                function makeWrapper(inst) {
+                    return {
+                        original: function() {
+                            if (!overload) return null;
+                            var captured = inst;
+                            Java.scheduleOnMainThread(function() {
+                                try { overload.call(captured); } catch(e) {}
+                            });
+                            return "scheduled";
+                        }
+                    };
+                }
+                var instanceWrappers = allInstances.map(makeWrapper);
+
+                // Fallback: if no instances, try static call
+                var topLevelOriginal = instanceWrappers.length > 0
+                    ? instanceWrappers[0].original.bind(instanceWrappers[0])
+                    : function() {
+                        try {
+                            if (overload) return overload.call(targetClass);
+                        } catch(e) {}
+                        return null;
+                    };
+
+                var userFn = new Function('context', code);
+                var context = {
+                    Java: Java,
+                    args: [],
+                    instances: instanceWrappers,
+                    original: topLevelOriginal,
+                    log: function(msg) {
+                        hookEvents.push({
+                            timestamp: Date.now(),
+                            target: { className: className, memberSignature: methodSig, type: "EXEC" },
+                            data: { message: String(msg) }
+                        });
+                    }
+                };
+
+                try {
+                    execResult = userFn(context);
+                } catch(e) {
+                    execError = e.toString();
+                }
+            });
+        } catch(e) {
+            execError = e.toString();
+        }
+
+        var retStr = (execResult !== null && execResult !== undefined) ? javaToString(execResult) : "void";
+        hookEvents.push({
+            timestamp: Date.now(),
+            target: { className: className, memberSignature: methodSig, type: "EXEC" },
+            data: execError ? { error: execError } : { result: retStr }
+        });
+
+        return true;
+    },
     setfieldvalue: function(className, id, fieldName, type, newValue) {
         try {
             return Java.perform(function() {

@@ -253,6 +253,7 @@ object Renderer {
             AppMode.DEBUG_HOOK_WATCH -> listOf(
                 FooterKey("↑↓", "Select"),
                 FooterKey("E", "Edit Impl"),
+                FooterKey("X", "Run Once"),
                 FooterKey("←→", "Scroll"),
                 FooterKey("I", "Inspect"),
                 FooterKey("Space", "Toggle"),
@@ -1049,6 +1050,16 @@ object Renderer {
                 val header = "${DIM_GRAY}$time${RESET}  $badge  ${WHITE}$memberName${RESET}$hashSuffix$countSuffix"
                 lines.add(header)
                 lines.add("  ${C_MID_GRAY}$message${RESET}")
+            }
+            HookType.EXEC -> {
+                val isError = event.data["error"] != null
+                val message = event.data["message"] ?: event.data["result"] ?: event.data["error"] ?: ""
+                val badgeColor = if (isError) Ansi.RED else C_BLUE
+                val badge = "${badgeColor}EXEC${RESET}"
+                val header = "${DIM_GRAY}$time${RESET}  $badge  ${WHITE}$memberName${RESET}$hashSuffix$countSuffix"
+                lines.add(header)
+                val valColor = if (isError) Ansi.RED else C_MID_GRAY
+                lines.add("  ${valColor}$message${RESET}")
             }
         }
 

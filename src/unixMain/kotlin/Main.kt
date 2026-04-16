@@ -233,6 +233,16 @@ fun main(args: Array<String>) {
                                 }
                             }
                         }
+                        'x', 'X' -> {
+                            val hooks = state.activeHooks
+                            if (state.selectedHookIndex in hooks.indices) {
+                                val target = hooks[state.selectedHookIndex]
+                                if (target.enabled && target.type == HookType.METHOD) {
+                                    CommandExecutor.executeWatchedHook(state, target.className, target.memberSignature, scope)
+                                    Renderer.render(state)
+                                }
+                            }
+                        }
                     }
 
                 } else if (state.mode == AppMode.DEBUG_CLASS_FILTER && (key.c == ']')) {

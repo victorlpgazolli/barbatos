@@ -280,6 +280,122 @@ object CommandExecutor {
     }
 
     @OptIn(ExperimentalForeignApi::class)
+    fun executeWatchedHook(state: AppState, className: String, methodSig: String, scope: CoroutineScope) {
+        val tempDir = "/tmp/barbatos"
+        system("mkdir -p $tempDir")
+
+        val tsPath = "$tempDir/exec.ts"
+        val dtsPath = "$tempDir/barbatos.d.ts"
+
+        // Fetch live instances before opening editor (best-effort, empty on failure)
+        var instanceAddresses: List<String> = emptyList()
+        try {
+            instanceAddresses = kotlinx.coroutines.runBlocking {
+                RpcClient.getInstanceAddresses(className)
+            }
+        } catch (_: Exception) {}
+
+        val dtsContent = """
+            declare interface BarbatosInstance {
+                original: () => any;
+            }
+            declare interface BarbatosContext {
+                Java: any;
+                args: any[];
+                instances: BarbatosInstance[];
+                original: () => any;
+                log: (msg: any) => void;
+            }
+        """.trimIndent()
+
+        val dtsFile = fopen(dtsPath, "w")
+        if (dtsFile != null) {
+            fprintf(dtsFile, "%s", dtsContent)
+            fclose(dtsFile)
+        }
+
+        val instanceComments = buildString {
+            if (instanceAddresses.isNotEmpty()) {
+                append("\n/* Available instances (newest → oldest):")
+                instanceAddresses.forEachIndexed { i, addr ->
+                    val marker = if (i == 0) "  ← most recent" else ""
+                    append("\n   context.instances[$i]  $addr$marker")
+                }
+                append("\n*/")
+            } else {
+                append("\n/* (no live instances found at time of opening) */")
+            }
+        }
+
+        val tsContent = """
+            /// <reference path="./barbatos.d.ts" />
+
+            /**
+             * One-shot execution for $methodSig
+             * This code runs ONCE and is NOT saved to the hook's implementation.
+             *
+             * context.instances[0]  → most recent live instance
+             * context.original()    → shortcut for context.instances[0].original()
+             * context.log(msg)      → log to Hook Watch view
+             * context.Java          → Frida Java object
+             */
+            export default (context: BarbatosContext): any => {
+                return context.instances[0].original();
+            };
+            $instanceComments
+        """.trimIndent()
+
+        val tsFile = fopen(tsPath, "w")
+        if (tsFile != null) {
+            fprintf(tsFile, "%s", tsContent)
+            fclose(tsFile)
+        }
+
+        Terminal.disableRawMode()
+        print(Ansi.DISABLE_MOUSE)
+        print(Ansi.SHOW_CURSOR)
+        Terminal.flush()
+
+        val editor = getenv("EDITOR")?.toKString() ?: "vi"
+        system("$editor $tsPath")
+
+        Terminal.enableRawMode()
+        print(Ansi.ENABLE_MOUSE)
+        print(Ansi.HIDE_CURSOR)
+        Terminal.flush()
+
+        val newContent = buildString {
+            val file = fopen(tsPath, "r") ?: return@buildString
+            val buf = ByteArray(1024)
+            while (fgets(buf.refTo(0), buf.size, file) != null) {
+                append(buf.toKString())
+            }
+            fclose(file)
+        }
+
+        if (newContent.trim() == tsContent.trim()) {
+            remove(tsPath)
+            remove(dtsPath)
+            return
+        }
+
+        val firstBrace = newContent.indexOf('{')
+        val lastBrace = newContent.lastIndexOf('}')
+
+        if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            val body = newContent.substring(firstBrace + 1, lastBrace).trim()
+            if (body.isNotEmpty()) {
+                scope.launch {
+                    RpcClient.runOnce(className, methodSig, body)
+                }
+            }
+        }
+
+        remove(tsPath)
+        remove(dtsPath)
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
     fun executeMethodOverride(state: AppState, className: String, methodSig: String, scope: CoroutineScope) {
         val tempDir = "/tmp/barbatos"
         system("mkdir -p $tempDir")

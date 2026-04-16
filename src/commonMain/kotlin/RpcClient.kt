@@ -292,6 +292,34 @@ data class JsonRpcHookEventsResponse(
 )
 
 @Serializable
+data class RunOnceParams(
+    val className: String,
+    val methodSig: String,
+    val code: String
+)
+
+@Serializable
+data class JsonRpcRequestRunOnce(
+    val jsonrpc: String = "2.0",
+    val method: String = "runOnce",
+    val params: RunOnceParams,
+    val id: Int = 1
+)
+
+@Serializable
+data class GetInstanceAddressesParams(
+    val className: String
+)
+
+@Serializable
+data class JsonRpcRequestGetInstanceAddresses(
+    val jsonrpc: String = "2.0",
+    val method: String = "getInstanceAddresses",
+    val params: GetInstanceAddressesParams,
+    val id: Int = 1
+)
+
+@Serializable
 data class SetFieldValueParams(
     val className: String,
     val id: String,
@@ -736,6 +764,43 @@ object RpcClient {
             response.status.value in 200..299
         } catch (e: Exception) {
             false
+        }
+    }
+
+    suspend fun runOnce(className: String, methodSig: String, code: String): Boolean {
+        return try {
+            val requestBody = JsonRpcRequestRunOnce(
+                params = RunOnceParams(className, methodSig, code)
+            )
+            val response: HttpResponse = withTimeoutOrNull(30000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return false
+            response.status.value in 200..299
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun getInstanceAddresses(className: String): List<String> {
+        return try {
+            val requestBody = JsonRpcRequestGetInstanceAddresses(
+                params = GetInstanceAddressesParams(className)
+            )
+            val response: HttpResponse = withTimeoutOrNull(5000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return emptyList()
+            val body = response.body<String>()
+            val json = Json { ignoreUnknownKeys = true }
+            val parsed = json.decodeFromString<JsonRpcResponse>(body)
+            parsed.result ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
