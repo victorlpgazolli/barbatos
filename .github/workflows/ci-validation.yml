@@ -44,11 +44,11 @@ jobs:
       mcp: ${{ steps.filter.outputs.mcp }}
     steps:
       - name: Checkout repository
-        if: github.event_name == 'pull_request'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Required to compare branches
       - id: filter
+        if: github.event_name == 'pull_request'
         run: |
           # Get the list of changed files between the base and head of the PR
           FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
