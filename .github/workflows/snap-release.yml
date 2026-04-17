@@ -40,18 +40,26 @@ jobs:
 
       - name: Build Components Nativity
         run: |
+          echo "Starting nativity build for ${{ matrix.architecture }}"
           if [ "${{ matrix.architecture }}" = "amd64" ]; then
             sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
             ./scripts/build_linux_x64.sh
           else
+            echo "Setting up ARM64 dependencies..."
             chmod +x scripts/setup_linux_arm64_deps.sh
             ./scripts/setup_linux_arm64_deps.sh
             
-            # Find libgcc.a path for ARM64 cross-compiler
+            echo "Discovering LIBGCC_PATH..."
             LIBGCC_PATH=$(find /usr/lib/gcc-cross/aarch64-linux-gnu -name libgcc.a | head -n 1)
             echo "LIBGCC_PATH=$LIBGCC_PATH" >> $GITHUB_ENV
             echo "Found libgcc.a at: $LIBGCC_PATH"
 
+            if [ -z "$LIBGCC_PATH" ]; then
+              echo "ERROR: libgcc.a not found for ARM64 cross-compiler"
+              exit 1
+            fi
+
+            echo "Running ARM64 build script..."
             ./scripts/build_linux_arm64.sh
           fi
 
