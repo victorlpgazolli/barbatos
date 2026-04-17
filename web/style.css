@@ -72,7 +72,7 @@ section {
     margin-bottom: 2rem;
 }
 
-.placeholder-img {
+.placeholder-img, .placeholder-img * {
     background: #000;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -80,10 +80,9 @@ section {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 400px;
+    height: 650px;
     margin: 2rem auto 3rem;
     font-family: var(--font-mono);
-    max-width: 800px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
@@ -153,7 +152,7 @@ section {
     padding: 2rem;
     border: 1px solid var(--border);
     border-radius: 8px;
-    max-width: 600px;
+    max-width: 800px;
     margin: 0 auto;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
@@ -230,7 +229,7 @@ pre {
     padding: 1.25rem;
     border-radius: 6px;
     overflow-x: auto;
-    margin-top: 1rem;
+    
     border: 1px solid var(--border);
 }
 
@@ -238,6 +237,13 @@ pre code {
     background: none;
     padding: 0;
     color: var(--text-primary);
+}
+
+.json-code-block, .json-code-block pre {
+    border-radius: 6px;
+}
+.json-code-block {
+    margin-top: 1rem;
 }
 
 footer {
