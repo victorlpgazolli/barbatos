@@ -13,12 +13,12 @@
 </p>
 
 <div align="center">
-<table>
-  <tr>
-    <td><img src="web/demo.gif" alt="Barbatos Demo"></td>
-    <td><img src="web/tui.gif" alt="Barbatos TUI"></td>
-  </tr>
-</table>
+Using Barbatos through the MCP server to explore an app's structure and inspect objects:
+<img src="web/demo.gif" alt="Barbatos Demo">
+</div>
+<div align="center">
+The Terminal User Interface (TUI) demo:
+<td><img src="web/tui.gif" alt="Barbatos TUI"></td>
 </div>
 
 ## Why the name "Barbatos?"
