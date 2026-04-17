@@ -41,7 +41,7 @@ kotlin {
                 )
             }
         }
-        compilation["main"].compilerOptions.configure {
+        compilations.getByName("main").compilerOptions.configure {
             freeCompilerArgs.add("-Xcompiler-option=-mno-outline-atomics")
         }
     }
