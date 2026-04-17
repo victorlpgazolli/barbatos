@@ -1,4 +1,4 @@
-name: PR Validation
+name: Compile and Test
 
 on:
   pull_request:

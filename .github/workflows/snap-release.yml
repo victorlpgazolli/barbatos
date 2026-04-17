@@ -1,4 +1,4 @@
-name: Snap Release
+name: Snapcraft Build and Publish
 
 on:
   push:
@@ -10,6 +10,7 @@ jobs:
   build-snap:
     name: Build Snap (${{ matrix.architecture }})
     runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         architecture: [amd64, arm64]
@@ -44,7 +45,14 @@ jobs:
             sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
             ./scripts/build_linux_x64.sh
           else
-            bash scripts/setup_linux_arm64_deps.sh
+            sudo apt-get update
+            chmod +x scripts/setup_linux_arm64_deps.sh
+            ./scripts/setup_linux_arm64_deps.sh
+            
+            # Find libgcc.a path for ARM64 cross-compiler
+            LIBGCC_PATH=$(find /usr/lib/gcc-cross/aarch64-linux-gnu -name libgcc.a | head -n 1)
+            echo "LIBGCC_PATH=$LIBGCC_PATH" >> $GITHUB_ENV
+            echo "Found libgcc.a at: $LIBGCC_PATH"
             ./scripts/build_linux_arm64.sh
           fi
 
@@ -67,7 +75,7 @@ jobs:
     name: Publish Snap to Store
     needs: build-snap
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch'
     steps:
       - name: Download all snaps
         uses: actions/download-artifact@v8
