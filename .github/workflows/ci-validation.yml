@@ -12,6 +12,26 @@ on:
       - 'bridge/**'
       - 'mcp_server/**'
       - '.github/workflows/ci-validation.yml'
+  workflow_dispatch:
+    inputs:
+      kotlin:
+        options:
+          - 'true'
+          - 'false'
+        description: 'Run Kotlin tests and Linux builds'
+        default: 'false'
+      bridge:
+        options:
+          - 'true'
+          - 'false'
+        description: 'Run Bridge validation'
+        default: 'false'
+      mcp:
+        options:
+          - 'true'
+          - 'false'
+        description: 'Run MCP validation'
+        default: 'false'
 
 jobs:
   detect-changes:
@@ -43,7 +63,7 @@ jobs:
   kotlin-test-and-linux-build:
     name: Kotlin (${{ matrix.target }})
     needs: detect-changes
-    if: needs.detect-changes.outputs.kotlin == 'true'
+    if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -88,7 +108,7 @@ jobs:
   kotlin-macos-build:
     name: Kotlin (macOS ARM64)
     needs: [detect-changes, kotlin-test-and-linux-build]
-    if: needs.detect-changes.outputs.kotlin == 'true'
+    if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
     runs-on: macos-15
     steps:
       - name: Checkout repository
@@ -107,7 +127,7 @@ jobs:
   bridge-validation:
     name: Bridge Validation
     needs: detect-changes
-    if: needs.detect-changes.outputs.bridge == 'true'
+    if: needs.detect-changes.outputs.bridge == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.bridge == 'true')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -138,7 +158,7 @@ jobs:
   mcp-validation:
     name: MCP Validation
     needs: detect-changes
-    if: needs.detect-changes.outputs.mcp == 'true'
+    if: needs.detect-changes.outputs.mcp == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mcp == 'true')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
