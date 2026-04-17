@@ -57,7 +57,7 @@ Barbatos is a TUI debugger designed to be frictionless, 0 setup needed. It handl
 *   **Simple App Exploration:** quickly list classes, inspect objects, and understand app structure.
 *   **Real-time App Debugging:** modify field values on the fly and hook methods to see live execution flow.
 *   **AI-Assisted Debugging:** Use the built-in MCP Server to let LLMs (Claude/Gemini/Cursor) debug your app autonomously.
-* (soon) **Intercept Method Calls:** Modify return values or arguments of any method.
+*   **Intercept Method Calls:** Modify return values or arguments of any method.
 
 ---
 
@@ -83,7 +83,7 @@ Barbatos provides native support for the Model Context Protocol (MCP). By connec
 *   **Method Hooking:** "Tell me the parameters passed to the `MyViewModel.fetchData` method every time it is called."
 *   **Live Edit:** "Change the `isPremium` boolean on the active `UserProfile` instance to `true`."
 *   **Root Cause Analysis:** "List all instances of `ApiError`, check their `message` field, and identify recurring failure patterns."
-* (soon) **Mock Behavior:** "Intercept the `fetchData` method in `MyViewModel` and modify its return to throw an exception when the `isActive` field is `false`."
+*   **Mock Behavior:** "Intercept the `fetchData` method in `MyViewModel` and modify its return to throw an exception when the `isActive` field is `false`."
 
 
 ---
