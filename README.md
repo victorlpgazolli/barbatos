@@ -165,8 +165,8 @@ To use `barbatos` with **Claude Desktop**, add this to your `claude_desktop_conf
 {
   "mcpServers": {
     "barbatos-debugger": {
-      "command": "python3",
-      "args": ["/path/to/barbatos/mcp_server/server.py"]
+      "command": "barbatos-mcp",
+      "args": []
     }
   }
 }

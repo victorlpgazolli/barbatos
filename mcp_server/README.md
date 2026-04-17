@@ -51,7 +51,7 @@ mv dist/barbatos-mcp ~/.local/bin/
 {
   "mcpServers": {
     "barbatos-debugger": {
-      "command": "~/.local/bin/barbatos-mcp"
+      "command": "barbatos-mcp"
     }
   }
 }
@@ -69,7 +69,7 @@ Add via the Amp VS Code extension settings screen or by updating your `settings.
 ```json
 "amp.mcpServers": {
   "barbatos-debugger": {
-    "command": "~/.local/bin/barbatos-mcp"
+    "command": "barbatos-mcp"
   }
 }
 ```
@@ -79,7 +79,7 @@ Add via the Amp VS Code extension settings screen or by updating your `settings.
 Run the following command in your terminal:
 
 ```bash
-amp mcp add barbatos-debugger -- ~/.local/bin/barbatos-mcp
+amp mcp add barbatos-debugger -- barbatos-mcp
 ```
 
 </details>
@@ -97,7 +97,7 @@ To setup Cline, just add the json above to your MCP settings file.
 Use the Claude Code CLI to add the Barbatos MCP server:
 
 ```bash
-claude mcp add barbatos-debugger -- ~/.local/bin/barbatos-mcp
+claude mcp add barbatos-debugger -- barbatos-mcp
 ```
 </details>
 
@@ -114,14 +114,14 @@ Follow the [MCP install guide](https://modelcontextprotocol.io/quickstart/user),
 Use the Codex CLI to add the Barbatos MCP server:
 
 ```bash
-codex mcp add barbatos-debugger ~/.local/bin/barbatos-mcp
+codex mcp add barbatos-debugger barbatos-mcp
 ```
 
 Alternatively, create or edit the configuration file `~/.codex/config.toml` and add:
 
 ```toml
 [mcp_servers.barbatos-debugger]
-command = "~/.local/bin/barbatos-mcp"
+command = "barbatos-mcp"
 ```
 
 </details>
@@ -142,7 +142,7 @@ You can edit the configuration file `~/.copilot/mcp-config.json` and add:
   "mcpServers": {
     "barbatos-debugger": {
       "type": "local",
-      "command": "~/.local/bin/barbatos-mcp",
+      "command": "barbatos-mcp",
       "tools": ["*"]
     }
   }
@@ -154,7 +154,7 @@ You can edit the configuration file `~/.copilot/mcp-config.json` and add:
 <details>
 <summary>Cursor</summary>
 
-Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `~/.local/bin/barbatos-mcp`.
+Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `barbatos-mcp`.
 
 </details>
 
@@ -164,7 +164,7 @@ Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, u
 Use the Gemini CLI to add the Barbatos MCP server:
 
 ```bash
-gemini mcp add barbatos-debugger ~/.local/bin/barbatos-mcp
+gemini mcp add barbatos-debugger barbatos-mcp
 ```
 
 </details>
@@ -172,7 +172,7 @@ gemini mcp add barbatos-debugger ~/.local/bin/barbatos-mcp
 <details>
 <summary>Goose</summary>
 
-Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to your liking, use type `STDIO`, and set the `command` to `~/.local/bin/barbatos-mcp`.
+Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to your liking, use type `STDIO`, and set the `command` to `barbatos-mcp`.
 
 </details>
 
@@ -185,7 +185,7 @@ Follow the MCP Servers [documentation](https://kiro.dev/docs/mcp/). For example 
 {
   "mcpServers": {
     "barbatos-debugger": {
-      "command": "~/.local/bin/barbatos-mcp"
+      "command": "barbatos-mcp"
     }
   }
 }
@@ -204,7 +204,7 @@ Follow the MCP Servers documentation. For example in `~/.config/opencode/opencod
   "mcp": {
     "barbatos-debugger": {
       "type": "local",
-      "command": ["~/.local/bin/barbatos-mcp"],
+      "command": ["barbatos-mcp"],
       "enabled": true
     }
   }
