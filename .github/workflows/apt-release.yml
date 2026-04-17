@@ -1,4 +1,4 @@
-name: APT Release
+name: Apt Build and Release
 
 on:
   push:

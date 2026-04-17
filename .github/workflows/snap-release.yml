@@ -1,4 +1,4 @@
-name: Snap Release
+name: Snapcraft Build and Publish
 
 on:
   push:
