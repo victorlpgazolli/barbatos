@@ -23,6 +23,7 @@ kotlin {
                 baseName = "barbatos"
                 val libgccPath = System.getenv("LIBGCC_PATH")
                 linkerOpts(
+                    "-Xlinker", "-mno-outline-atomics",
                     "-L/usr/lib/aarch64-linux-gnu",
                     "-L/usr/aarch64-linux-gnu/lib",
                     "--allow-shlib-undefined",
@@ -53,7 +54,6 @@ kotlin {
             }
         }
     }
-
 
     @OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
