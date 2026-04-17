@@ -131,6 +131,7 @@ jobs:
           
       - name: Validate Bridge Syntax
         run: |
+          make compile_bridge
           cd bridge
           python3 -m py_compile bridge.py
 
@@ -148,7 +149,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install MCP Dependencies
+        run: |
+          cd mcp_server
+          pip install -r requirements.txt
+
       - name: Validate MCP Syntax
         run: |
+          make compile_mcp
           cd mcp_server
           python3 -m py_compile server.py
