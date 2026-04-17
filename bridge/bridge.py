@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+import os
+import sys
+
+def _early_get_version():
+    try:
+        base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(base, 'version.txt')) as f:
+            return f.read().strip()
+    except Exception:
+        return 'unknown'
+
+if __name__ == '__main__' and len(sys.argv) == 2 and sys.argv[1] == '--version':
+    print(f'barbatos-bridge {_early_get_version()}')
+    sys.exit(0)
+
 import time
 import traceback
 import lzma
@@ -61,7 +76,7 @@ def setup_runtime_env():
         current_path = os.environ.get('PATH', '')
         os.environ['PATH'] = f"{mei_path}:{frida_dir}:{current_path}"
         
-        logging.info(f"Runtime environment setup. _MEIPASS: {mei_path}")
+        logging.debug(f"Runtime environment setup. _MEIPASS: {mei_path}")
 
 setup_runtime_env()
 
@@ -925,6 +940,68 @@ class FridaBridge:
             logging.info("[reset] Injection state reset.")
             return True
 
+    # Checks and reports the health of the bridge, ADB connection, Frida device, and session state
+    def health_check(self):
+        report = {}
+
+        # Check 1: ADB device reachable
+        try:
+            adb_cmd = ["adb"]
+            if self.serial:
+                adb_cmd.extend(["-s", self.serial])
+            adb_cmd.append("get-state")
+            result = subprocess.run(adb_cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip() == "device":
+                report["adb"] = {"status": "ok", "message": f"Device state: {result.stdout.strip()}"}
+            else:
+                stderr = result.stderr.strip() or result.stdout.strip()
+                serial_hint = f" -s {self.serial}" if self.serial else ""
+                report["adb"] = {
+                    "status": "error",
+                    "message": f"adb get-state failed: {stderr}",
+                    "fix": f"Run: adb{serial_hint} devices  — ensure a device is listed as 'device'"
+                }
+        except Exception as e:
+            report["adb"] = {"status": "error", "message": str(e), "fix": "Ensure adb is installed and in PATH"}
+
+        # Check 2: Frida can see the device
+        try:
+            if self.serial:
+                frida.get_device(self.serial, timeout=5)
+            else:
+                frida.get_usb_device(timeout=5)
+            report["frida_device"] = {"status": "ok", "message": "Frida device enumeration succeeded"}
+        except Exception as e:
+            serial_hint = f" --serial {self.serial}" if self.serial else ""
+            report["frida_device"] = {
+                "status": "error",
+                "message": str(e),
+                "fix": f"Check USB debugging is enabled; re-run: barbatos-bridge{serial_hint}"
+            }
+
+        # Check 3: Current session state
+        if self.session:
+            try:
+                detached = self.session.is_detached
+                report["session"] = {
+                    "status": "error" if detached else "ok",
+                    "message": "Session is detached" if detached else "Session is active"
+                }
+            except Exception as e:
+                report["session"] = {"status": "error", "message": f"Session check failed: {e}"}
+        else:
+            report["session"] = {"status": "skipped", "message": "No active session (injection not yet run)"}
+
+        # Check 4: Injection in progress
+        report["injection"] = {
+            "status": "skipped" if self.is_injecting_gadget else "ok",
+            "message": "Injection in progress — other commands will wait" if self.is_injecting_gadget else "No injection running"
+        }
+
+        statuses = [v["status"] for v in report.values()]
+        overall = "degraded" if "error" in statuses else "ok"
+        return {"overall": overall, "checks": report}
+
     # Routing logic mapping string method names from the JSON-RPC payload to their internal Python implementations
     def handle_rpc(self, method, params):
         if method == "listClasses":
@@ -1081,6 +1158,9 @@ class FridaBridge:
             logging.info(f"[runOnce] returned: {result}, script id still={id(self.script)}")
             return result
 
+        elif method == "healthCheck":
+            return self.health_check()
+
         else:
             raise Exception(f"Method {method} not found")
 
@@ -1091,6 +1171,16 @@ def run_server(port=8080, serial=None):
     logging.info(f"[run_server] Starting JSON-RPC Bridge on http://127.0.0.1:{port}...")
     if serial:
         logging.info(f"[run_server] Targeting ADB serial: {serial}")
+        # Startup device validation
+        try:
+            result = subprocess.run(["adb", "-s", serial, "get-state"], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0 or result.stdout.strip() != "device":
+                stderr = result.stderr.strip() or result.stdout.strip()
+                logging.error(f"[startup] Device '{serial}' not found: {stderr}")
+                logging.error(f"[startup] Run: adb devices  — to list connected devices")
+                # Bridge continues to start so MCP can call healthCheck for structured diagnosis
+        except Exception as e:
+            logging.error(f"[startup] ADB validation error: {e}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -1099,9 +1189,11 @@ def run_server(port=8080, serial=None):
     logging.info("Server stopped.")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='barbatos JSON-RPC Bridge')
-    parser.add_argument('--port', type=int, default=8080, help='Listen port (default: 8080)')
-    parser.add_argument('--serial', type=str, help='Target ADB device serial number')
+    parser = argparse.ArgumentParser(
+        description='barbatos-bridge: Frida JSON-RPC bridge for Android runtime instrumentation'
+    )
+    parser.add_argument('--port', type=int, default=8080, help='Local HTTP port to listen on (default: 8080)')
+    parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554). Omit to use the first USB device.')
     args = parser.parse_args()
-    
+
     run_server(port=args.port, serial=args.serial)
