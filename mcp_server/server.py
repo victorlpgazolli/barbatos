@@ -31,17 +31,30 @@ async def call_rpc(method: str, params: dict = None) -> dict:
         "params": params or {},
         "id": 1
     }
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(RPC_URL, json=payload, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
+            # Parse JSON first so error_message is never discarded on HTTP 500
+            try:
+                data = response.json()
+            except Exception:
+                response.raise_for_status()
+                return f"Error: bridge returned non-JSON response (HTTP {response.status_code})"
+            if not response.is_success:
+                err = data.get("error", {})
+                msg = err.get("error_message") or err.get("message") or str(err)
+                return f"Error from bridge: {msg}"
             if "error" in data:
-                return f"Error from bridge: {data['error']}"
+                err = data["error"]
+                msg = err.get("error_message") or err.get("message") or str(err)
+                return f"Error from bridge: {msg}"
             return data.get("result")
     except httpx.ConnectError:
-        return "Error: Could not connect to the barbatos bridge. Make sure 'barbatos' or 'bridge.py' is running on port 8080."
+        return (
+            "Error: Could not connect to the barbatos bridge on port 8080. "
+            "Start it with: barbatos-bridge [--serial <device-serial>]"
+        )
     except Exception as e:
         return f"Error executing {method}: {str(e)}"
 
@@ -248,9 +261,18 @@ Available MCP tools (Model Context Protocol capabilities):
   barbatos_inject_gadget_from_scratch  Orchestrate the full injection sequence
   barbatos_inject_jdwp           Directly trigger JDWP injection
   barbatos_reset_injection       Reset the injection state machine
+  barbatos_health_check          Check bridge and device health status
 
 Requires barbatos-bridge to be running on port 8080.
 """
+
+@mcp.tool()
+async def barbatos_health_check() -> str:
+    """
+    Checks the health of the barbatos bridge, ADB device connection, and Frida session.
+    Returns a human-readable status report with actionable fix suggestions.
+    Call this first when any tool returns an error.
+    """
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
