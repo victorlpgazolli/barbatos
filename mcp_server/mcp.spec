@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+httpx_hidden = collect_submodules('httpx')
+httpx_datas = collect_data_files('httpx')
 
 a = Analysis(
     ['server.py'],
     pathex=[],
     binaries=[],
-    datas=[('../version.txt', '.')],
-    hiddenimports=[],
+    datas=[('../version.txt', '.')] + httpx_datas,
+    hiddenimports=httpx_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
