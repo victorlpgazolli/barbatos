@@ -1,6 +1,6 @@
 name: barbatos
 base: core24
-version: '1.0.0'
+adopt-info: binaries
 summary: Frictionless Android Runtime Debugger & MCP Server
 description: |
   Barbatos is a zero-setup Android runtime debugger designed to bring the power of 
@@ -55,6 +55,9 @@ parts:
   binaries:
     plugin: dump
     source: dist/
+    override-pull: |
+      snapcraftctl pull
+      snapcraftctl set-version "$(git describe --tags --always | sed 's/^v//')"
     organize:
       barbatos: bin/barbatos
       barbatos-bridge: bin/barbatos-bridge
