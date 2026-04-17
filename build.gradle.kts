@@ -21,6 +21,7 @@ kotlin {
             executable {
                 entryPoint = "main"
                 baseName = "barbatos"
+                val libgccPath = System.getenv("LIBGCC_PATH")
                 linkerOpts(
                     "-L/usr/lib/aarch64-linux-gnu",
                     "-L/usr/aarch64-linux-gnu/lib",
@@ -36,7 +37,7 @@ kotlin {
                     "-lrtmp",
                     "-lzstd",
                     "-lz",
-                    "-lgcc"
+                    if (libgccPath != null && libgccPath.isNotEmpty()) libgccPath else "-lgcc"
                 )
             }
         }
