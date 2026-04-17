@@ -38,7 +38,15 @@ jobs:
 
       - name: Set up cross-compilation dependencies
         if: matrix.arch == 'aarch64'
-        run: bash scripts/setup_linux_arm64_deps.sh
+        run: |
+          sudo apt-get update
+          chmod +x scripts/setup_linux_arm64_deps.sh
+          ./scripts/setup_linux_arm64_deps.sh
+          
+          # Find libgcc.a path for ARM64 cross-compiler
+          LIBGCC_PATH=$(find /usr/lib/gcc-cross/aarch64-linux-gnu -name libgcc.a | head -n 1)
+          echo "LIBGCC_PATH=$LIBGCC_PATH" >> $GITHUB_ENV
+          echo "Found libgcc.a at: $LIBGCC_PATH"
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
