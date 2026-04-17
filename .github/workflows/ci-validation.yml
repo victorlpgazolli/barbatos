@@ -66,7 +66,12 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev
+          if [ "${{ matrix.name }}" = "ARM64" ]; then
+            chmod +x scripts/setup_linux_arm64_deps.sh
+            ./scripts/setup_linux_arm64_deps.sh
+          else
+            sudo apt-get install -y libcurl4-openssl-dev
+          fi
 
       - name: Run Kotlin Unit Tests
         if: matrix.name == 'x64'
