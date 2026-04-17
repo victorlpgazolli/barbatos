@@ -13,7 +13,12 @@
 </p>
 
 <div align="center">
-  <img src="web/demo.gif" alt="Barbatos Demo">
+<table>
+  <tr>
+    <td><img src="web/demo.gif" alt="Barbatos Demo"></td>
+    <td><img src="web/tui.gif" alt="Barbatos TUI"></td>
+  </tr>
+</table>
 </div>
 
 ## Why the name "Barbatos?"
