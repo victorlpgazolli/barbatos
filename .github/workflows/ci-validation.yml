@@ -36,7 +36,7 @@ on:
 jobs:
   detect-changes:
     name: Detect Changed Parts
-    if: github.event.pull_request.draft == false && github.event_name == 'pull_request'
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     outputs:
       kotlin: ${{ steps.filter.outputs.kotlin }}
@@ -44,6 +44,7 @@ jobs:
       mcp: ${{ steps.filter.outputs.mcp }}
     steps:
       - name: Checkout repository
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Required to compare branches
