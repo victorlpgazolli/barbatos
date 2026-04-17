@@ -35,13 +35,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Finish gracefully if manually triggered
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          echo "Manually triggered workflow. Skipping release creation."
-          exit 0
-
       - name: Update version.txt
+        if: github.event_name != 'workflow_dispatch'
         env:
           COMMIT_MESSAGE: "chore: update version.txt with release ${{ github.ref_name }}"
           VERSION: ${{ github.ref_name }}
@@ -54,6 +49,7 @@ jobs:
           git push origin HEAD:master
 
       - name: Create Release
+        if: github.event_name != 'workflow_dispatch'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
