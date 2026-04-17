@@ -67,7 +67,7 @@ jobs:
     name: Publish Snap to Store
     needs: build-snap
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Download all snaps
         uses: actions/download-artifact@v8
