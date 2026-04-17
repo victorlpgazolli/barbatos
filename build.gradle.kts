@@ -23,7 +23,6 @@ kotlin {
                 baseName = "barbatos"
                 val libgccPath = System.getenv("LIBGCC_PATH")
                 linkerOpts(
-                    "-mno-outline-atomics",
                     "-L/usr/lib/aarch64-linux-gnu",
                     "-L/usr/aarch64-linux-gnu/lib",
                     "--allow-shlib-undefined",
@@ -41,6 +40,9 @@ kotlin {
                     if (libgccPath != null && libgccPath.isNotEmpty()) libgccPath else "-lgcc"
                 )
             }
+        }
+        compilation["main"].compilerOptions.configure {
+            freeCompilerArgs.add("-Xcompiler-option=-mno-outline-atomics")
         }
     }
     linuxX64 {
