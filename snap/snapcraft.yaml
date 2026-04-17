@@ -64,3 +64,4 @@ parts:
       barbatos-mcp: bin/barbatos-mcp
     stage-packages:
       - libcurl4
+ 
