@@ -372,12 +372,12 @@ object CommandExecutor {
             }
             fclose(file)
         }
-
-        if (newContent.trim() == tsContent.trim()) {
-            remove(tsPath)
-            remove(dtsPath)
-            return
-        }
+        // Only proceed if content actually changed (ignoring whitespace)
+        // if (newContent.trim() == tsContent.trim()) {
+        //     remove(tsPath)
+        //     remove(dtsPath)
+        //     return
+        // }
 
         val firstBrace = newContent.indexOf('{')
         val lastBrace = newContent.lastIndexOf('}')

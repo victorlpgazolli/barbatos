@@ -524,7 +524,7 @@ class FridaBridge:
             " ".join(adb_cmd + ["shell", "dumpsys", "package", package_name, "|", "grep", "-i", "debuggable"]),
             shell=True, capture_output=True, text=True
         )
-        is_debuggable = "true" in result.stdout.lower()
+        is_debuggable = "debuggable" in result.stdout.lower()
         logging.info(f"[root] App '{package_name}' debuggable: {is_debuggable}")
         return is_debuggable
 
