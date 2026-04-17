@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+import os
+import sys
+
+def _early_get_version():
+    try:
+        base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(base, 'version.txt')) as f:
+            return f.read().strip()
+    except Exception:
+        return 'unknown'
+
+if __name__ == '__main__' and len(sys.argv) == 2 and sys.argv[1] == '--version':
+    print(f'barbatos-bridge {_early_get_version()}')
+    sys.exit(0)
+
 import time
 import traceback
 import lzma
@@ -61,7 +76,7 @@ def setup_runtime_env():
         current_path = os.environ.get('PATH', '')
         os.environ['PATH'] = f"{mei_path}:{frida_dir}:{current_path}"
         
-        logging.info(f"Runtime environment setup. _MEIPASS: {mei_path}")
+        logging.debug(f"Runtime environment setup. _MEIPASS: {mei_path}")
 
 setup_runtime_env()
 
@@ -1099,9 +1114,11 @@ def run_server(port=8080, serial=None):
     logging.info("Server stopped.")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='barbatos JSON-RPC Bridge')
-    parser.add_argument('--port', type=int, default=8080, help='Listen port (default: 8080)')
-    parser.add_argument('--serial', type=str, help='Target ADB device serial number')
+    parser = argparse.ArgumentParser(
+        description='barbatos-bridge: Frida JSON-RPC bridge for Android runtime instrumentation'
+    )
+    parser.add_argument('--port', type=int, default=8080, help='Local HTTP port to listen on (default: 8080)')
+    parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554). Omit to use the first USB device.')
     args = parser.parse_args()
-    
+
     run_server(port=args.port, serial=args.serial)
