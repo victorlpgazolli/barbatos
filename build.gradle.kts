@@ -42,7 +42,7 @@ kotlin {
             }
         }
         compilations.getByName("main").compilerOptions.configure {
-            freeCompilerArgs.add("-Xcompiler-option=-mno-outline-atomics")
+            freeCompilerArgs.add("-Xclang=-mno-outline-atomics")
         }
     }
     linuxX64 {
