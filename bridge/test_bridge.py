@@ -70,18 +70,62 @@ class TestFridaBridge(unittest.TestCase):
         # Mock script and exports
         mock_script = MagicMock()
         self.bridge.script = mock_script
-        mock_script.exports_sync.listclasses.return_value = ["java.lang.String"]
         
-        # Test listClasses routing
-        result = self.bridge.handle_rpc("listClasses", {"search_param": "String"})
-        self.assertEqual(result, ["java.lang.String"])
-        mock_script.exports_sync.listclasses.assert_called_with("String")
+        # Test cases for handle_rpc routing: (method_name, params, expected_export_name, expected_args)
+        test_cases = [
+            ("listClasses", {"search_param": "S"}, "listclasses", ("S",)),
+            ("inspectClass", {"className": "C"}, "inspectclass", ("C",)),
+            ("countInstances", {"className": "C"}, "countinstances", ("C",)),
+            ("listInstances", {"className": "C"}, "listinstances", ("C",)),
+            ("inspectInstance", {"className": "C", "id": "1", "offset": 0, "limit": 10}, "inspectinstance", ("C", "1", 0, 10)),
+            ("setFieldValue", {"className": "C", "id": "1", "fieldName": "f", "type": "int", "newValue": "2"}, "setfieldvalue", ("C", "1", "f", "int", "2")),
+            ("getpackagename", {}, "getpackagename", ()),
+            ("hookMethod", {"className": "C", "methodSig": "M"}, "hookmethod", ("C", "M")),
+            ("unhookMethod", {"className": "C", "methodSig": "M"}, "unhookmethod", ("C", "M")),
+            ("getHookEvents", {}, "gethookevents", ()),
+            ("getInstanceAddresses", {"className": "C"}, "getinstanceaddresses", ("C",)),
+            ("runOnce", {"className": "C", "methodSig": "M", "code": "code"}, "runonce", ("C", "M", "code")),
+        ]
 
-        # Test runOnce routing
-        mock_script.exports_sync.runonce.return_value = True
-        result = self.bridge.handle_rpc("runOnce", {"className": "A", "methodSig": "M", "code": "C"})
-        self.assertTrue(result)
-        mock_script.exports_sync.runonce.assert_called_with("A", "M", "C")
+        for method, params, export_name, expected_args in test_cases:
+            export_mock = MagicMock()
+            setattr(mock_script.exports_sync, export_name, export_mock)
+            
+            self.bridge.handle_rpc(method, params)
+            export_mock.assert_called_with(*expected_args)
+
+    @patch('bridge.FridaBridge._get_application_pid_and_package')
+    @patch('bridge.FridaBridge._prepare_gadget')
+    def test_handle_rpc_prepare_environment(self, mock_prepare, mock_get_app):
+        mock_get_app.return_value = (1234, "com.example")
+        result = self.bridge.handle_rpc("prepareEnvironment", {})
+        self.assertEqual(result["pid"], 1234)
+        mock_prepare.assert_called_with(1234)
+
+    @patch('bridge.FridaBridge._pushGadget')
+    def test_handle_rpc_check_push_gadget(self, mock_push):
+        result = self.bridge.handle_rpc("checkOrPushGadget", {})
+        self.assertEqual(result["status"], "ok")
+        mock_push.assert_called_once()
+
+    def test_handle_rpc_reset_injection(self):
+        self.bridge.is_injecting_gadget = False
+        result = self.bridge.handle_rpc("resetInjection", {})
+        self.assertEqual(result["status"], "ok")
+
+    @patch('bridge.threading.Thread')
+    def test_handle_rpc_inject_gadget_from_scratch(self, mock_thread):
+        result = self.bridge.handle_rpc("injectGadgetFromScratch", {})
+        self.assertEqual(result["status"], "running")
+        mock_thread.assert_called_once()
+
+    @patch('bridge.FridaBridge._run_jdwp')
+    @patch('bridge.FridaBridge._reattach_frida')
+    def test_handle_rpc_inject_jdwp(self, mock_reattach, mock_run_jdwp):
+        mock_run_jdwp.return_value = {"status": "completed"}
+        result = self.bridge.handle_rpc("injectJdwp", {"package_name": "p"})
+        self.assertEqual(result["status"], "completed")
+        mock_run_jdwp.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()
