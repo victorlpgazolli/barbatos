@@ -10,7 +10,8 @@ a = Analysis(
     pathex=[],
     binaries=frida_binaries,
     datas=[
-        ('agent.bundle.js', '.')
+        ('agent.bundle.js', '.'),
+        ('../version.txt', '.')
     ] + frida_datas,
     hiddenimports=['jdwp_frida'] + frida_hidden,
     hookspath=[],
