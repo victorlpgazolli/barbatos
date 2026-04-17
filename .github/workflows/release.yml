@@ -17,6 +17,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Update version.txt
+        env:
+          COMMIT_MESSAGE: "chore: update version.txt with release ${{ github.ref_name }}"
+          VERSION: ${{ github.ref_name }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${VERSION}" > version.txt
+          git add ./version.txt
+          git diff --cached --quiet || git commit -m "$COMMIT_MESSAGE"
+          git push origin HEAD:master
+
       - name: Create Release
         env:
           RELEASE_TAG: ${{ github.ref_name }}
