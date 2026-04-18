@@ -1,0 +1,37 @@
+name: 'Build macOS Binaries'
+description: 'Compile Kotlin, Bridge, and MCP binaries for macOS ARM64'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+      with:
+        architecture: 'arm64'
+
+    - name: Install dependencies
+      shell: bash
+      run: make install_dependencies
+
+    - name: Release (builds all 3 binaries)
+      shell: bash
+      run: make release
+
+    - name: Package artifacts
+      shell: bash
+      run: |
+        zip -r ./barbatos-macos-arm64.zip ./dist
+        cp dist/barbatos barbatos-macos-arm64-tui
+        cp dist/barbatos-bridge barbatos-macos-arm64-bridge
+        cp dist/barbatos-mcp barbatos-macos-arm64-mcp
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-arm64
+        path: |
+          barbatos-macos-arm64.zip
+          barbatos-macos-arm64-tui
+          barbatos-macos-arm64-bridge
+          barbatos-macos-arm64-mcp
+        retention-days: 1
