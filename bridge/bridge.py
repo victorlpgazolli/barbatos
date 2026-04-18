@@ -892,7 +892,12 @@ class FridaBridge:
         """
         Patches the specified iOS IPA file with a Frida gadget using lief, signs it with the provided certificate, and installs it.
         """
-        return {"status": "success"}
+        from ios_repacker import repack_and_install
+        try:
+            repack_and_install(ipa_path, cert_id)
+            return {"status": "success"}
+        except Exception as e:
+            return {"error": str(e)}
 
     # RPC endpoint: Retrieves loaded Java classes with a custom sorting heuristic based on target package
     def list_classes(self, search_param="", app_package="", offset=0, limit=200):
