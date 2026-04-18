@@ -1,0 +1,93 @@
+name: 'Publish to Platform'
+description: 'Publish artifacts to GitHub Release, APT Repository, or Snapcraft Store'
+
+inputs:
+  platform:
+    description: 'Target platform (github, apt, snapcraft)'
+    required: true
+  artifacts-dir:
+    description: 'Directory containing build artifacts'
+    required: true
+    default: 'artifacts'
+
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  RELEASE_TAG: ${{ github.ref_name }}
+
+runs:
+  using: 'composite'
+  steps:
+    # GitHub Release Publishing
+    - name: Publish to GitHub Release
+      if: inputs.platform == 'github'
+      shell: bash
+      run: |
+        gh release upload ${RELEASE_TAG} \
+          ${{ inputs.artifacts-dir }}/barbatos-*.zip \
+          ${{ inputs.artifacts-dir }}/barbatos-*-tui \
+          ${{ inputs.artifacts-dir }}/barbatos-*-bridge \
+          ${{ inputs.artifacts-dir }}/barbatos-*-mcp \
+          --clobber
+
+    # APT Repository Publishing
+    - name: Install APT signing tools
+      if: inputs.platform == 'apt'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y dpkg-sig
+
+    - name: Import GPG Key
+      if: inputs.platform == 'apt'
+      env:
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      shell: bash
+      run: |
+        mkdir -p ~/.gnupg
+        chmod 700 ~/.gnupg
+        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+        gpgconf --kill gpg-agent
+        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+    - name: Sign Debian Packages
+      if: inputs.platform == 'apt'
+      env:
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+      shell: bash
+      run: |
+        for deb in ${{ inputs.artifacts-dir }}/deb/*.deb; do
+          dpkg-sig --gpg-options "--batch --pinentry-mode loopback --passphrase \"$GPG_PASSPHRASE\"" \
+            -k "$GPG_KEY_ID" \
+            --sign builder "$deb"
+        done
+
+    - name: Update APT Repository
+      if: inputs.platform == 'apt'
+      env:
+        PACKAGES_BASE_URL: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y apt-utils
+        mkdir -p apt_meta
+        bash scripts/update-apt-repo.sh \
+          ${{ inputs.artifacts-dir }}/deb \
+          apt_meta \
+          ${{ secrets.GPG_KEY_ID }} \
+          "${{ secrets.GPG_PASSPHRASE }}" \
+          "$PACKAGES_BASE_URL"
+
+        cp -r apt_meta/dists ./web
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add ./web
+        git diff --cached --quiet || git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
+        git push origin HEAD:master
+
+    # Snapcraft Publishing
+    - name: Publish to Snap Store
+      if: inputs.platform == 'snapcraft'
+      uses: snapcore/action-publish@v1
+      env:
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+      with:
+        snap: ${{ inputs.artifacts-dir }}/snap/*.snap
+        release: stable
