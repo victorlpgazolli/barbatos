@@ -13,6 +13,8 @@ fun onInputChanged(state: AppState, resetCtrlC: Boolean = true) {
     if (state.mode == AppMode.DEFAULT) {
         state.suggestions = CommandRegistry.search(state.inputBuffer)
         state.selectedSuggestionIndex = if (state.suggestions.isNotEmpty()) 0 else -1
+    } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+        state.iosIpaPath = state.inputBuffer
     } else {
         state.lastInputTimestamp = currentTimeMillis()
     }
@@ -466,7 +468,12 @@ fun main(args: Array<String>) {
             }
 
             is KeyEvent.ArrowDown, is KeyEvent.MouseScrollDown -> {
-                if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
+                if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+                    if (state.iosCertList.isNotEmpty()) {
+                        state.iosSelectedCertIndex = (state.iosSelectedCertIndex + 1) % state.iosCertList.size
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex + 1).coerceAtMost(hooks.size - 1)
@@ -508,7 +515,12 @@ fun main(args: Array<String>) {
             }
 
             is KeyEvent.ArrowUp, is KeyEvent.MouseScrollUp -> {
-                if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
+                if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+                    if (state.iosCertList.isNotEmpty()) {
+                        state.iosSelectedCertIndex = if (state.iosSelectedCertIndex > 0) state.iosSelectedCertIndex - 1 else state.iosCertList.size - 1
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex - 1).coerceAtLeast(0)
@@ -607,6 +619,9 @@ fun main(args: Array<String>) {
                             }
                         }
                     }
+                } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+                    CommandExecutor.handleIosRepackage(state, scope)
+                    Renderer.render(state)
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     CommandExecutor.handleDebugEntrypoint(state, scope)
                     Renderer.render(state)
@@ -774,7 +789,7 @@ fun main(args: Array<String>) {
             }
 
             is KeyEvent.Esc -> {
-                if (state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
+                if (state.mode == AppMode.IOS_REPACKAGE_SETUP || state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
                     state.inputBuffer = ""
                     state.cursorPosition = 0
                     state.popMode()

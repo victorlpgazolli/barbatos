@@ -182,6 +182,10 @@ object Renderer {
             }
             renderInspectClassList(buf, state, termWidth, termHeight)
             hasInputBox = (state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE)
+        } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+            renderLogo(buf)
+            renderIosRepackageSetup(buf, state, termWidth)
+            hasInputBox = true
         } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
             renderLogo(buf)
             renderWelcome(buf)
@@ -216,6 +220,12 @@ object Renderer {
                 FooterKey("↑↓", "History"),
                 FooterKey("Tab", "Autocomplete"),
                 FooterKey("Enter", "Execute"),
+                FooterKey("Ctrl+C", "Quit")
+            )
+            AppMode.IOS_REPACKAGE_SETUP -> listOf(
+                FooterKey("↑↓", "Select Cert"),
+                FooterKey("Enter", "Patch & Install"),
+                FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
             AppMode.DEBUG_ENTRYPOINT -> listOf(
@@ -321,6 +331,35 @@ object Renderer {
         buf.append(INSTRUCTIONS_TEXT)
         buf.append(Ansi.RESET)
         buf.append("\n\n")
+    }
+
+    private fun renderIosRepackageSetup(buf: StringBuilder, state: AppState, termWidth: Int) {
+        buf.append(Ansi.CYAN).append("  === iOS REPACKAGING SETUP ===\n").append(Ansi.RESET)
+        buf.append("  Injects Frida Gadget into an IPA and installs it on your device.\n\n")
+
+        buf.append("  Target IPA Path:\n")
+        renderInputBox(buf, state, termWidth - 2)
+        buf.append("\n")
+
+        if (state.iosCertList.isNotEmpty()) {
+            buf.append("  Select Signing Certificate:\n")
+            state.iosCertList.forEachIndexed { index, cert ->
+                val prefix = ListRenderer.selectionPrefix(index == state.iosSelectedCertIndex)
+                val color = if (index == state.iosSelectedCertIndex) Ansi.GREEN else ""
+                buf.append("    $prefix$color$cert${Ansi.RESET}\n")
+            }
+        } else {
+            buf.append("  ${Ansi.YELLOW}Searching for certificates... (security find-identity)${Ansi.RESET}\n")
+        }
+
+        if (state.iosRepackageError != null) {
+            buf.append("\n  ${Ansi.RED}Error: ${state.iosRepackageError}${Ansi.RESET}\n")
+        }
+        
+        if (state.gadgetInstallStatus != GadgetInstallStatus.IDLE) {
+            buf.append("\n")
+            renderGadgetStatus(buf, state)
+        }
     }
 
     private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState) {

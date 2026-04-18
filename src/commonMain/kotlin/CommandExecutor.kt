@@ -32,6 +32,10 @@ object CommandExecutor {
 
         when (baseCommand) {
             "debug" -> handleDebug(state, scope)
+            "ios" -> {
+                state.pushMode(AppMode.IOS_REPACKAGE_SETUP)
+                fetchIosCertificates(state)
+            }
             "exit" -> state.running = false
             "clear" -> {
                 state.commandHistory.clear()
@@ -504,5 +508,56 @@ object CommandExecutor {
         // Cleanup
         remove(tsPath)
         remove(dtsPath)
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    fun fetchIosCertificates(state: AppState) {
+        state.iosCertList = emptyList()
+        val pipe = popen("security find-identity -v -p codesigning", "r") ?: return
+        memScoped {
+            val buffer = alloc<platform.posix.byteVarArray>(1024)
+            val certs = mutableListOf<String>()
+            while (fgets(buffer, 1024, pipe) != null) {
+                val line = buffer.toKString().trim()
+                if (line.contains(")")) {
+                    val parts = line.split("\"")
+                    if (parts.size >= 2) {
+                        val name = parts[1]
+                        val id = line.split(" ")[1]
+                        certs.add("$id \"$name\"")
+                    }
+                }
+            }
+            state.iosCertList = certs
+        }
+        pclose(pipe)
+    }
+
+    fun handleIosRepackage(state: AppState, scope: CoroutineScope) {
+        if (state.iosIpaPath.isEmpty()) {
+            state.iosRepackageError = "Please enter the path to the .ipa file"
+            return
+        }
+        if (state.iosCertList.isEmpty() || state.iosSelectedCertIndex !in state.iosCertList.indices) {
+            state.iosRepackageError = "Please select a signing certificate"
+            return
+        }
+
+        val certLine = state.iosCertList[state.iosSelectedCertIndex]
+        val certId = certLine.split(" ")[0]
+
+        state.iosRepackageError = null
+        state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
+        
+        scope.launch {
+            val (success, error) = RpcClient.patchAndInstallIosApp(state.iosIpaPath, certId)
+            if (success) {
+                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
+                state.pushMode(AppMode.DEBUG_ENTRYPOINT)
+            } else {
+                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error ?: "Unknown error during iOS repackaging")
+                state.iosRepackageError = error
+            }
+        }
     }
 }
