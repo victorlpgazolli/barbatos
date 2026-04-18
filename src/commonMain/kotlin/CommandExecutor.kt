@@ -1,5 +1,7 @@
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
@@ -515,7 +517,7 @@ object CommandExecutor {
         state.iosCertList = emptyList()
         val pipe = popen("security find-identity -v -p codesigning", "r") ?: return
         memScoped {
-            val buffer = alloc<platform.posix.byteVarArray>(1024)
+            val buffer = allocArray<ByteVar>(1024)
             val certs = mutableListOf<String>()
             while (fgets(buffer, 1024, pipe) != null) {
                 val line = buffer.toKString().trim()
@@ -523,8 +525,11 @@ object CommandExecutor {
                     val parts = line.split("\"")
                     if (parts.size >= 2) {
                         val name = parts[1]
-                        val id = line.split(" ")[1]
-                        certs.add("$id \"$name\"")
+                        val idParts = line.split(" ")
+                        if (idParts.size >= 2) {
+                            val id = idParts[1]
+                            certs.add("$id \"$name\"")
+                        }
                     }
                 }
             }
