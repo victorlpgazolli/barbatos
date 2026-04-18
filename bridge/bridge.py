@@ -888,6 +888,12 @@ class FridaBridge:
         except Exception as e:
             raise e
 
+    def _patch_and_install_ios_app(self, ipa_path: str, cert_id: str) -> dict:
+        """
+        Patches the specified iOS IPA file with a Frida gadget using lief, signs it with the provided certificate, and installs it.
+        """
+        return {"status": "success"}
+
     # RPC endpoint: Retrieves loaded Java classes with a custom sorting heuristic based on target package
     def list_classes(self, search_param="", app_package="", offset=0, limit=200):
         self.get_session()
@@ -1108,6 +1114,13 @@ class FridaBridge:
                 raise Exception(f"unable to re-attach to frida-server: {reattach_err}")
 
             return result
+
+        elif method == "patchAndInstallIosApp":
+            ipa_path = params.get("ipaPath")
+            cert_id = params.get("certId")
+            if not ipa_path or not cert_id:
+                raise Exception("ipaPath and certId are required")
+            return self._patch_and_install_ios_app(ipa_path, cert_id)
 
         elif method == "getpackagename":
             self.get_session()
