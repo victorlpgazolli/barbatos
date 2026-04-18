@@ -336,6 +336,20 @@ data class JsonRpcRequestSetFieldValue(
     val id: Int = 1
 )
 
+@Serializable
+data class PatchAndInstallIosAppParams(
+    val ipaPath: String,
+    val certId: String
+)
+
+@Serializable
+data class JsonRpcRequestPatchAndInstallIosApp(
+    val jsonrpc: String = "2.0",
+    val method: String = "patchAndInstallIosApp",
+    val params: PatchAndInstallIosAppParams,
+    val id: Int = 1
+)
+
 object RpcClient {
     var client: HttpClient = HttpClient(
         getRpcClientEngine()
@@ -811,6 +825,32 @@ object RpcClient {
     suspend fun syncAllHooks(hooks: List<HookTarget>) {
         hooks.filter { it.enabled }.forEach { hook ->
             toggleHook(hook.className, hook.memberSignature, true)
+        }
+    }
+
+    suspend fun patchAndInstallIosApp(ipaPath: String, certId: String): Pair<Boolean, String?> {
+        return try {
+            val requestBody = JsonRpcRequestPatchAndInstallIosApp(
+                params = PatchAndInstallIosAppParams(ipaPath, certId)
+            )
+            val response: HttpResponse = withTimeoutOrNull(300_000) {
+                client.post("http://127.0.0.1:8080/jsonrpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return Pair(false, "Timeout patching iOS app")
+            
+            val body = response.body<String>()
+            val json = Json { ignoreUnknownKeys = true }
+            val parsed = json.decodeFromString<JsonRpcResponse>(body)
+            
+            if (parsed.error != null) {
+                Pair(false, parsed.error.message ?: "Unknown error patching iOS app")
+            } else {
+                Pair(true, null)
+            }
+        } catch (e: Exception) {
+            Pair(false, e.message ?: "Error connecting to bridge")
         }
     }
 }

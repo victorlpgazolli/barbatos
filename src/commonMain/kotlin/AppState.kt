@@ -7,7 +7,8 @@ enum class AppMode {
     DEBUG_CLASS_FILTER,
     DEBUG_INSPECT_CLASS,
     DEBUG_HOOK_WATCH,
-    DEBUG_EDIT_ATTRIBUTE
+    DEBUG_EDIT_ATTRIBUTE,
+    IOS_REPACKAGE_SETUP
 }
 
 enum class GadgetInstallStatus {
@@ -114,6 +115,12 @@ data class AppState(
     val sharedInspectInstanceResult: AtomicReference<Triple<String, List<InstanceAttribute>, Boolean>?> = AtomicReference(null),
     val sharedInspectInstanceError: AtomicReference<Pair<String, String>?> = AtomicReference(null),
 
+
+    // iOS Repackaging
+    var iosIpaPath: String = "",
+    var iosCertList: List<String> = emptyList(),
+    var iosSelectedCertIndex: Int = 0,
+    var iosRepackageError: String? = null,
 
     // Gadget Install Status
     var gadgetInstallStatus: GadgetInstallStatus = GadgetInstallStatus.IDLE,
