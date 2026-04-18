@@ -1,0 +1,54 @@
+name: 'Setup Build Environment'
+description: 'Install JDK, Node, Python, QEMU, and architecture-specific dependencies'
+
+inputs:
+  architecture:
+    description: 'Target architecture (x86_64, aarch64, arm64)'
+    required: true
+    default: 'x86_64'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up JDK 21 (Linux) / JDK 17 (macOS)
+      uses: actions/setup-java@v5
+      with:
+        java-version: ${{ runner.os == 'macOS' && '17' || '21' }}
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'npm'
+        cache-dependency-path: bridge/package-lock.json
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Set up QEMU for ARM64 cross-compilation
+      if: inputs.architecture == 'aarch64'
+      uses: docker/setup-qemu-action@v4
+
+    - name: Install Linux x86_64 dependencies
+      if: runner.os == 'Linux' && inputs.architecture == 'x86_64'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libcurl4-openssl-dev
+
+    - name: Install Linux ARM64 cross-compilation dependencies
+      if: runner.os == 'Linux' && inputs.architecture == 'aarch64'
+      shell: bash
+      run: |
+        sudo apt-get update
+        chmod +x scripts/setup_linux_arm64_deps.sh
+        ./scripts/setup_linux_arm64_deps.sh
+
+        # Find libgcc.a path for ARM64 cross-compiler
+        LIBGCC_PATH=$(find /usr/lib/gcc-cross/aarch64-linux-gnu -name libgcc.a | head -n 1)
+        echo "LIBGCC_PATH=$LIBGCC_PATH" >> $GITHUB_ENV
+        echo "Found libgcc.a at: $LIBGCC_PATH"

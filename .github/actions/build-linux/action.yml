@@ -1,0 +1,69 @@
+name: 'Build Linux Binaries'
+description: 'Compile Kotlin, Bridge, and MCP binaries for Linux (x86_64 or aarch64)'
+
+inputs:
+  architecture:
+    description: 'Target architecture (x86_64 or aarch64)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+      with:
+        architecture: ${{ inputs.architecture }}
+
+    - name: Install dependencies
+      shell: bash
+      run: make install_dependencies
+
+    - name: Compile JS Agent & Kotlin Binary
+      shell: bash
+      run: |
+        make compile_bridge_agent
+        make compile_binary ARCH=${{ inputs.architecture }}
+
+    - name: Compile Python Bridge & MCP (x86_64 native)
+      if: inputs.architecture == 'x86_64'
+      shell: bash
+      run: |
+        make compile_bridge
+        make compile_mcp
+
+    - name: Compile Python Bridge & MCP (ARM64 Docker)
+      if: inputs.architecture == 'aarch64'
+      shell: bash
+      run: |
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}:/app -w /app \
+          python:3.11-slim \
+          bash -c "apt-get update && apt-get install -y binutils && pip install -r bridge/requirements.txt && cd bridge && pyinstaller bridge.spec"
+
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}:/app -w /app \
+          python:3.11-slim \
+          bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && cd mcp_server && pyinstaller mcp.spec"
+
+    - name: Prepare release artifacts
+      shell: bash
+      run: make prepare_release ARCH=${{ inputs.architecture }}
+
+    - name: Package artifacts
+      shell: bash
+      run: |
+        zip -r ./barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}.zip ./dist
+        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-tui
+        cp dist/barbatos-bridge barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-bridge
+        cp dist/barbatos-mcp barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-mcp
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}
+        path: |
+          barbatos-linux-*.zip
+          barbatos-linux-*-tui
+          barbatos-linux-*-bridge
+          barbatos-linux-*-mcp
+        retention-days: 1

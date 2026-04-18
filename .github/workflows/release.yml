@@ -1,4 +1,4 @@
-name: Github Build and Release
+name: Unified Build and Release
 
 on:
   push:
@@ -6,31 +6,41 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
-      kotlin:
-        options:
-          - 'true'
-          - 'false'
-        description: 'Build Kotlin Binary'
-        default: 'false'
-      bridge:
-        options:
-          - 'true'
-          - 'false'
-        description: 'Build Bridge Binary'
-        default: 'false'
-      mcp:
-        options:
-          - 'true'
-          - 'false'
-        description: 'Build MCP Binary'
-        default: 'false'
+      build-linux-x64:
+        type: boolean
+        description: 'Build Linux x86_64'
+        default: true
+      build-linux-arm64:
+        type: boolean
+        description: 'Build Linux ARM64'
+        default: true
+      build-macos-arm64:
+        type: boolean
+        description: 'Build macOS ARM64'
+        default: true
+      publish-github:
+        type: boolean
+        description: 'Publish to GitHub Release'
+        default: true
+      publish-apt:
+        type: boolean
+        description: 'Publish to APT Repository'
+        default: true
+      publish-snapcraft:
+        type: boolean
+        description: 'Publish to Snapcraft Store'
+        default: true
+
 jobs:
-  create_release:
-    name: Create GitHub Release
+  setup-release:
+    name: Setup Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -48,7 +58,7 @@ jobs:
           git diff --cached --quiet || git commit -m "$COMMIT_MESSAGE"
           git push origin HEAD:master
 
-      - name: Create Release
+      - name: Create GitHub Release
         if: github.event_name != 'workflow_dispatch'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -57,195 +67,190 @@ jobs:
           gh release create ${RELEASE_TAG} \
             --title "Release ${RELEASE_TAG}" \
             --generate-notes
-  build-macos:
-    name: Build macOS ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    needs: create_release
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    strategy:
-      matrix:
-        include:
-          - os: macos-15
-            target: arm64
-          # todo: add support for macosX64
-          # - os: macos-13
-          #   target: x64
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
+      - name: Export release tag
+        id: release
+        shell: bash
+        run: echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: bridge/package-lock.json
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: make install_dependencies
-
-      - name: Release
-        run: make release
-
-      - name: Package Artifacts
+      - name: Export version
+        id: version
+        shell: bash
         run: |
-          zip -r ./barbatos-macos-${{ matrix.target }}.zip ./dist
-          cp dist/barbatos barbatos-macos-${{ matrix.target }}-tui
-          cp dist/barbatos-bridge barbatos-macos-${{ matrix.target }}-bridge
-          cp dist/barbatos-mcp barbatos-macos-${{ matrix.target }}-mcp
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="0.0.0-snapshot"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Upload macOS Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: macos-${{ matrix.target }}
-          path: |
-            barbatos-macos-${{ matrix.target }}.zip
-            barbatos-macos-${{ matrix.target }}-tui
-            barbatos-macos-${{ matrix.target }}-bridge
-            barbatos-macos-${{ matrix.target }}-mcp
-
-  build-linux:
-    name: Build Linux ${{ matrix.target }}
+  build-linux-x64:
+    name: Build Linux x64
     runs-on: ubuntu-24.04
-    needs: create_release
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            target: x64
-          - arch: aarch64
-            target: arm64
+    needs: setup-release
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.build-linux-x64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
+      - name: Build Linux x86_64
+        uses: ./.github/actions/build-linux
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'gradle'
+          architecture: x86_64
 
-      - name: Set up native compilation dependencies
-        if: matrix.arch == 'x86_64'
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+  build-linux-arm64:
+    name: Build Linux ARM64
+    runs-on: ubuntu-24.04
+    needs: setup-release
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.build-linux-arm64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Set up cross-compilation dependencies
-        if: matrix.arch == 'aarch64'
-        run: |
-          sudo apt-get update
-          chmod +x scripts/setup_linux_arm64_deps.sh
-          ./scripts/setup_linux_arm64_deps.sh
-          
-          # Find libgcc.a path for ARM64 cross-compiler
-          LIBGCC_PATH=$(find /usr/lib/gcc-cross/aarch64-linux-gnu -name libgcc.a | head -n 1)
-          echo "LIBGCC_PATH=$LIBGCC_PATH" >> $GITHUB_ENV
-          echo "Found libgcc.a at: $LIBGCC_PATH"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+      - name: Build Linux aarch64
+        uses: ./.github/actions/build-linux
         with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: bridge/package-lock.json
+          architecture: aarch64
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+  build-macos-arm64:
+    name: Build macOS ARM64
+    runs-on: macos-15
+    needs: setup-release
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.build-macos-arm64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Install dependencies
-        run: make install_dependencies
+      - name: Build macOS ARM64
+        uses: ./.github/actions/build-macos
 
-      - name: Compile JS Agent & Kotlin Binary
-        run: |
-          make compile_bridge_agent
-          make compile_binary ARCH=${{ matrix.arch }}
-
-      - name: Compile Python Bridge (Native x86_64)
-        if: matrix.arch == 'x86_64'
-        run: make compile_bridge
-
-      - name: Compile MCP Server (Native x86_64)
-        if: matrix.arch == 'x86_64'
-        run: make compile_mcp
-
-      - name: Compile Python Bridge (Docker ARM64)
-        if: matrix.arch == 'aarch64'
-        run: |
-          make compile_bridge_agent
-          docker run --rm --platform linux/arm64 \
-            -v ${{ github.workspace }}:/app -w /app \
-            python:3.11-slim \
-            bash -c "apt-get update && apt-get install -y binutils && pip install -r bridge/requirements.txt && cd bridge && pyinstaller bridge.spec"
-
-      - name: Compile MCP Server (Docker ARM64)
-        if: matrix.arch == 'aarch64'
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v ${{ github.workspace }}:/app -w /app \
-            python:3.11-slim \
-            bash -c "apt-get update && apt-get install -y binutils && pip install -r mcp_server/requirements.txt && cd mcp_server && pyinstaller mcp.spec"
-
-      - name: Package Artifacts
-        run: |
-          make prepare_release ARCH=${{ matrix.arch }}
-          zip -r ./barbatos-linux-${{ matrix.target }}.zip ./dist
-          cp dist/barbatos barbatos-linux-${{ matrix.target }}-tui
-          cp dist/barbatos-bridge barbatos-linux-${{ matrix.target }}-bridge
-          cp dist/barbatos-mcp barbatos-linux-${{ matrix.target }}-mcp
-
-      - name: Upload Linux Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: linux-${{ matrix.target }}
-          path: |
-            barbatos-linux-${{ matrix.target }}.zip
-            barbatos-linux-${{ matrix.target }}-tui
-            barbatos-linux-${{ matrix.target }}-bridge
-            barbatos-linux-${{ matrix.target }}-mcp
-
-  publish-artifacts:
-    name: Publish Artifacts to GitHub Release
-    needs: [build-macos, build-linux]
+  publish-github:
+    name: Publish to GitHub Release
     runs-on: ubuntu-latest
+    needs: [setup-release, build-linux-x64, build-linux-arm64, build-macos-arm64]
+    if: |
+      !failure() &&
+      (github.event_name == 'workflow_dispatch' && inputs.publish-github == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: write
-    if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4 # using v4 to get the merge-multiple feature
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: Update Release with artifacts
+      - name: Publish to GitHub Release
+        uses: ./.github/actions/publish-to-platform
+        with:
+          platform: github
+          artifacts-dir: artifacts
+
+  publish-apt:
+    name: Publish to APT Repository
+    runs-on: ubuntu-latest
+    needs: [setup-release, build-linux-x64, build-linux-arm64]
+    if: |
+      !failure() &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish-apt == true) ||
+       (github.event_name == 'push'))
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Assemble Debian Packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.setup-release.outputs.version }}
         run: |
-          gh release upload ${RELEASE_TAG} \
-            artifacts/barbatos-*.zip \
-            artifacts/barbatos-*-tui \
-            artifacts/barbatos-*-bridge \
-            artifacts/barbatos-*-mcp \
-            --clobber
+          mkdir -p artifacts/deb
+          for arch in x64 arm64; do
+            arch_long=$([[ "$arch" == "x64" ]] && echo "x86_64" || echo "aarch64")
+            for package in barbatos barbatos-bridge barbatos-mcp; do
+              PKG_DIR="pkg_tmp_$package"
+              mkdir -p "$PKG_DIR"
+              cp -r packaging/debian/$package/* "$PKG_DIR/"
+
+              mkdir -p "$PKG_DIR/usr/bin"
+              cp "artifacts/dist/$package" "$PKG_DIR/usr/bin/$package" 2>/dev/null || \
+              cp "dist/$package" "$PKG_DIR/usr/bin/$package"
+              chmod +x "$PKG_DIR/usr/bin/$package"
+
+              sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
+              sed -i "s/Architecture: .*/Architecture: $arch/" "$PKG_DIR/DEBIAN/control"
+
+              DEB_FILE="artifacts/deb/${package}_${VERSION}_$arch.deb"
+              dpkg-deb --build "$PKG_DIR" "$DEB_FILE"
+              rm -rf "$PKG_DIR"
+            done
+          done
+
+      - name: Publish to APT Repository
+        uses: ./.github/actions/publish-to-platform
+        with:
+          platform: apt
+          artifacts-dir: artifacts
+
+  publish-snapcraft:
+    name: Publish to Snapcraft Store
+    runs-on: ubuntu-latest
+    needs: [setup-release, build-linux-x64, build-linux-arm64]
+    if: |
+      !failure() &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish-snapcraft == true) ||
+       (github.event_name == 'push'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Build Snap (x64)
+        uses: snapcore/action-build@v1
+        id: snap-x64
+        with:
+          path: .
+          snapcraft-args: pack --build-for=amd64
+
+      - name: Build Snap (ARM64)
+        uses: snapcore/action-build@v1
+        id: snap-arm64
+        with:
+          path: .
+          snapcraft-args: pack --build-for=arm64
+
+      - name: Upload snaps to artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/snap
+          cp ${{ steps.snap-x64.outputs.snap }} artifacts/snap/
+          cp ${{ steps.snap-arm64.outputs.snap }} artifacts/snap/
+
+      - name: Publish to Snapcraft Store
+        uses: ./.github/actions/publish-to-platform
+        with:
+          platform: snapcraft
+          artifacts-dir: artifacts
