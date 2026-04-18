@@ -497,6 +497,12 @@ fun main(args: Array<String>) {
                             (state.selectedClassIndex + 1).coerceAtMost(state.displayedClasses.size - 1)
                         Renderer.render(state)
                     }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty()) {
+                        state.selectedDeviceIndex =
+                            (state.selectedDeviceIndex + 1).coerceAtMost(state.deviceInfoList.size - 1)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty()) {
@@ -535,6 +541,12 @@ fun main(args: Array<String>) {
                     if (state.displayedClasses.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex - 1).coerceAtLeast(0)
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty()) {
+                        state.selectedDeviceIndex =
+                            (state.selectedDeviceIndex - 1).coerceAtLeast(0)
                         Renderer.render(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
@@ -606,6 +618,14 @@ fun main(args: Array<String>) {
                                 state.sharedRpcError.value = err
                             }
                         }
+                    }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty() && state.selectedDeviceIndex in state.deviceInfoList.indices) {
+                        val selectedDevice = state.deviceInfoList[state.selectedDeviceIndex]
+                        state.adbSerial = selectedDevice.serial
+                        state.popMode()
+                        CommandExecutor.proceedWithDebugSetup(state, scope)
+                        Renderer.render(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     CommandExecutor.handleDebugEntrypoint(state, scope)
