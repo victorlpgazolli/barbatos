@@ -921,7 +921,7 @@ fun main(args: Array<String>) {
                     }
                 }
 
-                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || state.isFetchingInstances || state.isFetchingInstancesList) {
+                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || state.isFetchingInstances || state.isFetchingInstancesList || state.isFetchingDevices) {
                     state.gadgetSpinnerFrame++
                     needsRender = true
                 }
@@ -991,6 +991,18 @@ fun main(args: Array<String>) {
                             state.displayedClasses = CommandExecutor.sortClasses(state.displayedClasses, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
                             needsRender = true
                         }
+                    }
+                }
+
+                // Handle device enumeration (happens from DEFAULT or DEBUG_DEVICE_SELECTION mode)
+                if (state.isFetchingDevices) {
+                    // Handle device enumeration errors
+                    val err = state.sharedRpcError.value
+                    if (err != null) {
+                        state.rpcError = err
+                        state.sharedRpcError.value = null
+                        state.isFetchingDevices = false
+                        needsRender = true
                     }
                 }
 

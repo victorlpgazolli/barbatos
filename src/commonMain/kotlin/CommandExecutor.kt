@@ -229,15 +229,13 @@ object CommandExecutor {
         scope.launch {
             val (devices, error) = AdbDeviceManager.getConnectedDevices()
 
-            if (error != null) {
-                state.rpcError = error
-                state.isFetchingDevices = false
-                return@launch
-            }
-
             when {
+                error != null -> {
+                    state.sharedRpcError.value = error
+                    state.isFetchingDevices = false
+                }
                 devices.isEmpty() -> {
-                    state.rpcError = "No online devices found. Check USB connection and developer mode"
+                    state.sharedRpcError.value = "No online devices found. Check USB connection and developer mode"
                     state.isFetchingDevices = false
                 }
                 devices.size == 1 -> {
@@ -247,13 +245,13 @@ object CommandExecutor {
                     proceedWithDebugSetup(state, scope)
                 }
                 else -> {
-                    // Show device selection UI
+                    // Show device selection UI - use shared observable pattern
                     state.deviceInfoList = devices
-                    state.displayedClasses = devices.map { "${it.serial} - ${it.model} - ${it.status}" }
-                    state.allFetchedClasses = emptyList()  // Clear to prevent displayedClasses corruption
+                    state.allFetchedClasses = emptyList()
                     state.selectedDeviceIndex = 0
                     state.isFetchingDevices = false
                     state.pushMode(AppMode.DEBUG_DEVICE_SELECTION)
+                    // Don't render here - Main.kt Timeout handler will render
                 }
             }
         }
