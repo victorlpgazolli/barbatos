@@ -9,6 +9,7 @@ enum class AppMode {
     DEBUG_HOOK_WATCH,
     DEBUG_EDIT_ATTRIBUTE,
     DEBUG_DEVICE_SELECTION,
+    IOS_APP_SELECTION,
     IOS_REPACKAGE_SETUP
 }
 
@@ -128,6 +129,8 @@ data class AppState(
 
 
     // iOS Repackaging
+    var iosAppPaths: List<String> = emptyList(),
+    var selectedIosAppIndex: Int = 0,
     var iosIpaPath: String = "",
     var iosCertList: List<String> = emptyList(),
     var iosSelectedCertIndex: Int = 0,

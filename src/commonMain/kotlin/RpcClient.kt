@@ -338,8 +338,7 @@ data class JsonRpcRequestSetFieldValue(
 
 @Serializable
 data class PatchAndInstallIosAppParams(
-    val ipaPath: String,
-    val certId: String
+    val appPath: String
 )
 
 @Serializable
@@ -347,6 +346,13 @@ data class JsonRpcRequestPatchAndInstallIosApp(
     val jsonrpc: String = "2.0",
     val method: String = "patchAndInstallIosApp",
     val params: PatchAndInstallIosAppParams,
+    val id: Int = 1
+)
+
+@Serializable
+data class JsonRpcRequestCheckIosDeployStatus(
+    val jsonrpc: String = "2.0",
+    val method: String = "checkIosDeployStatus",
     val id: Int = 1
 )
 
@@ -828,29 +834,59 @@ object RpcClient {
         }
     }
 
-    suspend fun patchAndInstallIosApp(ipaPath: String, certId: String): Pair<Boolean, String?> {
+    suspend fun patchAndInstallIosApp(appPath: String): Pair<Boolean, String?> {
         return try {
             val requestBody = JsonRpcRequestPatchAndInstallIosApp(
-                params = PatchAndInstallIosAppParams(ipaPath, certId)
+                params = PatchAndInstallIosAppParams(appPath)
             )
-            val response: HttpResponse = withTimeoutOrNull(300_000) {
-                client.post("http://127.0.0.1:8080/jsonrpc") {
+            val response: HttpResponse = withTimeoutOrNull(30_000) {
+                client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
                 }
-            } ?: return Pair(false, "Timeout patching iOS app")
+            } ?: return Pair(false, "Timeout calling bridge")
             
-            val body = response.body<String>()
-            val json = Json { ignoreUnknownKeys = true }
-            val parsed = json.decodeFromString<JsonRpcResponse>(body)
-            
-            if (parsed.error != null) {
-                Pair(false, parsed.error.message ?: "Unknown error patching iOS app")
+            if (response.status.value in 200..299) {
+                val rpcResponse = response.body<JsonRpcInjectionProgressResponse>()
+                if (rpcResponse.result != null) {
+                    Pair(true, null)
+                } else if (rpcResponse.error != null) {
+                    Pair(false, rpcResponse.error.message)
+                } else {
+                    Pair(false, "Unexpected empty response")
+                }
             } else {
-                Pair(true, null)
+                Pair(false, "RPC HTTP Error: ${response.status.value}")
             }
         } catch (e: Exception) {
             Pair(false, e.message ?: "Error connecting to bridge")
+        }
+    }
+
+    suspend fun checkIosDeployStatus(): Pair<GadgetInstallStatus, List<InjectionStep>?> {
+        return try {
+            val requestBody = JsonRpcRequestCheckIosDeployStatus()
+            val response: HttpResponse = withTimeoutOrNull(5000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return Pair(GadgetInstallStatus.IDLE, null)
+
+            if (response.status.value in 200..299) {
+                val rpcResponse = response.body<JsonRpcInjectionProgressResponse>()
+                val res = rpcResponse.result
+                if (res != null) {
+                    val status = when (res.status) {
+                        "completed", "success" -> GadgetInstallStatus.SUCCESS
+                        "error" -> GadgetInstallStatus.ERROR
+                        else -> GadgetInstallStatus.WAITING_BRIDGE_SETUP
+                    }
+                    Pair(status, res.steps)
+                } else Pair(GadgetInstallStatus.IDLE, null)
+            } else Pair(GadgetInstallStatus.ERROR, null)
+        } catch (e: Exception) {
+            Pair(GadgetInstallStatus.ERROR, null)
         }
     }
 }

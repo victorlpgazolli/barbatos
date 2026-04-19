@@ -510,6 +510,12 @@ fun main(args: Array<String>) {
                             (state.selectedDeviceIndex + 1).coerceAtMost(state.deviceInfoList.size - 1)
                         Renderer.render(state)
                     }
+                } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+                    if (state.iosAppPaths.isNotEmpty()) {
+                        state.selectedIosAppIndex =
+                            (state.selectedIosAppIndex + 1).coerceAtMost(state.iosAppPaths.size - 1)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty()) {
@@ -559,6 +565,12 @@ fun main(args: Array<String>) {
                     if (state.deviceInfoList.isNotEmpty()) {
                         state.selectedDeviceIndex =
                             (state.selectedDeviceIndex - 1).coerceAtLeast(0)
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+                    if (state.iosAppPaths.isNotEmpty()) {
+                        state.selectedIosAppIndex =
+                            (state.selectedIosAppIndex - 1).coerceAtLeast(0)
                         Renderer.render(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
@@ -631,6 +643,14 @@ fun main(args: Array<String>) {
                             }
                         }
                     }
+                } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+                    if (state.iosAppPaths.isNotEmpty() && state.selectedIosAppIndex in state.iosAppPaths.indices) {
+                        val selectedApp = state.iosAppPaths[state.selectedIosAppIndex]
+                        state.iosIpaPath = selectedApp
+                        state.popMode()
+                        CommandExecutor.startIosInjection(selectedApp, state, scope)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
                     CommandExecutor.handleIosRepackage(state, scope)
                     Renderer.render(state)
@@ -639,7 +659,12 @@ fun main(args: Array<String>) {
                         val selectedDevice = state.deviceInfoList[state.selectedDeviceIndex]
                         state.adbSerial = selectedDevice.serial
                         state.popMode()
-                        CommandExecutor.proceedWithDebugSetup(state, scope)
+                        
+                        if (selectedDevice.status == "iOS") {
+                            CommandExecutor.initIosAppSelection(state, scope)
+                        } else {
+                            CommandExecutor.proceedWithDebugSetup(state, scope)
+                        }
                         Renderer.render(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
@@ -936,7 +961,9 @@ fun main(args: Array<String>) {
                     }
                 }
 
-                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || state.isFetchingInstances || state.isFetchingInstancesList || state.isFetchingDevices) {
+                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || 
+                    state.isFetchingInstances || state.isFetchingInstancesList || 
+                    state.isFetchingDevices || state.mode == AppMode.IOS_APP_SELECTION) {
                     state.gadgetSpinnerFrame++
                     needsRender = true
                 }

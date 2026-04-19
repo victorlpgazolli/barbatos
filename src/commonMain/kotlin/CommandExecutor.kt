@@ -233,26 +233,30 @@ object CommandExecutor {
         state.rpcError = null
 
         scope.launch {
-            val (devices, error) = AdbDeviceManager.getConnectedDevices()
+            val (androidDevices, error) = AdbDeviceManager.getConnectedDevices()
+            val iosDevices = IosDeviceManager.getConnectedDevices()
+            
+            val allDevices = androidDevices + iosDevices
 
             when {
-                error != null -> {
+                error != null && iosDevices.isEmpty() -> {
                     state.sharedRpcError.value = error
                     state.isFetchingDevices = false
                 }
-                devices.isEmpty() -> {
+                allDevices.isEmpty() -> {
                     state.sharedRpcError.value = "No online devices found. Check USB connection and developer mode"
                     state.isFetchingDevices = false
                 }
-                devices.size == 1 -> {
+                allDevices.size == 1 -> {
                     // Auto-select single device
-                    state.adbSerial = devices[0].serial
+                    val device = allDevices[0]
+                    state.adbSerial = device.serial
                     state.isFetchingDevices = false
                     proceedWithDebugSetup(state, scope)
                 }
                 else -> {
                     // Show device selection UI - use shared observable pattern
-                    state.deviceInfoList = devices
+                    state.deviceInfoList = allDevices
                     state.allFetchedClasses = emptyList()
                     state.selectedDeviceIndex = 0
                     state.isFetchingDevices = false
@@ -261,6 +265,24 @@ object CommandExecutor {
                 }
             }
         }
+    }
+
+    fun initIosAppSelection(state: AppState, scope: CoroutineScope) {
+        state.isFetchingDevices = true
+        scope.launch {
+            discoverIosApps(state)
+            state.isFetchingDevices = false
+            state.pushMode(AppMode.IOS_APP_SELECTION)
+        }
+    }
+
+    private fun discoverIosApps(state: AppState) {
+        val home = Shell.execute("echo \$HOME").trim()
+        val derivedDataDir = "$home/Library/Developer/Xcode/DerivedData"
+        // Find .app directories modified in the last 48 hours (-mtime -2)
+        val output = Shell.execute("find $derivedDataDir -maxdepth 5 -type d -name '*.app' -mtime -2 2>/dev/null")
+        state.iosAppPaths = output.trim().lines().filter { it.isNotBlank() }
+        state.selectedIosAppIndex = 0
     }
 
     fun proceedWithDebugSetup(state: AppState, scope: CoroutineScope) {
@@ -586,31 +608,45 @@ object CommandExecutor {
         pclose(pipe)
     }
 
-    fun handleIosRepackage(state: AppState, scope: CoroutineScope) {
-        if (state.iosIpaPath.isEmpty()) {
-            state.iosRepackageError = "Please enter the path to the .ipa file"
-            return
-        }
-        if (state.iosCertList.isEmpty() || state.iosSelectedCertIndex !in state.iosCertList.indices) {
-            state.iosRepackageError = "Please select a signing certificate"
-            return
-        }
-
-        val certLine = state.iosCertList[state.iosSelectedCertIndex]
-        val certId = certLine.split(" ")[0]
-
-        state.iosRepackageError = null
+    fun startIosInjection(appPath: String, state: AppState, scope: CoroutineScope) {
         state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
-        
+        state.gadgetErrorMessage = null
+        state.gadgetSpinnerFrame = 0
+        state.gadgetInjectionSteps = emptyList()
+        state.pushMode(AppMode.IOS_REPACKAGE_SETUP)
+
         scope.launch {
-            val (success, error) = RpcClient.patchAndInstallIosApp(state.iosIpaPath, certId)
-            if (success) {
-                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
-                state.pushMode(AppMode.DEBUG_ENTRYPOINT)
-            } else {
-                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error ?: "Unknown error during iOS repackaging")
-                state.iosRepackageError = error
+            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
+            
+            // 1. Initial RPC to inject gadget and start monitor thread in bridge
+            val (success, error) = RpcClient.patchAndInstallIosApp(appPath)
+            if (!success) {
+                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error ?: "Failed to start iOS injection")
+                return@launch
+            }
+
+            // 2. Poll for status until Success or Error
+            while (state.running && state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
+                val (status, steps) = RpcClient.checkIosDeployStatus()
+                if (steps != null) {
+                    state.sharedGadgetSteps.value = steps
+                }
+                
+                if (status != GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
+                    state.sharedGadgetResult.value = Pair(status, null)
+                    break
+                }
+                delay(1000)
             }
         }
+    }
+
+    fun handleIosRepackage(state: AppState, scope: CoroutineScope) {
+        if (state.iosIpaPath.isEmpty()) {
+            state.iosRepackageError = "Please enter the path to the .app folder"
+            return
+        }
+        state.iosRepackageError = null
+        startIosInjection(state.iosIpaPath, state, scope)
     }
 }
