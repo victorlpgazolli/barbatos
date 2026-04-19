@@ -172,6 +172,10 @@ object Renderer {
             renderInputBox(buf, state, termWidth - 2)
             renderClassList(buf, state, termWidth, termHeight)
             hasInputBox = true
+        } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+            renderHeader(buf, state, termWidth)
+            renderDeviceSelectionList(buf, state, termWidth, termHeight)
+            hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS || state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
             renderHeader(buf, state, termWidth)
             renderBreadcrumb(buf, state, termWidth)
@@ -275,6 +279,12 @@ object Renderer {
             AppMode.DEBUG_EDIT_ATTRIBUTE -> listOf(
                 FooterKey("Enter", "Save"),
                 FooterKey("Esc", "Cancel"),
+                FooterKey("Ctrl+C", "Quit")
+            )
+            AppMode.DEBUG_DEVICE_SELECTION -> listOf(
+                FooterKey("↑↓", "Navigate"),
+                FooterKey("Enter", "Select"),
+                FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
         }
@@ -948,6 +958,42 @@ object Renderer {
         }
 
         ListRenderer.renderScrollIndicator(buf, startIdx, endIdx, rows.size, termWidth)
+    }
+
+    private fun renderDeviceSelectionList(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {
+        if (state.rpcError != null) {
+            buf.append(Ansi.RED).append("  Error: ${state.rpcError}").append(RESET).append("\n")
+            return
+        }
+
+        if (state.isFetchingDevices) {
+            buf.append("  ").append(DIM_GRAY).append("Fetching devices...").append(RESET).append("\n")
+            return
+        }
+
+        if (state.deviceInfoList.isEmpty()) {
+            buf.append(DIM_GRAY).append("  No devices found.\n").append(RESET)
+            return
+        }
+
+        val actualFixedLines = 2 + 3 // Header(2) + Footer(3)
+        val maxItems = maxOf(3, termHeight - actualFixedLines - 2)
+
+        val (startIdx, endIdx) = ListRenderer.computeViewport(
+            state.deviceInfoList.size, state.selectedDeviceIndex, maxItems
+        )
+
+        buf.append(DIM_GRAY).append("  Select a device to debug:").append(RESET).append("\n\n")
+
+        for (i in startIdx until endIdx) {
+            val device = state.deviceInfoList[i]
+            val displayStr = "${device.serial} - ${device.model} - ${device.status}"
+            val isSelected = i == state.selectedDeviceIndex
+            val prefix = ListRenderer.selectionPrefix(isSelected, "  ")
+
+            val displayColor = if (isSelected) WHITE else LIGHT_GRAY
+            buf.append(prefix).append(displayColor).append(displayStr).append(RESET).append("\n")
+        }
     }
 
     private fun renderHookWatchMode(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {

@@ -221,7 +221,49 @@ object CommandExecutor {
         if (state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
             return
         }
-        
+
+        // If serial already set (from device selection), proceed directly
+        if (state.adbSerial != null && state.adbSerial!!.isNotEmpty()) {
+            proceedWithDebugSetup(state, scope)
+            return
+        }
+
+        // Enumerate devices
+        state.isFetchingDevices = true
+        state.rpcError = null
+
+        scope.launch {
+            val (devices, error) = AdbDeviceManager.getConnectedDevices()
+
+            when {
+                error != null -> {
+                    state.sharedRpcError.value = error
+                    state.isFetchingDevices = false
+                }
+                devices.isEmpty() -> {
+                    state.sharedRpcError.value = "No online devices found. Check USB connection and developer mode"
+                    state.isFetchingDevices = false
+                }
+                devices.size == 1 -> {
+                    // Auto-select single device
+                    state.adbSerial = devices[0].serial
+                    state.isFetchingDevices = false
+                    proceedWithDebugSetup(state, scope)
+                }
+                else -> {
+                    // Show device selection UI - use shared observable pattern
+                    state.deviceInfoList = devices
+                    state.allFetchedClasses = emptyList()
+                    state.selectedDeviceIndex = 0
+                    state.isFetchingDevices = false
+                    state.pushMode(AppMode.DEBUG_DEVICE_SELECTION)
+                    // Don't render here - Main.kt Timeout handler will render
+                }
+            }
+        }
+    }
+
+    fun proceedWithDebugSetup(state: AppState, scope: CoroutineScope) {
         state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
         state.gadgetErrorMessage = null
         state.gadgetSpinnerFrame = 0
@@ -232,7 +274,13 @@ object CommandExecutor {
 
             // Smart check: if bridge is already responding, don't restart it
             if (!RpcClient.ping()) {
-                restartBridge(state, scope)
+                // Start bridge in background
+                val logFile = "${CacheManager.cacheDir()}/bridge.log"
+                val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
+                val serialArg = if (state.adbSerial != null) " --serial ${state.adbSerial}" else ""
+                val bridgeCmd = getBridgeCommand(serialArg)
+                system("$bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
+                delay(1000) // Give bridge time to start before first ping
             }
 
             var bridgeReady = false
@@ -256,14 +304,14 @@ object CommandExecutor {
             var isFinished = false
             while (!isFinished) {
                 val (progress, error) = RpcClient.injectGadgetFromScratch()
-                
+
                 if (error != null) {
                     state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error)
                     isFinished = true
                 } else if (progress != null) {
                     state.sharedGadgetSteps.value = progress.steps
                     state.sharedBridgeLogs.value = progress.logs
-                    
+
                     when (progress.status) {
                         "completed" -> {
                             state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)

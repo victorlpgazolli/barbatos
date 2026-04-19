@@ -504,6 +504,12 @@ fun main(args: Array<String>) {
                             (state.selectedClassIndex + 1).coerceAtMost(state.displayedClasses.size - 1)
                         Renderer.render(state)
                     }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty()) {
+                        state.selectedDeviceIndex =
+                            (state.selectedDeviceIndex + 1).coerceAtMost(state.deviceInfoList.size - 1)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty()) {
@@ -547,6 +553,12 @@ fun main(args: Array<String>) {
                     if (state.displayedClasses.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex - 1).coerceAtLeast(0)
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty()) {
+                        state.selectedDeviceIndex =
+                            (state.selectedDeviceIndex - 1).coerceAtLeast(0)
                         Renderer.render(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
@@ -622,6 +634,14 @@ fun main(args: Array<String>) {
                 } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
                     CommandExecutor.handleIosRepackage(state, scope)
                     Renderer.render(state)
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty() && state.selectedDeviceIndex in state.deviceInfoList.indices) {
+                        val selectedDevice = state.deviceInfoList[state.selectedDeviceIndex]
+                        state.adbSerial = selectedDevice.serial
+                        state.popMode()
+                        CommandExecutor.proceedWithDebugSetup(state, scope)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     CommandExecutor.handleDebugEntrypoint(state, scope)
                     Renderer.render(state)
@@ -916,7 +936,7 @@ fun main(args: Array<String>) {
                     }
                 }
 
-                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || state.isFetchingInstances || state.isFetchingInstancesList) {
+                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || state.isFetchingInstances || state.isFetchingInstancesList || state.isFetchingDevices) {
                     state.gadgetSpinnerFrame++
                     needsRender = true
                 }
@@ -986,6 +1006,18 @@ fun main(args: Array<String>) {
                             state.displayedClasses = CommandExecutor.sortClasses(state.displayedClasses, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
                             needsRender = true
                         }
+                    }
+                }
+
+                // Handle device enumeration (happens from DEFAULT or DEBUG_DEVICE_SELECTION mode)
+                if (state.isFetchingDevices) {
+                    // Handle device enumeration errors
+                    val err = state.sharedRpcError.value
+                    if (err != null) {
+                        state.rpcError = err
+                        state.sharedRpcError.value = null
+                        state.isFetchingDevices = false
+                        needsRender = true
                     }
                 }
 
