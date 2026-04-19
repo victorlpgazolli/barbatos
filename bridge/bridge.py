@@ -185,6 +185,7 @@ class FridaBridge:
         self.gadget_port = 8700
         self.gadget_target = "127.0.0.1"
         self.is_injecting_gadget = False
+        self.ios_deploy_status = {"state": "idle", "message": ""}
 
         # Track the progress of the gadget injection sequence
         self.injection_progress = {
@@ -888,14 +889,84 @@ class FridaBridge:
         except Exception as e:
             raise e
 
-    def _patch_and_install_ios_app(self, ipa_path: str, cert_id: str) -> dict:
+    def _monitor_and_hijack_ios(self, device_id, bundle_id):
+        """Background thread that polls for the app on the device and relaunches it with Frida."""
+        import subprocess
+        import time
+        import traceback
+
+        with self._lock:
+            self.ios_deploy_status = {"state": "waiting_for_xcode", "message": "Waiting for Xcode to build and launch the app..."}
+
+        max_wait = 300 # Wait up to 5 minutes
+        start_time = time.time()
+        
+        try:
+            while time.time() - start_time < max_wait:
+                # 1. Check if xcodebuild is running
+                res_mac = subprocess.run("ps aux | grep -i xcodebuild | grep -v grep", shell=True, capture_output=True, text=True)
+                with self._lock:
+                    if self.ios_deploy_status["state"] == "waiting_for_xcode" and res_mac.stdout.strip():
+                        self.ios_deploy_status = {"state": "xcode_running", "message": "Xcode is compiling/deploying..."}
+                    elif self.ios_deploy_status["state"] == "xcode_running" and not res_mac.stdout.strip():
+                        self.ios_deploy_status = {"state": "waiting_for_xcode", "message": "Waiting for Xcode to launch the app..."}
+
+                # 2. Check if the app is running on the device using frida-ps
+                res_frida = subprocess.run(['frida-ps', '-D', device_id, '-a'], capture_output=True, text=True)
+                if bundle_id in res_frida.stdout:
+                    # Xcode launched it! Time to hijack.
+                    with self._lock:
+                        self.ios_deploy_status = {"state": "hijacking", "message": "App detected! Hijacking process to inject Frida..."}
+                    
+                    logging.info(f"[_monitor_and_hijack_ios] App {bundle_id} detected. Killing Xcode session...")
+                    
+                    try:
+                        subprocess.run(['devicectl', 'device', 'process', 'terminate', '--device', device_id, bundle_id], capture_output=True)
+                    except Exception as e:
+                        logging.warning(f"Failed to terminate via devicectl: {e}")
+                    
+                    time.sleep(1.5)
+
+                    logging.info(f"[_monitor_and_hijack_ios] Relaunching with idevicedebug and DYLD_INSERT_LIBRARIES...")
+                    launch_cmd = [
+                        'idevicedebug', '-u', device_id, 
+                        '--detach',
+                        '-e', 'DYLD_INSERT_LIBRARIES=@executable_path/Frameworks/frida-gadget-ios.dylib',
+                        'run', bundle_id
+                    ]
+                    res_launch = subprocess.run(launch_cmd, capture_output=True, text=True)
+                    
+                    if res_launch.returncode != 0 and "failed to get the task" not in res_launch.stderr:
+                        raise RuntimeError(f"idevicedebug failed: {res_launch.stderr}")
+
+                    logging.info(f"[_monitor_and_hijack_ios] Hijack complete!")
+                    with self._lock:
+                        self.ios_deploy_status = {"state": "success", "message": f"App {bundle_id} launched with Frida instrumentation."}
+                    return
+
+                time.sleep(2)
+            
+            with self._lock:
+                self.ios_deploy_status = {"state": "error", "message": "Timed out waiting for Xcode to deploy the app."}
+
+        except Exception as e:
+            logging.error(f"[_monitor_and_hijack_ios] Error: {e}")
+            with self._lock:
+                self.ios_deploy_status = {"state": "error", "message": str(e)}
+
+    def _patch_and_install_ios_app(self, source_path: str) -> dict:
         """
-        Patches the specified iOS IPA file with a Frida gadget using lief, signs it with the provided certificate, and installs it.
+        Injects Frida gadget into the local build and spawns a background thread to hijack the Xcode launch.
         """
         from ios_repacker import repack_and_install
+        import threading
         try:
-            repack_and_install(ipa_path, cert_id)
-            return {"status": "success"}
+            device_id, bundle_id = repack_and_install(source_path)
+            threading.Thread(target=self._monitor_and_hijack_ios, args=(device_id, bundle_id), daemon=True).start()
+            return {
+                "status": "waiting_for_xcode",
+                "message": "Frida injected. Please press 'Run' in Xcode to deploy."
+            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -1121,11 +1192,14 @@ class FridaBridge:
             return result
 
         elif method == "patchAndInstallIosApp":
-            ipa_path = params.get("ipaPath")
-            cert_id = params.get("certId")
-            if not ipa_path or not cert_id:
-                raise Exception("ipaPath and certId are required")
-            return self._patch_and_install_ios_app(ipa_path, cert_id)
+            source_path = params.get("appPath")
+            if not source_path:
+                raise Exception("appPath is required")
+            return self._patch_and_install_ios_app(source_path)
+
+        elif method == "checkIosDeployStatus":
+            with self._lock:
+                return self.ios_deploy_status
 
         elif method == "getpackagename":
             self.get_session()
