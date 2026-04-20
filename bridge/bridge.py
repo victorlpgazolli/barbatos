@@ -808,13 +808,29 @@ class FridaBridge:
                     pass
 
             device = self._get_device()
-            front_app = self._get_front_app(device)
-            if not front_app:
-                raise Exception("No frontmost application found on device")
             
-            logging.info(f"[get_session] Attaching to {front_app.identifier} (PID: {front_app.pid})")
-            self.session = device.attach(front_app.pid)
-            self.session._pid = front_app.pid
+            # On iOS when using the Gadget via DYLD_INSERT_LIBRARIES, get_frontmost_application()
+            # often fails because the Gadget does not have the privileges or hooks to report it.
+            # Instead, we should check if we can connect to the Gadget directly or enumerate processes.
+            front_app = None
+            try:
+                front_app = self._get_front_app(device)
+            except Exception as e:
+                logging.warning(f"[get_session] get_frontmost_application failed: {e}. Trying to attach to Gadget directly...")
+            
+            if front_app:
+                logging.info(f"[get_session] Attaching to {front_app.identifier} (PID: {front_app.pid})")
+                self.session = device.attach(front_app.pid)
+                self.session._pid = front_app.pid
+            else:
+                # Fallback for iOS Gadget: Try attaching by name 'Gadget' or by finding the first app
+                try:
+                    logging.info("[get_session] Attempting to attach to 'Gadget'...")
+                    self.session = device.attach("Gadget")
+                    self.session._pid = 0 # PID might not be easily available if attached by name
+                except Exception as e:
+                    logging.error(f"[get_session] Failed to attach to Gadget: {e}")
+                    raise Exception("No frontmost application found on device and could not attach to Gadget")
 
             # Detect platform to load correct agent
             platform_script = self.session.create_script("send(Process.platform);")
@@ -932,48 +948,63 @@ class FridaBridge:
                 raise Exception(f"JDWP injection failed: {result}")        
         except Exception as e:
             raise e
+    def _kill_xcode_processes(self):
+        """Kills any existing Xcode processes on the host to prevent conflicts with idevicedebug."""
+        import subprocess
+        logging.info("[_kill_xcode_processes] Attempting to kill any existing Xcode processes...")
+        try:
+            subprocess.run(['pkill', '-f', 'Xcode'], capture_output=True)
+            logging.info("[_kill_xcode_processes] Xcode processes killed successfully (if any were running).")
+        except Exception as e:
+            logging.warning(f"[_kill_xcode_processes] Failed to kill Xcode processes: {e}")
+    def _kill_lldb_processes(self):
+        """Kills any existing lldb processes on the host to prevent conflicts with idevicedebug."""
+        import subprocess
+        logging.info("[_kill_lldb_processes] Attempting to kill any existing lldb processes...")
+        try:
+            subprocess.run(['pkill', '-f', 'lldb'], capture_output=True)
+            logging.info("[_kill_lldb_processes] lldb processes killed successfully (if any were running).")
+        except Exception as e:
+            logging.warning(f"[_kill_lldb_processes] Failed to kill lldb processes: {e}")
 
+    def _is_lldb_running(self):
+        """Checks if lldb is currently running on the host."""
+        import subprocess
+        res = subprocess.run("ps aux | grep -i lldb | grep -v grep", shell=True, capture_output=True, text=True)
+        return bool(res.stdout.strip())
     def _monitor_and_hijack_ios(self, device_id, bundle_id):
         """Background thread that polls for the app on the device and relaunches it with Frida."""
         import subprocess
         import time
-        import traceback
-
+        
+        logging.info(f"[_monitor_and_hijack_ios] Pre-emptively stopping any existing lldb processes to avoid conflicts...")
+        self._kill_lldb_processes()
         self._update_ios_progress("wait_xcode", "running")
-
-        logging.info(f"[_monitor_and_hijack_ios] Pre-emptively uninstalling {bundle_id} to force Xcode reinstall...")
-        try:
-            subprocess.run(['xcrun', 'devicectl', 'device', 'uninstall', 'app', bundle_id, '--device', device_id], capture_output=True)
-        except Exception as e:
-            logging.warning(f"[_monitor_and_hijack_ios] Failed to uninstall app: {e}")
 
         max_wait = 300 # Wait up to 5 minutes
         start_time = time.time()
         
         try:
             while time.time() - start_time < max_wait:
-                # 1. Check if xcodebuild is running
-                res_mac = subprocess.run("ps aux | grep -i xcodebuild | grep -v grep", shell=True, capture_output=True, text=True)
-                if res_mac.stdout.strip():
+                # 1. Check if lldb is running
+                if self._is_lldb_running():
                     with self._lock:
                         for s in self.ios_deploy_status["steps"]:
                             if s["id"] == "wait_xcode":
-                                s["title"] = "Xcode is compiling/deploying..."
+                                s["title"] = "Xcode has deployed... waiting 5 seconds for the process to start before hijack"
+                                time.sleep(5)
                 else:
                     with self._lock:
                         for s in self.ios_deploy_status["steps"]:
                             if s["id"] == "wait_xcode":
                                 s["title"] = "Waiting for Xcode build & deploy..."
-
-                # 2. Check if the app is running on the device using frida-ps
-                res_frida = subprocess.run(['frida-ps', '-D', device_id, '-a'], capture_output=True, text=True)
-                if bundle_id in res_frida.stdout:
-                    # Xcode launched it! Time to hijack.
-                    self._update_ios_progress("wait_xcode", "completed")
+                                time.sleep(2)
+                        continue
+                self._update_ios_progress("wait_xcode", "completed")
+                has_hijack_completed = any(s["id"] == "hijack_process" and s["status"] == "completed" for s in self.ios_deploy_status["steps"])
+                
+                if not has_hijack_completed:
                     self._update_ios_progress("hijack_process", "running")
-                    
-                    logging.info(f"[_monitor_and_hijack_ios] App {bundle_id} detected. Killing Xcode session...")
-                    
                     try:
                         subprocess.run(['devicectl', 'device', 'process', 'terminate', '--device', device_id, bundle_id], capture_output=True)
                     except Exception as e:
@@ -981,7 +1012,15 @@ class FridaBridge:
                     
                     time.sleep(1.5)
 
+                    logging.info(f"[_monitor_and_hijack_ios] Attempting to kill any existing Xcode processes to prevent idevicedebug conflicts...")
+                    self._kill_xcode_processes()
+                    logging.info(f"[_monitor_and_hijack_ios] Pre-emptively stopping any existing lldb processes to avoid conflicts...")
+                    self._kill_lldb_processes()
+
+                    time.sleep(1.5)
+
                     logging.info(f"[_monitor_and_hijack_ios] Relaunching with idevicedebug and DYLD_INSERT_LIBRARIES...")
+                    
                     launch_cmd = [
                         'idevicedebug', '-u', device_id, 
                         '--detach',
@@ -999,10 +1038,7 @@ class FridaBridge:
                     logging.info(f"[_monitor_and_hijack_ios] Hijack complete! Loading agent...")
                     # The TUI will handle session creation, but we mark success here
                     self._update_ios_progress("load_agent", "completed", global_status="completed")
-                    return
 
-                time.sleep(2)
-            
             self._update_ios_progress("wait_xcode", "error", global_status="error", error="Timed out waiting for Xcode")
 
         except Exception as e:
