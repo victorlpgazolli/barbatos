@@ -65,8 +65,8 @@ class TestIosHijackWorkflow(unittest.TestCase):
         with patch('time.sleep'): # Fast forward time
             bridge._monitor_and_hijack_ios("test_device", "com.test.app")
         
-        self.assertEqual(bridge.ios_deploy_status["state"], "success")
-        self.assertIn("launched with Frida", bridge.ios_deploy_status["message"])
+        self.assertEqual(bridge.ios_deploy_status["status"], "completed")
+        self.assertEqual(next(s for s in bridge.ios_deploy_status["steps"] if s["id"] == "load_agent")["status"], "completed")
 
     @patch('subprocess.run')
     def test_monitor_and_hijack_timeout(self, mock_run):
@@ -82,8 +82,8 @@ class TestIosHijackWorkflow(unittest.TestCase):
             mock_time.side_effect = [0, 600] # Start at 0, next call at 600 (exceeds 300 max_wait)
             bridge._monitor_and_hijack_ios("test_device", "com.test.app")
             
-        self.assertEqual(bridge.ios_deploy_status["state"], "error")
-        self.assertIn("Timed out", bridge.ios_deploy_status["message"])
+        self.assertEqual(bridge.ios_deploy_status["status"], "error")
+        self.assertIn("Timed out", bridge.ios_deploy_status["error_message"])
 
 if __name__ == '__main__':
     unittest.main()
