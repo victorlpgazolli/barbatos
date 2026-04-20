@@ -201,7 +201,7 @@ object Renderer {
             renderLogo(buf)
             renderWelcome(buf)
             renderCtrlCWarning(buf, state)
-            renderDebugEntrypoint(buf, state)
+            renderDebugEntrypoint(buf, state, termWidth)
             hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
             renderHeader(buf, state, termWidth)
@@ -390,14 +390,14 @@ object Renderer {
         }
     }
 
-    private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState) {
+    private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState, termWidth: Int) {
         val options = listOf(
             "Search & inspect classes instances",
             "Hook methods & watch changes"
         )
-        
+
         buf.append("  ${Ansi.WHITE}Select debug action:${Ansi.RESET}\n")
-        
+
         for ((index, option) in options.withIndex()) {
             val isSelected = index == state.debugEntrypointIndex
             val prefix = ListRenderer.selectionPrefix(isSelected, "  ")
@@ -405,9 +405,8 @@ object Renderer {
             buf.append(prefix).append(color).append(option).append(Ansi.RESET).append("\n")
         }
 
-        buf.appendBridgeLogBox(state.bridgeLogs)
+        buf.appendBridgeLogBox(state.bridgeLogs, maxOf(10, termWidth - 6))
     }
-
     private fun StringBuilder.appendBridgeLogBox(logs: List<String>, logWidth: Int = 100) {
         if (logs.isEmpty()) return
         
