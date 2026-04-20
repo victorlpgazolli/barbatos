@@ -197,6 +197,7 @@ object Renderer {
             hasInputBox = false
         }
 
+        renderStatusMessage(buf, state, termWidth)
         renderFooter(buf, state, termWidth, termHeight)
 
         if (hasInputBox) {
@@ -208,6 +209,24 @@ object Renderer {
         Terminal.flush()
     }
 
+    private fun renderStatusMessage(buf: StringBuilder, state: AppState, termWidth: Int) {
+        val message = state.statusMessage ?: return
+        val elapsed = currentTimeMillis() - state.statusMessageTimestamp
+        if (elapsed > 2000) {
+            state.statusMessage = null
+            return
+        }
+
+        val padding = maxOf(0, (termWidth - message.length - 4) / 2)
+        buf.append("\n")
+        buf.append(" ".repeat(padding))
+        buf.append(C_GREEN).append("╭").append("─".repeat(message.length + 2)).append("╮").append(RESET).append("\n")
+        buf.append(" ".repeat(padding))
+        buf.append(C_GREEN).append("│ ").append(WHITE).append(message).append(C_GREEN).append(" │").append(RESET).append("\n")
+        buf.append(" ".repeat(padding))
+        buf.append(C_GREEN).append("╰").append("─".repeat(message.length + 2)).append("╯").append(RESET).append("\n")
+    }
+
     private fun renderFooter(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {
         data class FooterKey(val key: String, val label: String)
 
@@ -216,6 +235,7 @@ object Renderer {
                 FooterKey("↑↓", "History"),
                 FooterKey("Tab", "Autocomplete"),
                 FooterKey("Enter", "Execute"),
+                FooterKey("Alt+C", "Copy"),
                 FooterKey("Ctrl+C", "Quit")
             )
             AppMode.DEBUG_ENTRYPOINT -> listOf(
@@ -229,6 +249,7 @@ object Renderer {
                 FooterKey("Enter", "Inspect"),
                 FooterKey("\\", "Count Instances"),
                 FooterKey("]", if (state.showSyntheticClasses) "Hide Synthetic Classes" else "Show Synthetic Classes"),
+                FooterKey("Alt+C", "Copy"),
                 FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
@@ -246,6 +267,7 @@ object Renderer {
                     FooterKey("E", eLabel),
                     FooterKey("W", "Watch"),
                     FooterKey("I", "Inspect"),
+                    FooterKey("Alt+C", "Copy"),
                     FooterKey("Esc", "Back"),
                     FooterKey("Ctrl+C", "Quit")
                 )
@@ -257,6 +279,7 @@ object Renderer {
                 FooterKey("←→", "Scroll"),
                 FooterKey("I", "Inspect"),
                 FooterKey("Space", "Toggle"),
+                FooterKey("Alt+C", "Copy"),
                 FooterKey("Del", "Remove"),
                 FooterKey("C", "Clear"),
                 FooterKey("Esc", "Back")
