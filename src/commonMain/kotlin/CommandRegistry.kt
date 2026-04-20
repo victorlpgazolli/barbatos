@@ -1,6 +1,7 @@
 object CommandRegistry {
     private val commands = listOf(
         Command("debug", "start a new debug session"),
+        Command("ios", "repackage and install an iOS IPA with Frida gadget"),
         Command("exit", "quit the application"),
         Command("clear", "clear the command history"),
     )

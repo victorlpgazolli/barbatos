@@ -11,9 +11,10 @@ a = Analysis(
     binaries=frida_binaries,
     datas=[
         ('agent.bundle.js', '.'),
+        ('agent.objc.bundle.js', '.'),
         ('../version.txt', '.')
     ] + frida_datas,
-    hiddenimports=['jdwp_frida'] + frida_hidden,
+    hiddenimports=['jdwp_frida', 'ios_repacker'] + frida_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

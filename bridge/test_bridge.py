@@ -127,5 +127,17 @@ class TestFridaBridge(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         mock_run_jdwp.assert_called_once()
 
+    @patch('bridge.FridaBridge._patch_and_install_ios_app')
+    def test_handle_rpc_patch_and_install_ios_app(self, mock_patch):
+        mock_patch.return_value = {"status": "success"}
+        result = self.bridge.handle_rpc("patchAndInstallIosApp", {"appPath": "/tmp/Test.app"})
+        self.assertEqual(result, {"status": "success"})
+        mock_patch.assert_called_once_with("/tmp/Test.app")
+
+    def test_handle_rpc_patch_and_install_ios_app_missing_params(self):
+        with self.assertRaises(Exception) as context:
+            self.bridge.handle_rpc("patchAndInstallIosApp", {})
+        self.assertTrue("appPath is required" in str(context.exception))
+
 if __name__ == '__main__':
     unittest.main()
