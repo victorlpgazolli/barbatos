@@ -230,9 +230,19 @@ object Renderer {
                 FooterKey("Enter", "Execute"),
                 FooterKey("Ctrl+C", "Quit")
             )
+            AppMode.DEBUG_DEVICE_SELECTION -> listOf(
+                FooterKey("↑↓", "Navigate"),
+                FooterKey("Enter", "Select"),
+                FooterKey("Esc", "Back"),
+                FooterKey("Ctrl+C", "Quit")
+            )
+            AppMode.IOS_APP_SELECTION -> listOf(
+                FooterKey("↑↓", "Navigate"),
+                FooterKey("Enter", "Select"),
+                FooterKey("Esc", "Back"),
+                FooterKey("Ctrl+C", "Quit")
+            )
             AppMode.IOS_REPACKAGE_SETUP -> listOf(
-                FooterKey("↑↓", "Select Cert"),
-                FooterKey("Enter", "Patch & Install"),
                 FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
@@ -283,12 +293,6 @@ object Renderer {
             AppMode.DEBUG_EDIT_ATTRIBUTE -> listOf(
                 FooterKey("Enter", "Save"),
                 FooterKey("Esc", "Cancel"),
-                FooterKey("Ctrl+C", "Quit")
-            )
-            AppMode.DEBUG_DEVICE_SELECTION -> listOf(
-                FooterKey("↑↓", "Navigate"),
-                FooterKey("Enter", "Select"),
-                FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
         }

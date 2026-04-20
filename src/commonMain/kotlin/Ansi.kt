@@ -1,5 +1,6 @@
 object Ansi {
     const val RESET = "\u001b[0m"
+    const val BOLD = "\u001b[1m"
     const val WHITE = "\u001b[97m"
     const val DIM = "\u001b[90m"
     const val GREEN = "\u001b[92m"
