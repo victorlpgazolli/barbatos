@@ -160,7 +160,7 @@ object Renderer {
         if (state.mode == AppMode.DEFAULT) {
             renderLogo(buf)
             renderWelcome(buf)
-            renderHistory(buf, state)
+            renderHistory(buf, state, termWidth)
             renderCtrlCWarning(buf, state)
             renderInputBox(buf, state, width)
             renderSuggestions(buf, state)
@@ -384,12 +384,11 @@ object Renderer {
         if (state.iosRepackageError != null) {
             buf.append("\n  ${Ansi.RED}Error: ${state.iosRepackageError}${Ansi.RESET}\n")
         }
-        
+
         if (state.gadgetInstallStatus != GadgetInstallStatus.IDLE) {
-            renderGadgetStatus(buf, state)
+            renderGadgetStatus(buf, state, termWidth)
         }
     }
-
     private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState, termWidth: Int) {
         val options = listOf(
             "Search & inspect classes instances",
@@ -440,7 +439,7 @@ object Renderer {
         append("  ").append(bottomBorder).append(Ansi.RESET).append("\n")
     }
 
-    private fun renderHistory(buf: StringBuilder, state: AppState) {
+    private fun renderHistory(buf: StringBuilder, state: AppState, termWidth: Int) {
         val lastDebugIndex = state.commandHistory.lastIndexOf("debug")
         for ((index, cmd) in state.commandHistory.withIndex()) {
             buf.append(Ansi.DIM)
@@ -453,18 +452,18 @@ object Renderer {
 
             // Show gadget install status only below the LAST "debug" command
             if (index == lastDebugIndex && state.gadgetInstallStatus != GadgetInstallStatus.IDLE && state.gadgetInstallStatus != GadgetInstallStatus.SUCCESS) {
-                renderGadgetStatus(buf, state)
+                renderGadgetStatus(buf, state, termWidth)
             }
         }
     }
 
-    private fun renderGadgetStatus(buf: StringBuilder, state: AppState) {
+    private fun renderGadgetStatus(buf: StringBuilder, state: AppState, termWidth: Int) {
         val status = state.gadgetInstallStatus
         val frame = ListRenderer.spinnerFrame(state.gadgetSpinnerFrame)
 
         if (status != GadgetInstallStatus.IDLE) {
             buf.append("\n   ${Ansi.WHITE}Initializing Debugging Session:${Ansi.RESET}\n")
-            
+
             if (state.gadgetInjectionSteps.isEmpty()) {
                 buf.append("   [${LIGHT_GRAY}$frame${Ansi.RESET}] ${Ansi.WHITE}Connecting to bridge...${Ansi.RESET}\n")
             } else {
@@ -478,10 +477,9 @@ object Renderer {
                     }
                 }
             }
-            
-            buf.appendBridgeLogBox(state.bridgeLogs)
-        }
 
+            buf.appendBridgeLogBox(state.bridgeLogs, maxOf(10, termWidth - 6))
+        }
         if (status == GadgetInstallStatus.ERROR) {
             val errorMsg = state.gadgetErrorMessage ?: "Unknown error"
             buf.append("   ${Ansi.RED}Setup failed: $errorMsg${Ansi.RESET}\n")
