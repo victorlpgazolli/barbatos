@@ -11,6 +11,7 @@ a = Analysis(
     binaries=frida_binaries,
     datas=[
         ('agent.bundle.js', '.'),
+        ('agent.objc.bundle.js', '.'),
         ('../version.txt', '.')
     ] + frida_datas,
     hiddenimports=['jdwp_frida'] + frida_hidden,

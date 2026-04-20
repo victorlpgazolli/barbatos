@@ -8,6 +8,8 @@ enum class AppMode {
     DEBUG_INSPECT_CLASS,
     DEBUG_HOOK_WATCH,
     DEBUG_EDIT_ATTRIBUTE,
+    DEBUG_DEVICE_SELECTION,
+    IOS_APP_SELECTION,
     IOS_REPACKAGE_SETUP
 }
 
@@ -17,6 +19,12 @@ enum class GadgetInstallStatus {
     SUCCESS,
     ERROR
 }
+
+data class DeviceInfo(
+    val serial: String,
+    val model: String,
+    val status: String
+)
 
 data class Command(val name: String, val description: String)
 
@@ -85,7 +93,13 @@ data class AppState(
     var selectedClassIndex: Int = -1,
     var isFetchingClasses: Boolean = false,
     var showSyntheticClasses: Boolean = false,
+    // Device Selection
+    var deviceInfoList: List<DeviceInfo> = emptyList(),
+    var isFetchingDevices: Boolean = false,
+    var selectedDeviceIndex: Int = 0,
+    var selectedPlatform: String = "Android",
     var rpcError: String? = null,
+    val sharedDeviceSelectionReady: AtomicReference<Boolean?> = AtomicReference(null),
     
     var instanceCounts: MutableMap<String, Int> = mutableMapOf(),
     var isFetchingInstances: Boolean = false,
@@ -117,10 +131,13 @@ data class AppState(
 
 
     // iOS Repackaging
+    var iosAppPaths: List<String> = emptyList(),
+    var selectedIosAppIndex: Int = 0,
     var iosIpaPath: String = "",
     var iosCertList: List<String> = emptyList(),
     var iosSelectedCertIndex: Int = 0,
     var iosRepackageError: String? = null,
+    val sharedIosAppSelectionReady: AtomicReference<Boolean?> = AtomicReference(null),
 
     // Gadget Install Status
     var gadgetInstallStatus: GadgetInstallStatus = GadgetInstallStatus.IDLE,
@@ -129,6 +146,7 @@ data class AppState(
     val sharedGadgetResult: AtomicReference<Pair<GadgetInstallStatus, String?>?> = AtomicReference(null),
     val sharedGadgetSteps: AtomicReference<List<InjectionStep>?> = AtomicReference(null),
     var gadgetSpinnerFrame: Int = 0,
+    var bridgeActivityUpdateCounter: Int = 0,
     var isSubPane: Boolean = false,
     var startedAsInspectPane: Boolean = false,
     var inspectBackStack: MutableList<String> = mutableListOf(),

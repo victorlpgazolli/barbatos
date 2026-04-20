@@ -34,10 +34,6 @@ object CommandExecutor {
 
         when (baseCommand) {
             "debug" -> handleDebug(state, scope)
-            "ios" -> {
-                state.pushMode(AppMode.IOS_REPACKAGE_SETUP)
-                fetchIosCertificates(state)
-            }
             "exit" -> state.running = false
             "clear" -> {
                 state.commandHistory.clear()
@@ -92,7 +88,7 @@ object CommandExecutor {
     private fun getBridgeCommand(serialArg: String): String {
         // 1. Check if we're in development mode (running from source)
         if (access("./bridge/bridge.py", F_OK) == 0) {
-            return "python3 ./bridge/bridge.py$serialArg"
+            return "python3 -u ./bridge/bridge.py$serialArg"
         }
 
         // 2. Check environment variable
@@ -221,7 +217,92 @@ object CommandExecutor {
         if (state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
             return
         }
-        
+
+        // // If serial already set (from device selection), proceed directly
+        // if (state.adbSerial != null && state.adbSerial!!.isNotEmpty()) {
+        //     proceedWithDebugSetup(state, scope)
+        //     return
+        // }
+
+        // Enumerate devices
+        state.isFetchingDevices = true
+        state.rpcError = null
+
+        scope.launch {
+            val (androidDevices, error) = AdbDeviceManager.getConnectedDevices()
+            val iosDevices = IosDeviceManager.getConnectedDevices()
+            
+            val allDevices = androidDevices + iosDevices
+
+            when {
+                error != null && iosDevices.isEmpty() -> {
+                    state.sharedRpcError.value = error
+                    state.isFetchingDevices = false
+                }
+                allDevices.isEmpty() -> {
+                    state.sharedRpcError.value = "No online devices found. Check USB connection and developer mode"
+                    state.isFetchingDevices = false
+                }
+                allDevices.size == 1 -> {
+                    // Auto-select single device
+                    val device = allDevices[0]
+                    state.adbSerial = device.serial
+                    state.selectedPlatform = device.status
+                    state.isFetchingDevices = false
+
+                    if (device.status == "iOS") {
+                        initIosAppSelection(state, scope)
+                    } else {
+                        proceedWithDebugSetup(state, scope)
+                    }
+                }
+                else -> {
+                    // Show device selection UI - use shared observable pattern
+                    state.deviceInfoList = allDevices
+                    state.allFetchedClasses = emptyList()
+                    state.selectedDeviceIndex = 0
+                    state.isFetchingDevices = false
+                    state.pushMode(AppMode.DEBUG_DEVICE_SELECTION)
+                    state.sharedDeviceSelectionReady.value = true
+                }
+            }
+        }
+    }
+
+    fun initIosAppSelection(state: AppState, scope: CoroutineScope) {
+        state.isFetchingDevices = true
+        scope.launch {
+            try {
+                discoverIosApps(state)
+                if (state.iosAppPaths.isEmpty()) {
+                    state.iosRepackageError = "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                }
+            } catch (e: Exception) {
+                state.iosRepackageError = "Error discovering apps: ${e.message}"
+            }
+            state.isFetchingDevices = false
+            state.pushMode(AppMode.IOS_APP_SELECTION)
+            state.sharedIosAppSelectionReady.value = true
+        }
+    }
+
+    private fun discoverIosApps(state: AppState) {
+        val home = Shell.execute("echo \$HOME").trim()
+        if (home.isBlank()) {
+            throw Exception("Cannot determine home directory")
+        }
+        val derivedDataDir = "$home/Library/Developer/Xcode/DerivedData"
+        // Find .app directories modified in the last 48 hours (-mtime -2)
+        val output = Shell.execute("find $derivedDataDir -maxdepth 5 -type d -name '*.app' -mtime -2 2>/dev/null")
+        state.iosAppPaths = output.trim().lines().filter { it.isNotBlank() && it.endsWith(".app") }
+        state.selectedIosAppIndex = 0
+    }
+
+    fun proceedWithDebugSetup(state: AppState, scope: CoroutineScope) {
+        if (state.selectedPlatform == "iOS") {
+            initIosAppSelection(state, scope)
+            return
+        }
         state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
         state.gadgetErrorMessage = null
         state.gadgetSpinnerFrame = 0
@@ -232,7 +313,13 @@ object CommandExecutor {
 
             // Smart check: if bridge is already responding, don't restart it
             if (!RpcClient.ping()) {
-                restartBridge(state, scope)
+                // Start bridge in background
+                val logFile = "${CacheManager.cacheDir()}/bridge.log"
+                val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
+                val serialArg = if (state.adbSerial != null) " --serial ${state.adbSerial}" else ""
+                val bridgeCmd = getBridgeCommand(serialArg)
+                system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
+                delay(1000) // Give bridge time to start before first ping
             }
 
             var bridgeReady = false
@@ -256,14 +343,14 @@ object CommandExecutor {
             var isFinished = false
             while (!isFinished) {
                 val (progress, error) = RpcClient.injectGadgetFromScratch()
-                
+
                 if (error != null) {
                     state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error)
                     isFinished = true
                 } else if (progress != null) {
                     state.sharedGadgetSteps.value = progress.steps
                     state.sharedBridgeLogs.value = progress.logs
-                    
+
                     when (progress.status) {
                         "completed" -> {
                             state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
@@ -512,57 +599,91 @@ object CommandExecutor {
         remove(dtsPath)
     }
 
-    @OptIn(ExperimentalForeignApi::class)
-    fun fetchIosCertificates(state: AppState) {
-        state.iosCertList = emptyList()
-        val pipe = popen("security find-identity -v -p codesigning", "r") ?: return
-        memScoped {
-            val buffer = allocArray<ByteVar>(1024)
-            val certs = mutableListOf<String>()
-            while (fgets(buffer, 1024, pipe) != null) {
-                val line = buffer.toKString().trim()
-                if (line.contains(")")) {
-                    val parts = line.split("\"")
-                    if (parts.size >= 2) {
-                        val name = parts[1]
-                        val idParts = line.split(" ")
-                        if (idParts.size >= 2) {
-                            val id = idParts[1]
-                            certs.add("$id \"$name\"")
-                        }
+    fun startIosInjection(appPath: String, state: AppState, scope: CoroutineScope) {
+        state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
+        state.gadgetErrorMessage = null
+        state.gadgetSpinnerFrame = 0
+        state.gadgetInjectionSteps = emptyList()
+        state.pushMode(AppMode.IOS_REPACKAGE_SETUP)
+
+        scope.launch {
+            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
+
+            // Start bridge if not already running (iOS doesn't use --serial for adb)
+            if (!RpcClient.ping()) {
+                val logFile = "${CacheManager.cacheDir()}/bridge.log"
+                val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
+                val bridgeCmd = getBridgeCommand("")
+                system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
+                delay(1000)
+            }
+
+            var bridgeReady = false
+            for (i in 0..30) {
+                if (RpcClient.ping()) {
+                    bridgeReady = true
+                    break
+                }
+                delay(500)
+            }
+
+            if (!bridgeReady) {
+                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Bridge not ready. Is it running?")
+                return@launch
+            }
+
+            // 1. Initial RPC to inject gadget and start monitor thread in bridge
+            val (success, error) = RpcClient.patchAndInstallIosApp(appPath)
+            if (!success) {
+                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error ?: "Failed to start iOS injection")
+                return@launch
+            }
+
+            // 2. Poll for status until Success or Error (with timeout: 5 minutes)
+            val startTime = currentTimeMillis()
+            val timeoutMs = 5 * 60 * 1000L
+            var consecutiveErrors = 0
+
+            while (state.running && state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
+                if (currentTimeMillis() - startTime > timeoutMs) {
+                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "iOS injection timeout (5 min). Check if Xcode deploy is still running.")
+                    break
+                }
+
+                val (status, result) = RpcClient.checkIosDeployStatus()
+
+                if (status == GadgetInstallStatus.ERROR) {
+                    state.sharedGadgetResult.value = Pair(status, null)
+                    break
+                }
+
+                if (result != null) {
+                    state.sharedGadgetSteps.value = result.steps
+                    consecutiveErrors = 0
+                } else {
+                    consecutiveErrors++
+                    if (consecutiveErrors > 20) {
+                        state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Lost connection to bridge. Check if bridge.py is still running.")
+                        break
                     }
                 }
+
+                if (status == GadgetInstallStatus.SUCCESS) {
+                    state.sharedGadgetResult.value = Pair(status, null)
+                    break
+                }
+
+                delay(1000)
             }
-            state.iosCertList = certs
         }
-        pclose(pipe)
     }
 
     fun handleIosRepackage(state: AppState, scope: CoroutineScope) {
         if (state.iosIpaPath.isEmpty()) {
-            state.iosRepackageError = "Please enter the path to the .ipa file"
+            state.iosRepackageError = "Please enter the path to the .app folder"
             return
         }
-        if (state.iosCertList.isEmpty() || state.iosSelectedCertIndex !in state.iosCertList.indices) {
-            state.iosRepackageError = "Please select a signing certificate"
-            return
-        }
-
-        val certLine = state.iosCertList[state.iosSelectedCertIndex]
-        val certId = certLine.split(" ")[0]
-
         state.iosRepackageError = null
-        state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
-        
-        scope.launch {
-            val (success, error) = RpcClient.patchAndInstallIosApp(state.iosIpaPath, certId)
-            if (success) {
-                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
-                state.pushMode(AppMode.DEBUG_ENTRYPOINT)
-            } else {
-                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error ?: "Unknown error during iOS repackaging")
-                state.iosRepackageError = error
-            }
-        }
+        startIosInjection(state.iosIpaPath, state, scope)
     }
 }

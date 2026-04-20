@@ -73,16 +73,8 @@ fun main(args: Array<String>) {
     state.commandHistory = HistoryStore.load()
     val scope = CoroutineScope(Dispatchers.Default)
 
-    // Try to fetch package name at startup to load hooks early
-    scope.launch {
-        val ok = RpcClient.ping()
-        if (ok) {
-            val (pkg, _) = RpcClient.getPackageName()
-            if (pkg != null) {
-                loadAndSyncHooks(state, scope, pkg)
-            }
-        }
-    }
+    // Hooks are loaded after the debug session is established, not on startup,
+    // because getPackageName() requires an active Frida session which doesn't exist yet.
 
     // Bridge logs background reading
     scope.launch {
@@ -91,11 +83,11 @@ fun main(args: Array<String>) {
             val canShowBridgeLogs = when (state.mode) {
                 AppMode.DEBUG_ENTRYPOINT,
                 AppMode.DEFAULT -> {
-                    // Only use file reading if NOT actively polling via RPC in CommandExecutor
-                    state.gadgetInstallStatus == GadgetInstallStatus.IDLE || 
-                    state.gadgetInstallStatus == GadgetInstallStatus.SUCCESS || 
+                    state.gadgetInstallStatus == GadgetInstallStatus.IDLE ||
+                    state.gadgetInstallStatus == GadgetInstallStatus.SUCCESS ||
                     state.gadgetInstallStatus == GadgetInstallStatus.ERROR
                 }
+                AppMode.IOS_REPACKAGE_SETUP -> true
                 else -> false
             }
             if (canShowBridgeLogs) {
@@ -473,7 +465,7 @@ fun main(args: Array<String>) {
                         state.iosSelectedCertIndex = (state.iosSelectedCertIndex + 1) % state.iosCertList.size
                         Renderer.render(state)
                     }
-                } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
+                } else if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex + 1).coerceAtMost(hooks.size - 1)
@@ -504,6 +496,18 @@ fun main(args: Array<String>) {
                             (state.selectedClassIndex + 1).coerceAtMost(state.displayedClasses.size - 1)
                         Renderer.render(state)
                     }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty()) {
+                        state.selectedDeviceIndex =
+                            (state.selectedDeviceIndex + 1).coerceAtMost(state.deviceInfoList.size - 1)
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+                    if (state.iosAppPaths.isNotEmpty()) {
+                        state.selectedIosAppIndex =
+                            (state.selectedIosAppIndex + 1).coerceAtMost(state.iosAppPaths.size - 1)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
                     val rows = state.buildInspectRows()
                     if (rows.isNotEmpty()) {
@@ -520,7 +524,7 @@ fun main(args: Array<String>) {
                         state.iosSelectedCertIndex = if (state.iosSelectedCertIndex > 0) state.iosSelectedCertIndex - 1 else state.iosCertList.size - 1
                         Renderer.render(state)
                     }
-                } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
+                } else if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex - 1).coerceAtLeast(0)
@@ -547,6 +551,18 @@ fun main(args: Array<String>) {
                     if (state.displayedClasses.isNotEmpty()) {
                         state.selectedClassIndex =
                             (state.selectedClassIndex - 1).coerceAtLeast(0)
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty()) {
+                        state.selectedDeviceIndex =
+                            (state.selectedDeviceIndex - 1).coerceAtLeast(0)
+                        Renderer.render(state)
+                    }
+                } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+                    if (state.iosAppPaths.isNotEmpty()) {
+                        state.selectedIosAppIndex =
+                            (state.selectedIosAppIndex - 1).coerceAtLeast(0)
                         Renderer.render(state)
                     }
                 } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
@@ -619,9 +635,31 @@ fun main(args: Array<String>) {
                             }
                         }
                     }
+                } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+                    if (state.iosAppPaths.isNotEmpty() && state.selectedIosAppIndex in state.iosAppPaths.indices) {
+                        val selectedApp = state.iosAppPaths[state.selectedIosAppIndex]
+                        state.iosIpaPath = selectedApp
+                        state.popMode()
+                        CommandExecutor.startIosInjection(selectedApp, state, scope)
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
                     CommandExecutor.handleIosRepackage(state, scope)
                     Renderer.render(state)
+                } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+                    if (state.deviceInfoList.isNotEmpty() && state.selectedDeviceIndex in state.deviceInfoList.indices) {
+                        val selectedDevice = state.deviceInfoList[state.selectedDeviceIndex]
+                        state.adbSerial = selectedDevice.serial
+                        state.selectedPlatform = selectedDevice.status
+                        state.popMode()
+                        
+                        if (selectedDevice.status == "iOS") {
+                            CommandExecutor.initIosAppSelection(state, scope)
+                        } else {
+                            CommandExecutor.proceedWithDebugSetup(state, scope)
+                        }
+                        Renderer.render(state)
+                    }
                 } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
                     CommandExecutor.handleDebugEntrypoint(state, scope)
                     Renderer.render(state)
@@ -790,6 +828,15 @@ fun main(args: Array<String>) {
 
             is KeyEvent.Esc -> {
                 if (state.mode == AppMode.IOS_REPACKAGE_SETUP || state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
+                    if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+                        state.gadgetInstallStatus = GadgetInstallStatus.IDLE
+                        state.gadgetErrorMessage = null
+                        state.gadgetInjectionSteps = emptyList()
+                        state.sharedGadgetResult.value = null
+                        state.sharedGadgetSteps.value = null
+                        state.bridgeLogs = emptyList()
+                        state.sharedBridgeLogs.value = null
+                    }
                     state.inputBuffer = ""
                     state.cursorPosition = 0
                     state.popMode()
@@ -850,12 +897,15 @@ fun main(args: Array<String>) {
             is KeyEvent.Timeout -> {
                 var needsRender = false
 
-                val updatedLogs = state.sharedBridgeLogs.value
-                if (updatedLogs != null) {
-                    state.sharedBridgeLogs.value = null
-                    state.bridgeLogs = updatedLogs
-                    // Always render logs if we are in a mode that shows them or during setup
-                    if (state.mode == AppMode.DEBUG_ENTRYPOINT || state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
+                // Increment counter for periodic updates (every 500ms = 10 x 50ms)
+                state.bridgeActivityUpdateCounter++
+                if (state.bridgeActivityUpdateCounter >= 10) {
+                    state.bridgeActivityUpdateCounter = 0
+
+                    val updatedLogs = state.sharedBridgeLogs.value
+                    if (updatedLogs != null) {
+                        state.sharedBridgeLogs.value = null
+                        state.bridgeLogs = updatedLogs
                         needsRender = true
                     }
                 }
@@ -873,15 +923,18 @@ fun main(args: Array<String>) {
                     }
                 }
 
-                // Gadget install status polling
+                // Gadget install status polling - always render for smooth spinner animation
                 if (state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
                     state.gadgetSpinnerFrame++
                     needsRender = true
-                    
-                    val stepsUpdate = state.sharedGadgetSteps.value
-                    if (stepsUpdate != null) {
-                        state.gadgetInjectionSteps = stepsUpdate
-                        needsRender = true
+
+                    // Only check for step updates every 500ms
+                    if (state.bridgeActivityUpdateCounter == 0) {
+                        val stepsUpdate = state.sharedGadgetSteps.value
+                        if (stepsUpdate != null) {
+                            state.gadgetInjectionSteps = stepsUpdate
+                            needsRender = true
+                        }
                     }
 
                     val gadgetUpdate = state.sharedGadgetResult.value
@@ -891,16 +944,21 @@ fun main(args: Array<String>) {
                         state.gadgetErrorMessage = gadgetUpdate.second
 
                         if (gadgetUpdate.first == GadgetInstallStatus.SUCCESS) {
-                            // Reset gadget state and proceed with tmux
                             state.gadgetInstallStatus = GadgetInstallStatus.IDLE
                             state.gadgetErrorMessage = null
-                            
+
                             // Re-apply active hooks to the new session
                             scope.launch { RpcClient.syncAllHooks(state.activeHooks) }
-                            
+
                             Renderer.render(state)
-                            CommandExecutor.proceedWithTmux(state)
-                            state.mode = AppMode.DEBUG_ENTRYPOINT
+
+                            // iOS goes directly to class filtering, Android uses tmux
+                            if (state.selectedPlatform == "iOS") {
+                                CommandExecutor.initDebugClassFilter(state, scope)
+                            } else {
+                                CommandExecutor.proceedWithTmux(state)
+                                state.mode = AppMode.DEBUG_ENTRYPOINT
+                            }
                             needsRender = true
                         }
                     }
@@ -916,7 +974,9 @@ fun main(args: Array<String>) {
                     }
                 }
 
-                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || state.isFetchingInstances || state.isFetchingInstancesList) {
+                if ((state.mode == AppMode.DEBUG_CLASS_FILTER && state.isFetchingClasses) || 
+                    state.isFetchingInstances || state.isFetchingInstancesList || 
+                    state.isFetchingDevices || state.mode == AppMode.IOS_APP_SELECTION) {
                     state.gadgetSpinnerFrame++
                     needsRender = true
                 }
@@ -987,6 +1047,32 @@ fun main(args: Array<String>) {
                             needsRender = true
                         }
                     }
+                }
+
+                // Handle device enumeration (happens from DEFAULT or DEBUG_DEVICE_SELECTION mode)
+                if (state.isFetchingDevices) {
+                    // Handle device enumeration errors
+                    val err = state.sharedRpcError.value
+                    if (err != null) {
+                        state.rpcError = err
+                        state.sharedRpcError.value = null
+                        state.isFetchingDevices = false
+                        needsRender = true
+                    }
+                }
+
+                // Handle device selection ready signal
+                val deviceReady = state.sharedDeviceSelectionReady.value
+                if (deviceReady == true) {
+                    state.sharedDeviceSelectionReady.value = null
+                    needsRender = true
+                }
+
+                // Handle iOS app selection ready signal
+                val iosAppReady = state.sharedIosAppSelectionReady.value
+                if (iosAppReady == true) {
+                    state.sharedIosAppSelectionReady.value = null
+                    needsRender = true
                 }
 
                 if (state.mode == AppMode.DEBUG_INSPECT_CLASS) {
