@@ -252,15 +252,31 @@ class FridaBridge:
     def _get_front_app(self, device):
         return device.get_frontmost_application()
 
+    def _adb_run(self, args, shell=False, capture_output=True, text=True, check=False, timeout=None):
+        """Helper to run ADB commands consistently with the serial flag."""
+        adb_base = ["adb"]
+        if self.serial:
+            adb_base.extend(["-s", self.serial])
+        
+        if shell:
+            # If shell=True, we expect a string or we join the list
+            if isinstance(args, list):
+                cmd_str = " ".join(adb_base) + " " + " ".join(args)
+            else:
+                cmd_str = " ".join(adb_base) + " " + args
+            logging.debug(f"[adb] Running: {cmd_str}")
+            return subprocess.run(cmd_str, shell=True, capture_output=capture_output, text=text, check=check, timeout=timeout)
+        else:
+            full_cmd = adb_base + args
+            logging.debug(f"[adb] Running: {full_cmd}")
+            return subprocess.run(full_cmd, capture_output=capture_output, text=text, check=check, timeout=timeout)
+
     # Fallback method to discover the frontmost application's package name using ADB shell dumpsys
     def _get_front_app_using_adb(self):
         logging.info("[_get_front_app_using_adb] Failed to get frontmost app after retries, attempting fallback via adb...")
         try:
-            adb_cmd = ["adb"]
-            if self.serial:
-                adb_cmd.extend(["-s", self.serial])
-            adb_cmd.extend(["shell", "dumpsys", "window", "|", "grep", "-E", "\"mCurrentFocus\"", "|", "xargs", "|", "cut", "-d' '", "-f3", "|", "cut", "-d'/'", "-f1"])
-            result = subprocess.run(adb_cmd, shell=True, capture_output=True, text=True)
+            # We use shell=True because of the pipes
+            result = self._adb_run("shell \"dumpsys window | grep -E 'mCurrentFocus' | xargs | cut -d' ' -f3 | cut -d'/' -f1\"", shell=True)
             if result.returncode == 0:
                 package_name = result.stdout.strip()
                 logging.info(f"[_get_front_app_using_adb] Fallback got frontmost package: {package_name}")
@@ -272,17 +288,13 @@ class FridaBridge:
 
     # Fallback method to get the PID of a given package name using ADB shell pidof
     def _get_front_app_pid_using_adb(self, package_name):
-        adb_cmd = ["adb"]
-        if self.serial:
-            adb_cmd.extend(["-s", self.serial])
-        adb_cmd.extend(["shell", "pidof", package_name])
-        result = subprocess.run(" ".join(adb_cmd), shell=True, capture_output=True, text=True)
-        if result.returncode == 0:
-            pid = int(result.stdout.strip())
+        result = self._adb_run(["shell", "pidof", package_name])
+        if result.returncode == 0 and result.stdout.strip():
+            pid = int(result.stdout.strip().split()[0]) # pidof can return multiple PIDs
             logging.info(f"[_get_front_app_pid_using_adb] Got PID {pid} for package {package_name} via adb fallback")
             return pid
         else:
-            raise Exception(f"[_get_front_app_pid_using_adb] Could not get pid of frontmost app: {result}")
+            raise Exception(f"[_get_front_app_pid_using_adb] Could not get pid of frontmost app: {result.stderr}")
 
     # Orchestrates the retrieval of the target app's PID and package, trying Frida first, then falling back to ADB
     def _get_application_pid_and_package(self):
@@ -300,26 +312,13 @@ class FridaBridge:
 
     # Checks if the Frida Gadget library is on the device, downloads it if missing based on architecture, and pushes it via ADB
     def _pushGadget(self):
-        adb_base = ["adb"]
-        if self.serial:
-            adb_base.extend(["-s", self.serial])
-
-        gadgetCheck = subprocess.run(
-            adb_base + ["shell", "ls", "/data/local/tmp/frida-gadget.so"],
-            capture_output=True, text=True
-        )
-        configCheck = subprocess.run(
-            adb_base + ["shell", "ls", "/data/local/tmp/frida-gadget.config"],
-            capture_output=True, text=True
-        )
+        gadgetCheck = self._adb_run(["shell", "ls", "/data/local/tmp/frida-gadget.so"])
+        configCheck = self._adb_run(["shell", "ls", "/data/local/tmp/frida-gadget.config"])
 
 
         if gadgetCheck.returncode == 0 and configCheck.returncode == 0:
             # Check if frida-gadget.so on device is a valid ELF
-            magicCheck = subprocess.run(
-                adb_base + ["shell", "dd", "if=/data/local/tmp/frida-gadget.so", "bs=1", "count=4", "2>/dev/null"],
-                capture_output=True
-            ).stdout
+            magicCheck = self._adb_run(["shell", "dd", "if=/data/local/tmp/frida-gadget.so", "bs=1", "count=4", "2>/dev/null"], capture_output=True, text=False).stdout
             if magicCheck == b'\x7fELF':
                 logging.info("[_pushGadget] frida-gadget.so and frida-gadget.config already on device and valid, skipping push")
                 return { "status": "ok" }
@@ -328,10 +327,7 @@ class FridaBridge:
 
         logging.info("[_pushGadget] frida-gadget.so or frida-gadget.config not found or invalid on device, downloading and pushing...")
 
-        device_arch_raw = subprocess.run(
-            adb_base + ["shell", "uname", "-m"],
-            capture_output=True, text=True
-        ).stdout.strip().lower()
+        device_arch_raw = self._adb_run(["shell", "uname", "-m"]).stdout.strip().lower()
 
         if "aarch64" in device_arch_raw:
             device_arch_parsed = "arm64"
@@ -380,15 +376,12 @@ class FridaBridge:
         
         # adb push to device
         logging.info(f"[_pushGadget] Pushing {gadget_path} to device...")
-        r = subprocess.run(
-            adb_base + ["push", gadget_path, "/data/local/tmp/frida-gadget.so"],
-            capture_output=True, text=True
-        )
+        r = self._adb_run(["push", gadget_path, "/data/local/tmp/frida-gadget.so"])
         if r.returncode != 0:
             raise Exception(f"[_pushGadget] adb push failed: {r.stderr}")
         
         # Ensure correct permissions
-        subprocess.run(adb_base + ["shell", "chmod", "755", "/data/local/tmp/frida-gadget.so"], capture_output=True)
+        self._adb_run(["shell", "chmod", "755", "/data/local/tmp/frida-gadget.so"])
         
         logging.info(f"[_pushGadget] adb push ok: {r.stdout.strip()}")
 
@@ -397,15 +390,7 @@ class FridaBridge:
         self._detach_frida()
 
         logging.info(f"[_prepare_gadget] Setting up adb forward tcp:{self.gadget_port} jdwp:{pid}")
-        adb_cmd = ["adb"]
-        if self.serial:
-            adb_cmd.extend(["-s", self.serial])
-        adb_cmd.extend(["forward", f"tcp:{self.gadget_port}", f"jdwp:{pid}"])
-
-        r = subprocess.run(
-            adb_cmd,
-            capture_output=True, text=True
-        )
+        r = self._adb_run(["forward", f"tcp:{self.gadget_port}", f"jdwp:{pid}"])
         if r.returncode != 0:
             raise Exception(f"[_prepare_gadget] adb forward failed: {r.stderr}")
 
@@ -414,36 +399,26 @@ class FridaBridge:
     # Utility method to identify the foreground app's package name and PID directly via ADB commands
     def _get_front_package_and_pid(self):
             """Descobre o package e o PID do app em primeiro plano via ADB."""
-            adb_cmd = ["adb"]
-            if self.serial:
-                adb_cmd.extend(["-s", self.serial])
-
             logging.info("[inject] Getting frontmost package and PID...")
-            pkg_cmd = adb_cmd.copy() + ["shell", "dumpsys", "window", "|", "grep", "-E", "\"mCurrentFocus\"", "|", "xargs", "|", "cut", "-d' '", "-f3", "|", "cut", "-d'/'", "-f1"]
-            r_pkg = subprocess.run(" ".join(pkg_cmd), shell=True, capture_output=True, text=True)
-            if r_pkg.returncode != 0:
-                raise Exception(f"Failed to get frontmost package: {r_pkg.stderr}")
+            result = self._adb_run("shell \"dumpsys window | grep -E 'mCurrentFocus' | xargs | cut -d' ' -f3 | cut -d'/' -f1\"", shell=True)
+            if result.returncode != 0:
+                raise Exception(f"Failed to get frontmost package: {result.stderr}")
             
-            package_name = r_pkg.stdout.strip()
+            package_name = result.stdout.strip()
 
-            pid_cmd = adb_cmd.copy() + ["shell", "pidof", package_name]
-            r_pid = subprocess.run(" ".join(pid_cmd), shell=True, capture_output=True, text=True)
-            if r_pid.returncode != 0:
-                raise Exception(f"Failed to get PID for {package_name}: {r_pid.stderr}")
+            result_pid = self._adb_run(["shell", "pidof", package_name])
+            if result_pid.returncode != 0:
+                raise Exception(f"Failed to get PID for {package_name}: {result_pid.stderr}")
             
-            pid = r_pid.stdout.strip()
+            pid = result_pid.stdout.strip().split()[0]
             logging.info(f"[inject] Target: {package_name} (PID: {pid})")
             return package_name, pid
 
     # Idempotent helper to map local TCP ports to the device's JDWP and Gadget ports only if not already mapped
     def _setup_forwards_if_needed(self, pid):
         """Only recreates ADB forwards if they don't exist for the current PID."""
-        adb_cmd = ["adb"]
-        if self.serial:
-            adb_cmd.extend(["-s", self.serial])
-
         # Check current state
-        r_list = subprocess.run(adb_cmd + ["forward", "--list"], capture_output=True, text=True)
+        r_list = self._adb_run(["forward", "--list"])
         current_forwards = r_list.stdout.strip()
 
         expected_jdwp = f"tcp:{self.gadget_port} jdwp:{pid}"
@@ -454,13 +429,13 @@ class FridaBridge:
             return True
 
         logging.info("[inject] Setting up new ADB forwards...")
-        subprocess.run(adb_cmd + ["forward", "--remove-all"], capture_output=True)
+        self._adb_run(["forward", "--remove-all"])
 
-        r_jdwp = subprocess.run(adb_cmd + ["forward", f"tcp:{self.gadget_port}", f"jdwp:{pid}"], capture_output=True, text=True)
+        r_jdwp = self._adb_run(["forward", f"tcp:{self.gadget_port}", f"jdwp:{pid}"])
         if r_jdwp.returncode != 0:
             raise Exception(f"Failed to set JDWP forward: {r_jdwp.stderr}")
 
-        r_gadget = subprocess.run(adb_cmd + ["forward", "tcp:27042", "tcp:27042"], capture_output=True, text=True)
+        r_gadget = self._adb_run(["forward", "tcp:27042", "tcp:27042"])
         if r_gadget.returncode != 0:
             raise Exception(f"Failed to set Gadget forward: {r_gadget.stderr}")
         
@@ -542,41 +517,30 @@ class FridaBridge:
     # =================================================================
 
     def _is_device_rooted(self):
-        """Check if the device is rooted by running 'which su' via ADB."""
-        adb_cmd = ["adb"]
-        if self.serial:
-            adb_cmd.extend(["-s", self.serial])
-        result = subprocess.run(
-            adb_cmd + ["shell", "which", "su"],
-            capture_output=True, text=True
-        )
-        is_rooted = result.returncode == 0 and result.stdout.strip() != ""
-        logging.info(f"[root] Device rooted: {is_rooted} (su path: {result.stdout.strip()!r})")
+        """Check if the device is rooted by running 'id' via 'su -c'."""
+        # Test 1: 'which su'
+        result = self._adb_run(["shell", "which", "su"])
+        if result.returncode != 0 or not result.stdout.strip():
+            logging.info("[root] 'su' binary not found via 'which su'")
+            return False
+
+        # Test 2: Actually try to execute something as root
+        result = self._adb_run(["shell", "su", "-c", "id -u"])
+        is_rooted = result.returncode == 0 and result.stdout.strip() == "0"
+        logging.info(f"[root] Device rooted (id=0): {is_rooted}")
         return is_rooted
 
     def _is_app_debuggable(self, package_name):
         """Check if the target app has debuggable=true in its manifest."""
-        adb_cmd = ["adb"]
-        if self.serial:
-            adb_cmd.extend(["-s", self.serial])
-        result = subprocess.run(
-            " ".join(adb_cmd + ["shell", "dumpsys", "package", package_name, "|", "grep", "-i", "debuggable"]),
-            shell=True, capture_output=True, text=True
-        )
+        # Ensure command is a single string for shell=True with pipes
+        result = self._adb_run(f"shell \"dumpsys package {package_name} | grep -i debuggable\"", shell=True)
         is_debuggable = "debuggable" in result.stdout.lower()
         logging.info(f"[root] App '{package_name}' debuggable: {is_debuggable}")
         return is_debuggable
 
     def _ensure_frida_server_binary(self):
         """Download frida-server matching the current frida version and push it to the device."""
-        adb_base = ["adb"]
-        if self.serial:
-            adb_base.extend(["-s", self.serial])
-
-        device_arch_raw = subprocess.run(
-            adb_base + ["shell", "uname", "-m"],
-            capture_output=True, text=True
-        ).stdout.strip().lower()
+        device_arch_raw = self._adb_run(["shell", "uname", "-m"]).stdout.strip().lower()
 
         if "aarch64" in device_arch_raw:
             device_arch = "arm64"
@@ -618,32 +582,25 @@ class FridaBridge:
 
         remote_path = "/data/local/tmp/barbatos-server"
         logging.info(f"[frida-server] Pushing binary to {remote_path}...")
-        r = subprocess.run(
-            adb_base + ["push", server_local, remote_path],
-            capture_output=True, text=True
-        )
+        r = self._adb_run(["push", server_local, remote_path])
         if r.returncode != 0:
             raise Exception(f"[frida-server] adb push failed: {r.stderr}")
-        subprocess.run(adb_base + ["shell", "chmod", "755", remote_path], capture_output=True)
+        self._adb_run(["shell", "chmod", "755", remote_path])
         logging.info(f"[frida-server] Binary pushed and chmod done.")
 
     def _start_frida_server(self):
         """Kill any running instance and start frida-server as root via su -c."""
-        adb_base = ["adb"]
-        if self.serial:
-            adb_base.extend(["-s", self.serial])
-
         remote_path = "/data/local/tmp/barbatos-server"
 
         # Kill existing instances
-        subprocess.run(
-            " ".join(adb_base + ["shell", "su", "-c",
-                                  "'pkill -f barbatos-server 2>/dev/null; pkill -f frida-server 2>/dev/null; true'"]),
-            shell=True, capture_output=True
-        )
+        self._adb_run("shell su -c 'pkill -f barbatos-server 2>/dev/null; pkill -f frida-server 2>/dev/null; true'", shell=True)
         time.sleep(1)
 
         logging.info(f"[frida-server] Starting as root...")
+        adb_base = ["adb"]
+        if self.serial:
+            adb_base.extend(["-s", self.serial])
+        
         subprocess.Popen(
             adb_base + ["shell", "su", "-c", f"{remote_path}"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -697,9 +654,9 @@ class FridaBridge:
             is_rooted = self._is_device_rooted()
             is_debuggable = self._is_app_debuggable(package_name)
 
-            if is_rooted and not is_debuggable:
+            if is_rooted:
                 # ── ROOT PATH ────────────────────────────────────────────────
-                logging.info("[*] Root device + non-debuggable app → Root Path (frida-server).")
+                logging.info("[*] Root device detected → Root Path (frida-server).")
                 self.injection_progress["steps"] = [
                     {"id": "get_target",     "title": "Identify target application",      "status": "completed"},
                     {"id": "prepare_server", "title": "Prepare frida-server on device",   "status": "pending"},
@@ -760,8 +717,7 @@ class FridaBridge:
                     self._update_progress("push_gadget", "completed")
 
                     self._update_progress("inject_jdwp", "running")
-                    adb_clear_cmd = f"adb {'-s ' + self.serial if self.serial else ''} shell am clear-debug-app"
-                    subprocess.run(adb_clear_cmd, shell=True, capture_output=True)
+                    self._adb_run(["shell", "am", "clear-debug-app"])
                     self._inject_with_retry(package_name)
                     time.sleep(2)
                     self._update_progress("inject_jdwp", "completed")
@@ -881,25 +837,14 @@ class FridaBridge:
 
     # Force closes and subsequently restarts the target Android application using ADB monkey events
     def _force_restart_app(self, package_name):
-        adb_base = ["adb"]
-        if self.serial:
-            adb_base.extend(["-s", self.serial])
-            
         logging.info(f"[*] Forcing stop of app: {package_name}")
-        
-        subprocess.run(
-            adb_base + ["shell", "am", "force-stop", package_name],
-            capture_output=True
-        )
+        self._adb_run(["shell", "am", "force-stop", package_name])
         
         time.sleep(1) 
         
         logging.info(f"[*] Restarting app: {package_name}")
         
-        r_start = subprocess.run(
-            adb_base + ["shell", "monkey", "-p", package_name, "-c", "android.intent.category.LAUNCHER", "1"],
-            capture_output=True, text=True
-        )
+        r_start = self._adb_run(["shell", "monkey", "-p", package_name, "-c", "android.intent.category.LAUNCHER", "1"])
         
         if r_start.returncode != 0 or "monkey aborted" in r_start.stderr.lower():
             raise Exception(f"[-] Failed to restart the app: {r_start.stderr}")
@@ -909,22 +854,21 @@ class FridaBridge:
 
     # Attempts JDWP injection and applies an automatic app-restart fallback if the JDWP port is busy/locked
     def _inject_with_retry(self, package_name):
+        result = {}
         try:
             result = self._run_jdwp(package_name=package_name)
         except Exception as e:
-            pass
+            logging.warning(f"Initial JDWP attempt failed: {e}")
+
         try:
             if result.get("status") == "unknown_error" and "Failed to handshake" in result.get("error_message", ""):
+                logging.info("[inject] Handshake failed, attempting app restart fallback...")
                 self._force_restart_app(package_name)
                 
                 new_pid = self._get_front_app_pid_using_adb(package_name)
                 
-                adb_cmd = ["adb"]
-                if self.serial:
-                    adb_cmd.extend(["-s", self.serial])
-                
-                subprocess.run(" ".join(adb_cmd + ["forward", f"tcp:{self.gadget_port}", f"jdwp:{new_pid}"]), shell=True, capture_output=True)
-                subprocess.run(" ".join(adb_cmd + ["forward", "tcp:27042", "tcp:27042"]), shell=True, capture_output=True)
+                self._adb_run(["forward", f"tcp:{self.gadget_port}", f"jdwp:{new_pid}"])
+                self._adb_run(["forward", "tcp:27042", "tcp:27042"])
                 
                 result = self._run_jdwp(package_name=package_name)
                 
@@ -945,6 +889,7 @@ class FridaBridge:
         start_time = time.time()
         
         try:
+            logging.info(f"[_monitor_and_hijack_ios] Starting monitor for {bundle_id} on {device_id}...")
             while time.time() - start_time < max_wait:
                 # 1. Check if xcodebuild is running
                 res_mac = subprocess.run("ps aux | grep -i xcodebuild | grep -v grep", shell=True, capture_output=True, text=True)
@@ -963,10 +908,9 @@ class FridaBridge:
                 res_frida = subprocess.run(['frida-ps', '-D', device_id, '-a'], capture_output=True, text=True)
                 if bundle_id in res_frida.stdout:
                     # Xcode launched it! Time to hijack.
+                    logging.info(f"[_monitor_and_hijack_ios] App {bundle_id} detected. Killing Xcode session...")
                     self._update_ios_progress("wait_xcode", "completed")
                     self._update_ios_progress("hijack_process", "running")
-                    
-                    logging.info(f"[_monitor_and_hijack_ios] App {bundle_id} detected. Killing Xcode session...")
                     
                     try:
                         subprocess.run(['devicectl', 'device', 'process', 'terminate', '--device', device_id, bundle_id], capture_output=True)
@@ -985,6 +929,7 @@ class FridaBridge:
                     res_launch = subprocess.run(launch_cmd, capture_output=True, text=True)
                     
                     if res_launch.returncode != 0 and "failed to get the task" not in res_launch.stderr:
+                        logging.error(f"[_monitor_and_hijack_ios] idevicedebug failed: {res_launch.stderr}")
                         raise RuntimeError(f"idevicedebug failed: {res_launch.stderr}")
 
                     self._update_ios_progress("hijack_process", "completed")
@@ -997,6 +942,7 @@ class FridaBridge:
 
                 time.sleep(2)
             
+            logging.error(f"[_monitor_and_hijack_ios] Timed out waiting for {bundle_id}")
             self._update_ios_progress("wait_xcode", "error", global_status="error", error="Timed out waiting for Xcode")
 
         except Exception as e:
