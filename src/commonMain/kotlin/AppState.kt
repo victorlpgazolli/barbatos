@@ -97,6 +97,7 @@ data class AppState(
     var deviceInfoList: List<DeviceInfo> = emptyList(),
     var isFetchingDevices: Boolean = false,
     var selectedDeviceIndex: Int = 0,
+    var selectedPlatform: String = "Android",
     var rpcError: String? = null,
     
     var instanceCounts: MutableMap<String, Int> = mutableMapOf(),

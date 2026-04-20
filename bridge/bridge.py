@@ -185,7 +185,24 @@ class FridaBridge:
         self.gadget_port = 8700
         self.gadget_target = "127.0.0.1"
         self.is_injecting_gadget = False
-        self.ios_deploy_status = {"state": "idle", "message": ""}
+        
+        # Buffer to store the last N logs for the TUI to fetch
+        self.log_buffer = []
+        handler = LogBufferHandler(self.log_buffer)
+        handler.setFormatter(logging.Formatter('%(message)s'))
+        logging.getLogger().addHandler(handler)
+
+        self.ios_deploy_status = {
+            "status": "idle",
+            "steps": [
+                {"id": "inject_gadget", "title": "Inject Frida Gadget", "status": "pending"},
+                {"id": "wait_xcode", "title": "Waiting for Xcode build & deploy...", "status": "pending"},
+                {"id": "hijack_process", "title": "Hijack process for debugging", "status": "pending"},
+                {"id": "load_agent", "title": "Load Frida instrumentation agent", "status": "pending"}
+            ],
+            "logs": [],
+            "error_message": None
+        }
 
         # Track the progress of the gadget injection sequence
         self.injection_progress = {
@@ -200,11 +217,17 @@ class FridaBridge:
             "error_message": None
         }
 
-        # Buffer to store the last N logs for the TUI to fetch
-        self.log_buffer = []
-        handler = LogBufferHandler(self.log_buffer)
-        handler.setFormatter(logging.Formatter('%(message)s'))
-        logging.getLogger().addHandler(handler)
+    def _update_ios_progress(self, step_id, status, global_status="running", error=None):
+        with self._lock:
+            self.ios_deploy_status["status"] = global_status
+            if error:
+                self.ios_deploy_status["error_message"] = error
+            for s in self.ios_deploy_status["steps"]:
+                if s["id"] == step_id:
+                    s["status"] = status
+                    break
+            # Sync logs from global buffer
+            self.ios_deploy_status["logs"] = self.log_buffer[-20:]
 
     # Helper to update the status of a specific injection step
     def _update_progress(self, step_id, status, error=None):
@@ -775,31 +798,52 @@ class FridaBridge:
             logging.info("Waiting for gadget injection to complete...")
             time.sleep(1)
         with self._lock:
+            # If we already have a valid session and it's not detached, just reuse it.
+            # This prevents constant polling for 'frontmost app' which can be noisy and slow.
+            if self.session:
+                try:
+                    if not self.session.is_detached:
+                        return self.session
+                except:
+                    pass
+
             device = self._get_device()
             front_app = self._get_front_app(device)
             if not front_app:
                 raise Exception("No frontmost application found on device")
             
-            if self.session:
-                try:
-                    if not self.session.is_detached and getattr(self.session, "_pid", None) == front_app.pid:
-                        logging.debug(f"[get_session] Reusing existing session (script id={id(self.script)})")
-                        return self.session
-                except Exception as e:
-                    logging.info(f"[get_session] Existing session invalid ({e}), re-attaching")
-
             logging.info(f"[get_session] Attaching to {front_app.identifier} (PID: {front_app.pid})")
             self.session = device.attach(front_app.pid)
             self.session._pid = front_app.pid
 
+            # Detect platform to load correct agent
+            platform_script = self.session.create_script("send(Process.platform);")
+            platform = "linux"
+
+            def on_message(message, data):
+                nonlocal platform
+                if message['type'] == 'send':
+                    platform = message['payload']
+
+            platform_script.on('message', on_message)
+            platform_script.load()
+            platform_script.unload()
+
+            logging.info(f"[get_session] Target platform detected: {platform}")
+
+            agent_file = 'agent.bundle.js'
+            if platform == 'darwin':
+                agent_file = 'agent.objc.bundle.js'
+
             logging.info("[get_session] Successfully attached to process, now loading Frida agent...")
-            agent_path = get_resource_path('agent.bundle.js')
+            agent_path = get_resource_path(agent_file)
             logging.info(f"[get_session] Loading Frida agent from: {agent_path}")
-            
+
             with open(agent_path, 'r', encoding='utf-8') as f:
                 source = f.read()
 
             self.script = self.session.create_script(source)
+
             self.script.load()
 
             return self.session
@@ -895,8 +939,7 @@ class FridaBridge:
         import time
         import traceback
 
-        with self._lock:
-            self.ios_deploy_status = {"state": "waiting_for_xcode", "message": "Waiting for Xcode to build and launch the app..."}
+        self._update_ios_progress("wait_xcode", "running")
 
         max_wait = 300 # Wait up to 5 minutes
         start_time = time.time()
@@ -905,18 +948,23 @@ class FridaBridge:
             while time.time() - start_time < max_wait:
                 # 1. Check if xcodebuild is running
                 res_mac = subprocess.run("ps aux | grep -i xcodebuild | grep -v grep", shell=True, capture_output=True, text=True)
-                with self._lock:
-                    if self.ios_deploy_status["state"] == "waiting_for_xcode" and res_mac.stdout.strip():
-                        self.ios_deploy_status = {"state": "xcode_running", "message": "Xcode is compiling/deploying..."}
-                    elif self.ios_deploy_status["state"] == "xcode_running" and not res_mac.stdout.strip():
-                        self.ios_deploy_status = {"state": "waiting_for_xcode", "message": "Waiting for Xcode to launch the app..."}
+                if res_mac.stdout.strip():
+                    with self._lock:
+                        for s in self.ios_deploy_status["steps"]:
+                            if s["id"] == "wait_xcode":
+                                s["title"] = "Xcode is compiling/deploying..."
+                else:
+                    with self._lock:
+                        for s in self.ios_deploy_status["steps"]:
+                            if s["id"] == "wait_xcode":
+                                s["title"] = "Waiting for Xcode build & deploy..."
 
                 # 2. Check if the app is running on the device using frida-ps
                 res_frida = subprocess.run(['frida-ps', '-D', device_id, '-a'], capture_output=True, text=True)
                 if bundle_id in res_frida.stdout:
                     # Xcode launched it! Time to hijack.
-                    with self._lock:
-                        self.ios_deploy_status = {"state": "hijacking", "message": "App detected! Hijacking process to inject Frida..."}
+                    self._update_ios_progress("wait_xcode", "completed")
+                    self._update_ios_progress("hijack_process", "running")
                     
                     logging.info(f"[_monitor_and_hijack_ios] App {bundle_id} detected. Killing Xcode session...")
                     
@@ -939,20 +987,21 @@ class FridaBridge:
                     if res_launch.returncode != 0 and "failed to get the task" not in res_launch.stderr:
                         raise RuntimeError(f"idevicedebug failed: {res_launch.stderr}")
 
-                    logging.info(f"[_monitor_and_hijack_ios] Hijack complete!")
-                    with self._lock:
-                        self.ios_deploy_status = {"state": "success", "message": f"App {bundle_id} launched with Frida instrumentation."}
+                    self._update_ios_progress("hijack_process", "completed")
+                    self._update_ios_progress("load_agent", "running")
+                    
+                    logging.info(f"[_monitor_and_hijack_ios] Hijack complete! Loading agent...")
+                    # The TUI will handle session creation, but we mark success here
+                    self._update_ios_progress("load_agent", "completed", global_status="completed")
                     return
 
                 time.sleep(2)
             
-            with self._lock:
-                self.ios_deploy_status = {"state": "error", "message": "Timed out waiting for Xcode to deploy the app."}
+            self._update_ios_progress("wait_xcode", "error", global_status="error", error="Timed out waiting for Xcode")
 
         except Exception as e:
             logging.error(f"[_monitor_and_hijack_ios] Error: {e}")
-            with self._lock:
-                self.ios_deploy_status = {"state": "error", "message": str(e)}
+            self._update_ios_progress("hijack_process", "error", global_status="error", error=str(e))
 
     def _patch_and_install_ios_app(self, source_path: str) -> dict:
         """
@@ -961,14 +1010,25 @@ class FridaBridge:
         from ios_repacker import repack_and_install
         import threading
         try:
+            # Reset status
+            with self._lock:
+                self.ios_deploy_status["status"] = "running"
+                self.ios_deploy_status["error_message"] = None
+                for s in self.ios_deploy_status["steps"]:
+                    s["status"] = "pending"
+            
+            self._update_ios_progress("inject_gadget", "running")
             device_id, bundle_id = repack_and_install(source_path)
+            self._update_ios_progress("inject_gadget", "completed")
+            
             threading.Thread(target=self._monitor_and_hijack_ios, args=(device_id, bundle_id), daemon=True).start()
-            return {
-                "status": "waiting_for_xcode",
-                "message": "Frida injected. Please press 'Run' in Xcode to deploy."
-            }
+            
+            with self._lock:
+                return self.ios_deploy_status
         except Exception as e:
-            return {"error": str(e)}
+            self._update_ios_progress("inject_gadget", "error", global_status="error", error=str(e))
+            with self._lock:
+                return self.ios_deploy_status
 
     # RPC endpoint: Retrieves loaded Java classes with a custom sorting heuristic based on target package
     def list_classes(self, search_param="", app_package="", offset=0, limit=200):
@@ -1225,12 +1285,16 @@ class FridaBridge:
             )
 
         elif method == "getHookEvents":
-            self.get_session()
-            script_id = id(self.script)
-            events = self.script.exports_sync.gethookevents()
-            if events:
-                logging.info(f"[getHookEvents] script id={script_id}, returning {len(events)} events")
-            return events
+            try:
+                self.get_session()
+                script_id = id(self.script)
+                events = self.script.exports_sync.gethookevents()
+                if events:
+                    logging.info(f"[getHookEvents] script id={script_id}, returning {len(events)} events")
+                return events
+            except Exception:
+                # Silence polling errors to avoid noisy logs when app is backgrounded/closed
+                return []
 
         elif method == "getInstanceAddresses":
             self.get_session()

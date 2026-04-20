@@ -251,6 +251,7 @@ object CommandExecutor {
                     // Auto-select single device
                     val device = allDevices[0]
                     state.adbSerial = device.serial
+                    state.selectedPlatform = device.status
                     state.isFetchingDevices = false
                     proceedWithDebugSetup(state, scope)
                 }
@@ -270,7 +271,14 @@ object CommandExecutor {
     fun initIosAppSelection(state: AppState, scope: CoroutineScope) {
         state.isFetchingDevices = true
         scope.launch {
-            discoverIosApps(state)
+            try {
+                discoverIosApps(state)
+                if (state.iosAppPaths.isEmpty()) {
+                    state.iosRepackageError = "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                }
+            } catch (e: Exception) {
+                state.iosRepackageError = "Error discovering apps: ${e.message}"
+            }
             state.isFetchingDevices = false
             state.pushMode(AppMode.IOS_APP_SELECTION)
         }
@@ -278,14 +286,21 @@ object CommandExecutor {
 
     private fun discoverIosApps(state: AppState) {
         val home = Shell.execute("echo \$HOME").trim()
+        if (home.isBlank()) {
+            throw Exception("Cannot determine home directory")
+        }
         val derivedDataDir = "$home/Library/Developer/Xcode/DerivedData"
         // Find .app directories modified in the last 48 hours (-mtime -2)
         val output = Shell.execute("find $derivedDataDir -maxdepth 5 -type d -name '*.app' -mtime -2 2>/dev/null")
-        state.iosAppPaths = output.trim().lines().filter { it.isNotBlank() }
+        state.iosAppPaths = output.trim().lines().filter { it.isNotBlank() && it.endsWith(".app") }
         state.selectedIosAppIndex = 0
     }
 
     fun proceedWithDebugSetup(state: AppState, scope: CoroutineScope) {
+        if (state.selectedPlatform == "iOS") {
+            initIosAppSelection(state, scope)
+            return
+        }
         state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
         state.gadgetErrorMessage = null
         state.gadgetSpinnerFrame = 0
@@ -617,7 +632,7 @@ object CommandExecutor {
 
         scope.launch {
             state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
-            
+
             // 1. Initial RPC to inject gadget and start monitor thread in bridge
             val (success, error) = RpcClient.patchAndInstallIosApp(appPath)
             if (!success) {
@@ -625,17 +640,40 @@ object CommandExecutor {
                 return@launch
             }
 
-            // 2. Poll for status until Success or Error
+            // 2. Poll for status until Success or Error (with timeout: 5 minutes)
+            val startTime = currentTimeMillis()
+            val timeoutMs = 5 * 60 * 1000L
+            var consecutiveErrors = 0
+
             while (state.running && state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
-                val (status, steps) = RpcClient.checkIosDeployStatus()
-                if (steps != null) {
-                    state.sharedGadgetSteps.value = steps
+                if (currentTimeMillis() - startTime > timeoutMs) {
+                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "iOS injection timeout (5 min). Check if Xcode deploy is still running.")
+                    break
                 }
-                
-                if (status != GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
+
+                val (status, steps) = RpcClient.checkIosDeployStatus()
+
+                if (status == GadgetInstallStatus.ERROR) {
                     state.sharedGadgetResult.value = Pair(status, null)
                     break
                 }
+
+                if (steps != null) {
+                    state.sharedGadgetSteps.value = steps
+                    consecutiveErrors = 0
+                } else {
+                    consecutiveErrors++
+                    if (consecutiveErrors > 20) {
+                        state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Lost connection to bridge. Check if bridge.py is still running.")
+                        break
+                    }
+                }
+
+                if (status == GadgetInstallStatus.SUCCESS) {
+                    state.sharedGadgetResult.value = Pair(status, null)
+                    break
+                }
+
                 delay(1000)
             }
         }

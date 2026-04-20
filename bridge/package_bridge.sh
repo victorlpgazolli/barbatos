@@ -14,6 +14,9 @@ npm ci
 echo "Creating bundle of agent.js..."
 npx frida-compile agent.js -o agent.bundle.js -c
 
+echo "Creating bundle of agent.objc.js..."
+npx frida-compile agent.objc.js -o agent.objc.bundle.js -c
+
 echo "Running PyInstaller..."
 python3 -m PyInstaller bridge.spec
 

@@ -473,7 +473,7 @@ fun main(args: Array<String>) {
                         state.iosSelectedCertIndex = (state.iosSelectedCertIndex + 1) % state.iosCertList.size
                         Renderer.render(state)
                     }
-                } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
+                } else if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex + 1).coerceAtMost(hooks.size - 1)
@@ -532,7 +532,7 @@ fun main(args: Array<String>) {
                         state.iosSelectedCertIndex = if (state.iosSelectedCertIndex > 0) state.iosSelectedCertIndex - 1 else state.iosCertList.size - 1
                         Renderer.render(state)
                     }
-                } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
+                } else if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     val hooks = state.activeHooks.toList()
                     if (hooks.isNotEmpty()) {
                         state.selectedHookIndex = (state.selectedHookIndex - 1).coerceAtLeast(0)
@@ -658,6 +658,7 @@ fun main(args: Array<String>) {
                     if (state.deviceInfoList.isNotEmpty() && state.selectedDeviceIndex in state.deviceInfoList.indices) {
                         val selectedDevice = state.deviceInfoList[state.selectedDeviceIndex]
                         state.adbSerial = selectedDevice.serial
+                        state.selectedPlatform = selectedDevice.status
                         state.popMode()
                         
                         if (selectedDevice.status == "iOS") {
@@ -936,16 +937,21 @@ fun main(args: Array<String>) {
                         state.gadgetErrorMessage = gadgetUpdate.second
 
                         if (gadgetUpdate.first == GadgetInstallStatus.SUCCESS) {
-                            // Reset gadget state and proceed with tmux
                             state.gadgetInstallStatus = GadgetInstallStatus.IDLE
                             state.gadgetErrorMessage = null
-                            
+
                             // Re-apply active hooks to the new session
                             scope.launch { RpcClient.syncAllHooks(state.activeHooks) }
-                            
+
                             Renderer.render(state)
-                            CommandExecutor.proceedWithTmux(state)
-                            state.mode = AppMode.DEBUG_ENTRYPOINT
+
+                            // iOS goes directly to class filtering, Android uses tmux
+                            if (state.selectedPlatform == "iOS") {
+                                CommandExecutor.initDebugClassFilter(state, scope)
+                            } else {
+                                CommandExecutor.proceedWithTmux(state)
+                                state.mode = AppMode.DEBUG_ENTRYPOINT
+                            }
                             needsRender = true
                         }
                     }
