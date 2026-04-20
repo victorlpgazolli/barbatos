@@ -50,6 +50,7 @@ install_dependencies:
 compile_bridge_agent:
 	cd bridge && npm ci
 	cd bridge && npx frida-compile agent.js -o agent.bundle.js -c
+	cd bridge && npx frida-compile agent.objc.js -o agent.objc.bundle.js -c
 
 compile_bridge: compile_bridge_agent
 	cd bridge && $(PYTHON) -m PyInstaller bridge.spec

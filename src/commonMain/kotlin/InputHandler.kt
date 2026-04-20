@@ -1,7 +1,12 @@
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
+import kotlinx.cinterop.alloc
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.ptr
 import platform.posix.STDIN_FILENO
 import platform.posix.read
+import platform.posix.poll
+import platform.posix.pollfd
 
 sealed class KeyEvent {
     data class Char(val c: kotlin.Char) : KeyEvent()
@@ -33,6 +38,16 @@ sealed class KeyEvent {
 
 object InputHandler {
     private fun readByte(): Int {
+        memScoped {
+            // Use poll() with 50ms timeout for smooth animations + periodic data updates
+            val pfd = alloc<pollfd>()
+            pfd.fd = STDIN_FILENO
+            pfd.events = 1.toShort() // POLLIN
+
+            val ready = poll(pfd.ptr, 1u, 50) // 50ms timeout for smooth UI updates
+            if (ready <= 0) return -1 // Timeout or error
+        }
+
         val buffer = ByteArray(1)
         val bytesRead = buffer.usePinned { pinned ->
             read(STDIN_FILENO, pinned.addressOf(0), 1u)

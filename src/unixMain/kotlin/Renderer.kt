@@ -172,6 +172,16 @@ object Renderer {
             renderInputBox(buf, state, termWidth - 2)
             renderClassList(buf, state, termWidth, termHeight)
             hasInputBox = true
+        } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
+            renderHeader(buf, state, termWidth)
+            renderCtrlCWarning(buf, state)
+            renderDeviceSelectionList(buf, state, termWidth, termHeight)
+            hasInputBox = false
+        } else if (state.mode == AppMode.IOS_APP_SELECTION) {
+            renderHeader(buf, state, termWidth)
+            renderCtrlCWarning(buf, state)
+            renderIosAppSelectionList(buf, state, termWidth, termHeight)
+            hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS || state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
             renderHeader(buf, state, termWidth)
             renderBreadcrumb(buf, state, termWidth)
@@ -182,6 +192,11 @@ object Renderer {
             }
             renderInspectClassList(buf, state, termWidth, termHeight)
             hasInputBox = (state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE)
+        } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
+            renderLogo(buf)
+            renderCtrlCWarning(buf, state)
+            renderIosRepackageSetup(buf, state, termWidth)
+            hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
             renderLogo(buf)
             renderWelcome(buf)
@@ -236,6 +251,22 @@ object Renderer {
                 FooterKey("Tab", "Autocomplete"),
                 FooterKey("Enter", "Execute"),
                 FooterKey("Alt+C", "Copy"),
+                FooterKey("Ctrl+C", "Quit")
+            )
+            AppMode.DEBUG_DEVICE_SELECTION -> listOf(
+                FooterKey("↑↓", "Navigate"),
+                FooterKey("Enter", "Select"),
+                FooterKey("Esc", "Back"),
+                FooterKey("Ctrl+C", "Quit")
+            )
+            AppMode.IOS_APP_SELECTION -> listOf(
+                FooterKey("↑↓", "Navigate"),
+                FooterKey("Enter", "Select"),
+                FooterKey("Esc", "Back"),
+                FooterKey("Ctrl+C", "Quit")
+            )
+            AppMode.IOS_REPACKAGE_SETUP -> listOf(
+                FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
             AppMode.DEBUG_ENTRYPOINT -> listOf(
@@ -344,6 +375,19 @@ object Renderer {
         buf.append(INSTRUCTIONS_TEXT)
         buf.append(Ansi.RESET)
         buf.append("\n\n")
+    }
+
+    private fun renderIosRepackageSetup(buf: StringBuilder, state: AppState, termWidth: Int) {
+        buf.append(Ansi.CYAN).append("  === iOS FRIDA INJECTION ===\n").append(Ansi.RESET)
+        buf.append("  Preparing the app bundle and hijacking the Xcode launch.\n\n")
+
+        if (state.iosRepackageError != null) {
+            buf.append("\n  ${Ansi.RED}Error: ${state.iosRepackageError}${Ansi.RESET}\n")
+        }
+        
+        if (state.gadgetInstallStatus != GadgetInstallStatus.IDLE) {
+            renderGadgetStatus(buf, state)
+        }
     }
 
     private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState) {
@@ -932,6 +976,80 @@ object Renderer {
         }
 
         ListRenderer.renderScrollIndicator(buf, startIdx, endIdx, rows.size, termWidth)
+    }
+
+    private fun renderIosAppSelectionList(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {
+        if (state.isFetchingDevices) { // Reuse isFetchingDevices for app scanning status
+            buf.append("  ").append(DIM_GRAY).append("Scanning DerivedData for recently built apps...").append(RESET).append("\n")
+            return
+        }
+
+        if (state.iosAppPaths.isEmpty()) {
+            buf.append(DIM_GRAY).append("  No recently built iOS apps found in DerivedData.\n").append(RESET)
+            buf.append(DIM_GRAY).append("  Make sure you built the project in Xcode for 'Generic iOS Device' or a physical iPhone.\n").append(RESET)
+            return
+        }
+
+        val actualFixedLines = 2 + 3 // Header(2) + Footer(3)
+        val maxItems = maxOf(3, termHeight - actualFixedLines - 2)
+
+        val (startIdx, endIdx) = ListRenderer.computeViewport(
+            state.iosAppPaths.size, state.selectedIosAppIndex, maxItems
+        )
+
+        buf.append(DIM_GRAY).append("  Select the target .app bundle:").append(RESET).append("\n\n")
+
+        for (i in startIdx until endIdx) {
+            val path = state.iosAppPaths[i]
+            // Shorten path for display: show only the last 3 parts
+            val parts = path.split("/")
+            val displayStr = if (parts.size > 3) ".../" + parts.takeLast(3).joinToString("/") else path
+            
+            val isSelected = i == state.selectedIosAppIndex
+            buf.append(ListRenderer.selectionPrefix(isSelected))
+            if (isSelected) buf.append(Ansi.WHITE).append(Ansi.BOLD)
+            buf.append(displayStr).append(RESET).append("\n")
+        }
+        buf.append("\n")
+    }
+
+    private fun renderDeviceSelectionList(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {
+        if (state.rpcError != null) {
+            buf.append(Ansi.RED).append("  Error: ${state.rpcError}").append(RESET).append("\n")
+            buf.append(DIM_GRAY).append("  (Try 'debug' again to retry)").append(RESET).append("\n")
+            return
+        }
+
+        if (state.isFetchingDevices) {
+            val frame = ListRenderer.spinnerFrame(state.gadgetSpinnerFrame)
+            buf.append("  ").append(DIM_GRAY).append("$frame Fetching devices...").append(RESET).append("\n")
+            return
+        }
+
+        if (state.deviceInfoList.isEmpty()) {
+            buf.append(DIM_GRAY).append("  No devices found.\n").append(RESET)
+            buf.append(DIM_GRAY).append("  (Try 'debug' again to retry)").append(RESET).append("\n")
+            return
+        }
+
+        val actualFixedLines = 2 + 3 // Header(2) + Footer(3)
+        val maxItems = maxOf(3, termHeight - actualFixedLines - 2)
+
+        val (startIdx, endIdx) = ListRenderer.computeViewport(
+            state.deviceInfoList.size, state.selectedDeviceIndex, maxItems
+        )
+
+        buf.append(DIM_GRAY).append("  Select a device to debug:").append(RESET).append("\n\n")
+
+        for (i in startIdx until endIdx) {
+            val device = state.deviceInfoList[i]
+            val displayStr = "${device.serial} - ${device.model} - ${device.status}"
+            val isSelected = i == state.selectedDeviceIndex
+            val prefix = ListRenderer.selectionPrefix(isSelected, "  ")
+
+            val displayColor = if (isSelected) WHITE else LIGHT_GRAY
+            buf.append(prefix).append(displayColor).append(displayStr).append(RESET).append("\n")
+        }
     }
 
     private fun renderHookWatchMode(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {

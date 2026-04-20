@@ -10,7 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "frida-java-bridge": "^7.0.13"
+    "frida-java-bridge": "^7.0.13",
+    "frida-objc-bridge": "^8.0.5",
+    "frida-swift-bridge": "^3.0.2"
   },
   "devDependencies": {
     "frida-compile": "^19.0.5"
