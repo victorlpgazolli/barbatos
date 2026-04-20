@@ -174,10 +174,12 @@ object Renderer {
             hasInputBox = true
         } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
             renderHeader(buf, state, termWidth)
+            renderCtrlCWarning(buf, state)
             renderDeviceSelectionList(buf, state, termWidth, termHeight)
             hasInputBox = false
         } else if (state.mode == AppMode.IOS_APP_SELECTION) {
             renderHeader(buf, state, termWidth)
+            renderCtrlCWarning(buf, state)
             renderIosAppSelectionList(buf, state, termWidth, termHeight)
             hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_INSPECT_CLASS || state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE) {
@@ -192,8 +194,9 @@ object Renderer {
             hasInputBox = (state.mode == AppMode.DEBUG_EDIT_ATTRIBUTE)
         } else if (state.mode == AppMode.IOS_REPACKAGE_SETUP) {
             renderLogo(buf)
+            renderCtrlCWarning(buf, state)
             renderIosRepackageSetup(buf, state, termWidth)
-            hasInputBox = true
+            hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_ENTRYPOINT) {
             renderLogo(buf)
             renderWelcome(buf)
@@ -990,16 +993,19 @@ object Renderer {
     private fun renderDeviceSelectionList(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {
         if (state.rpcError != null) {
             buf.append(Ansi.RED).append("  Error: ${state.rpcError}").append(RESET).append("\n")
+            buf.append(DIM_GRAY).append("  (Try 'debug' again to retry)").append(RESET).append("\n")
             return
         }
 
         if (state.isFetchingDevices) {
-            buf.append("  ").append(DIM_GRAY).append("Fetching devices...").append(RESET).append("\n")
+            val frame = ListRenderer.spinnerFrame(state.gadgetSpinnerFrame)
+            buf.append("  ").append(DIM_GRAY).append("$frame Fetching devices...").append(RESET).append("\n")
             return
         }
 
         if (state.deviceInfoList.isEmpty()) {
             buf.append(DIM_GRAY).append("  No devices found.\n").append(RESET)
+            buf.append(DIM_GRAY).append("  (Try 'debug' again to retry)").append(RESET).append("\n")
             return
         }
 

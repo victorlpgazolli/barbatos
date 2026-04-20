@@ -34,10 +34,6 @@ object CommandExecutor {
 
         when (baseCommand) {
             "debug" -> handleDebug(state, scope)
-            "ios" -> {
-                state.pushMode(AppMode.IOS_REPACKAGE_SETUP)
-                fetchIosCertificates(state)
-            }
             "exit" -> state.running = false
             "clear" -> {
                 state.commandHistory.clear()
@@ -92,7 +88,7 @@ object CommandExecutor {
     private fun getBridgeCommand(serialArg: String): String {
         // 1. Check if we're in development mode (running from source)
         if (access("./bridge/bridge.py", F_OK) == 0) {
-            return "python3 ./bridge/bridge.py$serialArg"
+            return "python3 -u ./bridge/bridge.py$serialArg"
         }
 
         // 2. Check environment variable
@@ -222,11 +218,11 @@ object CommandExecutor {
             return
         }
 
-        // If serial already set (from device selection), proceed directly
-        if (state.adbSerial != null && state.adbSerial!!.isNotEmpty()) {
-            proceedWithDebugSetup(state, scope)
-            return
-        }
+        // // If serial already set (from device selection), proceed directly
+        // if (state.adbSerial != null && state.adbSerial!!.isNotEmpty()) {
+        //     proceedWithDebugSetup(state, scope)
+        //     return
+        // }
 
         // Enumerate devices
         state.isFetchingDevices = true
@@ -253,7 +249,12 @@ object CommandExecutor {
                     state.adbSerial = device.serial
                     state.selectedPlatform = device.status
                     state.isFetchingDevices = false
-                    proceedWithDebugSetup(state, scope)
+
+                    if (device.status == "iOS") {
+                        initIosAppSelection(state, scope)
+                    } else {
+                        proceedWithDebugSetup(state, scope)
+                    }
                 }
                 else -> {
                     // Show device selection UI - use shared observable pattern
@@ -262,7 +263,7 @@ object CommandExecutor {
                     state.selectedDeviceIndex = 0
                     state.isFetchingDevices = false
                     state.pushMode(AppMode.DEBUG_DEVICE_SELECTION)
-                    // Don't render here - Main.kt Timeout handler will render
+                    state.sharedDeviceSelectionReady.value = true
                 }
             }
         }
@@ -281,6 +282,7 @@ object CommandExecutor {
             }
             state.isFetchingDevices = false
             state.pushMode(AppMode.IOS_APP_SELECTION)
+            state.sharedIosAppSelectionReady.value = true
         }
     }
 
@@ -316,7 +318,7 @@ object CommandExecutor {
                 val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
                 val serialArg = if (state.adbSerial != null) " --serial ${state.adbSerial}" else ""
                 val bridgeCmd = getBridgeCommand(serialArg)
-                system("$bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
+                system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
                 delay(1000) // Give bridge time to start before first ping
             }
 
@@ -597,32 +599,6 @@ object CommandExecutor {
         remove(dtsPath)
     }
 
-    @OptIn(ExperimentalForeignApi::class)
-    fun fetchIosCertificates(state: AppState) {
-        state.iosCertList = emptyList()
-        val pipe = popen("security find-identity -v -p codesigning", "r") ?: return
-        memScoped {
-            val buffer = allocArray<ByteVar>(1024)
-            val certs = mutableListOf<String>()
-            while (fgets(buffer, 1024, pipe) != null) {
-                val line = buffer.toKString().trim()
-                if (line.contains(")")) {
-                    val parts = line.split("\"")
-                    if (parts.size >= 2) {
-                        val name = parts[1]
-                        val idParts = line.split(" ")
-                        if (idParts.size >= 2) {
-                            val id = idParts[1]
-                            certs.add("$id \"$name\"")
-                        }
-                    }
-                }
-            }
-            state.iosCertList = certs
-        }
-        pclose(pipe)
-    }
-
     fun startIosInjection(appPath: String, state: AppState, scope: CoroutineScope) {
         state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
         state.gadgetErrorMessage = null
@@ -632,6 +608,29 @@ object CommandExecutor {
 
         scope.launch {
             state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
+
+            // Start bridge if not already running (iOS doesn't use --serial for adb)
+            if (!RpcClient.ping()) {
+                val logFile = "${CacheManager.cacheDir()}/bridge.log"
+                val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
+                val bridgeCmd = getBridgeCommand("")
+                system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
+                delay(1000)
+            }
+
+            var bridgeReady = false
+            for (i in 0..30) {
+                if (RpcClient.ping()) {
+                    bridgeReady = true
+                    break
+                }
+                delay(500)
+            }
+
+            if (!bridgeReady) {
+                state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Bridge not ready. Is it running?")
+                return@launch
+            }
 
             // 1. Initial RPC to inject gadget and start monitor thread in bridge
             val (success, error) = RpcClient.patchAndInstallIosApp(appPath)
@@ -651,15 +650,15 @@ object CommandExecutor {
                     break
                 }
 
-                val (status, steps) = RpcClient.checkIosDeployStatus()
+                val (status, result) = RpcClient.checkIosDeployStatus()
 
                 if (status == GadgetInstallStatus.ERROR) {
                     state.sharedGadgetResult.value = Pair(status, null)
                     break
                 }
 
-                if (steps != null) {
-                    state.sharedGadgetSteps.value = steps
+                if (result != null) {
+                    state.sharedGadgetSteps.value = result.steps
                     consecutiveErrors = 0
                 } else {
                     consecutiveErrors++

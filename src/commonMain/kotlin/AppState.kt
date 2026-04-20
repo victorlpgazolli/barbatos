@@ -99,6 +99,7 @@ data class AppState(
     var selectedDeviceIndex: Int = 0,
     var selectedPlatform: String = "Android",
     var rpcError: String? = null,
+    val sharedDeviceSelectionReady: AtomicReference<Boolean?> = AtomicReference(null),
     
     var instanceCounts: MutableMap<String, Int> = mutableMapOf(),
     var isFetchingInstances: Boolean = false,
@@ -136,6 +137,7 @@ data class AppState(
     var iosCertList: List<String> = emptyList(),
     var iosSelectedCertIndex: Int = 0,
     var iosRepackageError: String? = null,
+    val sharedIosAppSelectionReady: AtomicReference<Boolean?> = AtomicReference(null),
 
     // Gadget Install Status
     var gadgetInstallStatus: GadgetInstallStatus = GadgetInstallStatus.IDLE,
@@ -144,6 +146,7 @@ data class AppState(
     val sharedGadgetResult: AtomicReference<Pair<GadgetInstallStatus, String?>?> = AtomicReference(null),
     val sharedGadgetSteps: AtomicReference<List<InjectionStep>?> = AtomicReference(null),
     var gadgetSpinnerFrame: Int = 0,
+    var bridgeActivityUpdateCounter: Int = 0,
     var isSubPane: Boolean = false,
     var startedAsInspectPane: Boolean = false,
     var inspectBackStack: MutableList<String> = mutableListOf(),

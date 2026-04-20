@@ -863,7 +863,7 @@ object RpcClient {
         }
     }
 
-    suspend fun checkIosDeployStatus(): Pair<GadgetInstallStatus, List<InjectionStep>?> {
+    suspend fun checkIosDeployStatus(): Pair<GadgetInstallStatus, InjectionProgressResult?> {
         return try {
             val requestBody = JsonRpcRequestCheckIosDeployStatus()
             val response: HttpResponse = withTimeoutOrNull(5000) {
@@ -882,7 +882,7 @@ object RpcClient {
                         "error" -> GadgetInstallStatus.ERROR
                         else -> GadgetInstallStatus.WAITING_BRIDGE_SETUP
                     }
-                    Pair(status, res.steps)
+                    Pair(status, res)
                 } else Pair(GadgetInstallStatus.IDLE, null)
             } else Pair(GadgetInstallStatus.ERROR, null)
         } catch (e: Exception) {
