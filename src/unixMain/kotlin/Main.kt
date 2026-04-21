@@ -172,6 +172,11 @@ fun main(args: Array<String>) {
                 }
             }
 
+            is KeyEvent.OptionC, is KeyEvent.CtrlY -> {
+                handleCopy(state)
+                Renderer.render(state)
+            }
+
             is KeyEvent.Char -> {
                 if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
                     when (key.c) {
@@ -1155,3 +1160,32 @@ fun main(args: Array<String>) {
     print(Ansi.RESET)
     Terminal.flush()
 }
+
+fun handleCopy(state: AppState) {
+    val textToCopy = when (state.mode) {
+        AppMode.DEBUG_CLASS_FILTER -> {
+            state.displayedClasses.getOrNull(state.selectedClassIndex)
+        }
+        AppMode.DEBUG_INSPECT_CLASS, AppMode.DEBUG_EDIT_ATTRIBUTE -> {
+            val rows = state.buildInspectRows()
+            val selectedRow = rows.getOrNull(state.selectedClassIndex)
+            when (selectedRow) {
+                is InspectRow.StaticAttributeRow -> selectedRow.attribute
+                is InspectRow.StaticMethodRow -> selectedRow.method
+                is InspectRow.InstanceRow -> selectedRow.instance.handle
+                is InspectRow.InstanceAttributeRow -> selectedRow.attribute.value
+                else -> null
+            }
+        }
+        AppMode.DEFAULT -> state.inputBuffer
+        else -> null
+    }
+
+    if (textToCopy != null) {
+        if (ClipboardManager.copyToClipboard(textToCopy)) {
+            state.statusMessage = "Copied to clipboard!"
+            state.statusMessageTimestamp = currentTimeMillis()
+        }
+    }
+}
+

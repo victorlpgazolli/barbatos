@@ -218,12 +218,6 @@ object CommandExecutor {
             return
         }
 
-        // // If serial already set (from device selection), proceed directly
-        // if (state.adbSerial != null && state.adbSerial!!.isNotEmpty()) {
-        //     proceedWithDebugSetup(state, scope)
-        //     return
-        // }
-
         // Enumerate devices
         state.isFetchingDevices = true
         state.rpcError = null
@@ -258,11 +252,11 @@ object CommandExecutor {
                 }
                 else -> {
                     // Show device selection UI - use shared observable pattern
+                    state.pushMode(AppMode.DEBUG_DEVICE_SELECTION)
                     state.deviceInfoList = allDevices
                     state.allFetchedClasses = emptyList()
                     state.selectedDeviceIndex = 0
                     state.isFetchingDevices = false
-                    state.pushMode(AppMode.DEBUG_DEVICE_SELECTION)
                     state.sharedDeviceSelectionReady.value = true
                 }
             }

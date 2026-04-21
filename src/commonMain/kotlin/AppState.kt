@@ -159,7 +159,9 @@ data class AppState(
 
     var editingInstanceId: String = "",
     var editingAttribute: InstanceAttribute? = null,
-    var navigationStack: MutableList<AppMode> = mutableListOf()
+    var navigationStack: MutableList<AppMode> = mutableListOf(),
+    var statusMessage: String? = null,
+    var statusMessageTimestamp: Long = 0L
 ) {
     fun pushMode(newMode: AppMode, force: Boolean = false) {
         if (force || mode != newMode) {

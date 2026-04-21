@@ -160,7 +160,7 @@ object Renderer {
         if (state.mode == AppMode.DEFAULT) {
             renderLogo(buf)
             renderWelcome(buf)
-            renderHistory(buf, state)
+            renderHistory(buf, state, termWidth)
             renderCtrlCWarning(buf, state)
             renderInputBox(buf, state, width)
             renderSuggestions(buf, state)
@@ -201,7 +201,7 @@ object Renderer {
             renderLogo(buf)
             renderWelcome(buf)
             renderCtrlCWarning(buf, state)
-            renderDebugEntrypoint(buf, state)
+            renderDebugEntrypoint(buf, state, termWidth)
             hasInputBox = false
         } else if (state.mode == AppMode.DEBUG_HOOK_WATCH) {
             renderHeader(buf, state, termWidth)
@@ -212,6 +212,7 @@ object Renderer {
             hasInputBox = false
         }
 
+        renderStatusMessage(buf, state, termWidth)
         renderFooter(buf, state, termWidth, termHeight)
 
         if (hasInputBox) {
@@ -223,6 +224,24 @@ object Renderer {
         Terminal.flush()
     }
 
+    private fun renderStatusMessage(buf: StringBuilder, state: AppState, termWidth: Int) {
+        val message = state.statusMessage ?: return
+        val elapsed = currentTimeMillis() - state.statusMessageTimestamp
+        if (elapsed > 2000) {
+            state.statusMessage = null
+            return
+        }
+
+        val padding = maxOf(0, (termWidth - message.length - 4) / 2)
+        buf.append("\n")
+        buf.append(" ".repeat(padding))
+        buf.append(C_GREEN).append("╭").append("─".repeat(message.length + 2)).append("╮").append(RESET).append("\n")
+        buf.append(" ".repeat(padding))
+        buf.append(C_GREEN).append("│ ").append(WHITE).append(message).append(C_GREEN).append(" │").append(RESET).append("\n")
+        buf.append(" ".repeat(padding))
+        buf.append(C_GREEN).append("╰").append("─".repeat(message.length + 2)).append("╯").append(RESET).append("\n")
+    }
+
     private fun renderFooter(buf: StringBuilder, state: AppState, termWidth: Int, termHeight: Int) {
         data class FooterKey(val key: String, val label: String)
 
@@ -231,6 +250,7 @@ object Renderer {
                 FooterKey("↑↓", "History"),
                 FooterKey("Tab", "Autocomplete"),
                 FooterKey("Enter", "Execute"),
+                // FooterKey("Alt+C", "Copy"),
                 FooterKey("Ctrl+C", "Quit")
             )
             AppMode.DEBUG_DEVICE_SELECTION -> listOf(
@@ -260,6 +280,7 @@ object Renderer {
                 FooterKey("Enter", "Inspect"),
                 FooterKey("\\", "Count Instances"),
                 FooterKey("]", if (state.showSyntheticClasses) "Hide Synthetic Classes" else "Show Synthetic Classes"),
+                // FooterKey("Alt+C", "Copy"),
                 FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
@@ -277,6 +298,7 @@ object Renderer {
                     FooterKey("E", eLabel),
                     FooterKey("W", "Watch"),
                     FooterKey("I", "Inspect"),
+                    // FooterKey("Alt+C", "Copy"),
                     FooterKey("Esc", "Back"),
                     FooterKey("Ctrl+C", "Quit")
                 )
@@ -288,6 +310,7 @@ object Renderer {
                 FooterKey("←→", "Scroll"),
                 FooterKey("I", "Inspect"),
                 FooterKey("Space", "Toggle"),
+                // FooterKey("Alt+C", "Copy"),
                 FooterKey("Del", "Remove"),
                 FooterKey("C", "Clear"),
                 FooterKey("Esc", "Back")
@@ -361,20 +384,19 @@ object Renderer {
         if (state.iosRepackageError != null) {
             buf.append("\n  ${Ansi.RED}Error: ${state.iosRepackageError}${Ansi.RESET}\n")
         }
-        
+
         if (state.gadgetInstallStatus != GadgetInstallStatus.IDLE) {
-            renderGadgetStatus(buf, state)
+            renderGadgetStatus(buf, state, termWidth)
         }
     }
-
-    private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState) {
+    private fun renderDebugEntrypoint(buf: StringBuilder, state: AppState, termWidth: Int) {
         val options = listOf(
             "Search & inspect classes instances",
             "Hook methods & watch changes"
         )
-        
+
         buf.append("  ${Ansi.WHITE}Select debug action:${Ansi.RESET}\n")
-        
+
         for ((index, option) in options.withIndex()) {
             val isSelected = index == state.debugEntrypointIndex
             val prefix = ListRenderer.selectionPrefix(isSelected, "  ")
@@ -382,9 +404,8 @@ object Renderer {
             buf.append(prefix).append(color).append(option).append(Ansi.RESET).append("\n")
         }
 
-        buf.appendBridgeLogBox(state.bridgeLogs)
+        buf.appendBridgeLogBox(state.bridgeLogs, maxOf(10, termWidth - 6))
     }
-
     private fun StringBuilder.appendBridgeLogBox(logs: List<String>, logWidth: Int = 100) {
         if (logs.isEmpty()) return
         
@@ -418,7 +439,7 @@ object Renderer {
         append("  ").append(bottomBorder).append(Ansi.RESET).append("\n")
     }
 
-    private fun renderHistory(buf: StringBuilder, state: AppState) {
+    private fun renderHistory(buf: StringBuilder, state: AppState, termWidth: Int) {
         val lastDebugIndex = state.commandHistory.lastIndexOf("debug")
         for ((index, cmd) in state.commandHistory.withIndex()) {
             buf.append(Ansi.DIM)
@@ -431,18 +452,18 @@ object Renderer {
 
             // Show gadget install status only below the LAST "debug" command
             if (index == lastDebugIndex && state.gadgetInstallStatus != GadgetInstallStatus.IDLE && state.gadgetInstallStatus != GadgetInstallStatus.SUCCESS) {
-                renderGadgetStatus(buf, state)
+                renderGadgetStatus(buf, state, termWidth)
             }
         }
     }
 
-    private fun renderGadgetStatus(buf: StringBuilder, state: AppState) {
+    private fun renderGadgetStatus(buf: StringBuilder, state: AppState, termWidth: Int) {
         val status = state.gadgetInstallStatus
         val frame = ListRenderer.spinnerFrame(state.gadgetSpinnerFrame)
 
         if (status != GadgetInstallStatus.IDLE) {
             buf.append("\n   ${Ansi.WHITE}Initializing Debugging Session:${Ansi.RESET}\n")
-            
+
             if (state.gadgetInjectionSteps.isEmpty()) {
                 buf.append("   [${LIGHT_GRAY}$frame${Ansi.RESET}] ${Ansi.WHITE}Connecting to bridge...${Ansi.RESET}\n")
             } else {
@@ -456,10 +477,9 @@ object Renderer {
                     }
                 }
             }
-            
-            buf.appendBridgeLogBox(state.bridgeLogs)
-        }
 
+            buf.appendBridgeLogBox(state.bridgeLogs, maxOf(10, termWidth - 6))
+        }
         if (status == GadgetInstallStatus.ERROR) {
             val errorMsg = state.gadgetErrorMessage ?: "Unknown error"
             buf.append("   ${Ansi.RED}Setup failed: $errorMsg${Ansi.RESET}\n")

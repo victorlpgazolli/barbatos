@@ -28,6 +28,8 @@ sealed class KeyEvent {
     data object CtrlA : KeyEvent()
     data object CtrlE : KeyEvent()
     data object CtrlC : KeyEvent()
+    data object OptionC : KeyEvent()
+    data object CtrlY : KeyEvent()
     data object MouseScrollUp : KeyEvent()
     data object MouseScrollDown : KeyEvent()
     data object Timeout : KeyEvent()
@@ -66,6 +68,7 @@ object InputHandler {
             10, 13 -> KeyEvent.Enter
             21 -> KeyEvent.CmdBackspace // Ctrl-U
             23 -> KeyEvent.OptionBackspace // Ctrl-W
+            25 -> KeyEvent.CtrlY
             127 -> KeyEvent.Backspace
             27 -> {
                 val next = readByte()
@@ -142,6 +145,8 @@ object InputHandler {
                     KeyEvent.OptionLeft
                 } else if (next == 'f'.code) {
                     KeyEvent.OptionRight
+                } else if (next == 'c'.code) {
+                    KeyEvent.OptionC
                 } else {
                     KeyEvent.Unknown
                 }

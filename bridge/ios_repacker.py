@@ -42,6 +42,8 @@ def repack_and_install(app_path: str):
     frameworks_dir = os.path.join(app_path, "Frameworks")
     os.makedirs(frameworks_dir, exist_ok=True)
     gadget_dest = os.path.join(frameworks_dir, "frida-gadget-ios.dylib")
+    
+    print(f"[*] Copying Frida Gadget to: {gadget_dest}")
     shutil.copy(cache_path, gadget_dest)
     
     # Extract Bundle ID for the future launch
@@ -50,5 +52,7 @@ def repack_and_install(app_path: str):
         plist = plistlib.load(f)
     bundle_id = plist['CFBundleIdentifier']
     
-    print(f"Frida Gadget injected. Now please press 'Run' in Xcode to deploy.")
+    print(f"\n[!] Frida Gadget injected successfully.")
+    print(f"[!] IMPORTANT: If you built your app in Xcode AFTER this step, our injection was likely overwritten.")
+    print(f"[!] Best workflow: 1. Build in Xcode (Cmd+B) -> 2. Inject here -> 3. Run in Xcode (Cmd+R).")
     return device_id, bundle_id
