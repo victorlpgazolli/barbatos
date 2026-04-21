@@ -250,7 +250,7 @@ object Renderer {
                 FooterKey("↑↓", "History"),
                 FooterKey("Tab", "Autocomplete"),
                 FooterKey("Enter", "Execute"),
-                FooterKey("Alt+C", "Copy"),
+                // FooterKey("Alt+C", "Copy"),
                 FooterKey("Ctrl+C", "Quit")
             )
             AppMode.DEBUG_DEVICE_SELECTION -> listOf(
@@ -280,7 +280,7 @@ object Renderer {
                 FooterKey("Enter", "Inspect"),
                 FooterKey("\\", "Count Instances"),
                 FooterKey("]", if (state.showSyntheticClasses) "Hide Synthetic Classes" else "Show Synthetic Classes"),
-                FooterKey("Alt+C", "Copy"),
+                // FooterKey("Alt+C", "Copy"),
                 FooterKey("Esc", "Back"),
                 FooterKey("Ctrl+C", "Quit")
             )
@@ -298,7 +298,7 @@ object Renderer {
                     FooterKey("E", eLabel),
                     FooterKey("W", "Watch"),
                     FooterKey("I", "Inspect"),
-                    FooterKey("Alt+C", "Copy"),
+                    // FooterKey("Alt+C", "Copy"),
                     FooterKey("Esc", "Back"),
                     FooterKey("Ctrl+C", "Quit")
                 )
@@ -310,7 +310,7 @@ object Renderer {
                 FooterKey("←→", "Scroll"),
                 FooterKey("I", "Inspect"),
                 FooterKey("Space", "Toggle"),
-                FooterKey("Alt+C", "Copy"),
+                // FooterKey("Alt+C", "Copy"),
                 FooterKey("Del", "Remove"),
                 FooterKey("C", "Clear"),
                 FooterKey("Esc", "Back")

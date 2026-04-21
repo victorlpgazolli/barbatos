@@ -697,9 +697,9 @@ class FridaBridge:
             is_rooted = self._is_device_rooted()
             is_debuggable = self._is_app_debuggable(package_name)
 
-            if is_rooted and not is_debuggable:
+            if is_rooted:
                 # ── ROOT PATH ────────────────────────────────────────────────
-                logging.info("[*] Root device + non-debuggable app → Root Path (frida-server).")
+                logging.info("[*] Root device → Root Path (frida-server).")
                 self.injection_progress["steps"] = [
                     {"id": "get_target",     "title": "Identify target application",      "status": "completed"},
                     {"id": "prepare_server", "title": "Prepare frida-server on device",   "status": "pending"},
@@ -718,14 +718,7 @@ class FridaBridge:
                 self._update_progress("load_agent", "running")
                 self._load_agent_via_frida_server(pid)
                 self._update_progress("load_agent", "completed")
-
-            elif not is_debuggable and not is_rooted:
-                raise Exception(
-                    f"App '{package_name}' is not debuggable and the device is not rooted. "
-                    "Cannot inject: enable developer options on the device or use a rooted device."
-                )
-
-            else:
+            elif is_debuggable:
                 # ── GADGET PATH (existing logic) ─────────────────────────────
                 logging.info("[*] Debuggable app detected → Gadget Path (JDWP).")
 
@@ -774,7 +767,11 @@ class FridaBridge:
                 self._update_progress("load_agent", "running")
                 self._connect_and_load_agent(pid)
                 self._update_progress("load_agent", "completed")
-
+            else:
+                raise Exception(
+                    f"App '{package_name}' is not debuggable and the device is not rooted. "
+                    "Cannot inject: enable developer options on the device or use a rooted device."
+                )
             logging.info("=== [ INJECTION SEQUENCE COMPLETED ] ===\n")
 
         except Exception as e:
