@@ -957,8 +957,8 @@ fun main(args: Array<String>) {
 
                             Renderer.render(state)
 
-                            // iOS goes directly to class filtering, Android uses tmux
-                            if (state.selectedPlatform == "iOS") {
+                            // iOS repackaged goes directly to class filtering, Android and Jailbroken iOS use the menu/tmux flow
+                            if (state.selectedPlatform == "iOS" && !state.isIosJailbroken) {
                                 CommandExecutor.initDebugClassFilter(state, scope)
                             } else {
                                 CommandExecutor.proceedWithTmux(state)

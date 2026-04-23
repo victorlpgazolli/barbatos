@@ -137,6 +137,7 @@ data class AppState(
     var iosCertList: List<String> = emptyList(),
     var iosSelectedCertIndex: Int = 0,
     var iosRepackageError: String? = null,
+    var isIosJailbroken: Boolean = false,
     val sharedIosAppSelectionReady: AtomicReference<Boolean?> = AtomicReference(null),
 
     // Gadget Install Status

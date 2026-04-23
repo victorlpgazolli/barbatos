@@ -268,12 +268,20 @@ object CommandExecutor {
         scope.launch {
             try {
                 val device = state.deviceInfoList.getOrNull(state.selectedDeviceIndex)
+                val targetSerial = device?.serial ?: ""
+
+                // Show spinner during bridge check and jailbreak check
+                state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
+                state.gadgetErrorMessage = null
+                state.gadgetSpinnerFrame = 0
+                state.gadgetInjectionSteps = emptyList()
+                state.isFetchingDevices = false
 
                 // 1. Ensure Bridge is running
                 if (!RpcClient.ping()) {
                     val logFile = "${CacheManager.cacheDir()}/bridge.log"
                     val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
-                    val serialArg = if (device != null && device.serial.isNotEmpty()) " --serial ${device.serial}" else ""
+                    val serialArg = if (targetSerial.isNotEmpty()) " --serial $targetSerial" else ""
                     val bridgeCmd = getBridgeCommand(serialArg)
                     system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
                     kotlinx.coroutines.delay(1000)
@@ -288,7 +296,7 @@ object CommandExecutor {
                     }
                     if (!bridgeReady) {
                         state.iosRepackageError = "Failed to start bridge for jailbreak check."
-                        state.isFetchingDevices = false
+                        state.gadgetInstallStatus = GadgetInstallStatus.IDLE
                         state.pushMode(AppMode.IOS_APP_SELECTION)
                         state.sharedIosAppSelectionReady.value = true
                         return@launch
@@ -296,17 +304,11 @@ object CommandExecutor {
                 }
 
                 // 2. Check Jailbreak Status
-                val targetSerial = device?.serial ?: ""
                 val (status, message) = RpcClient.checkIosJailbreakStatus(targetSerial)
 
                 if (status == "jailbroken") {
                     // Jailbroken path
-                    state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
-                    state.gadgetErrorMessage = null
-                    state.gadgetSpinnerFrame = 0
-                    state.gadgetInjectionSteps = emptyList()
-                    state.isFetchingDevices = false
-                    
+                    state.isIosJailbroken = true
                     state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
                     RpcClient.resetInjection()
 
@@ -345,7 +347,8 @@ object CommandExecutor {
                     // Show error (e.g., please open app) on the app selection screen
                     state.iosRepackageError = message ?: "Error checking jailbreak status"
                     discoverIosApps(state)
-                    state.isFetchingDevices = false
+                    state.isIosJailbroken = false
+                    state.gadgetInstallStatus = GadgetInstallStatus.IDLE
                     state.pushMode(AppMode.IOS_APP_SELECTION)
                     state.sharedIosAppSelectionReady.value = true
                     return@launch
@@ -363,7 +366,8 @@ object CommandExecutor {
             } catch (e: Exception) {
                 state.iosRepackageError = "Error initializing iOS selection: ${e.message}"
             }
-            state.isFetchingDevices = false
+            state.isIosJailbroken = false
+            state.gadgetInstallStatus = GadgetInstallStatus.IDLE
             state.pushMode(AppMode.IOS_APP_SELECTION)
             state.sharedIosAppSelectionReady.value = true
         }
