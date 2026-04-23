@@ -800,14 +800,14 @@ class FridaBridge:
                 return {"status": "jailbroken", "app": app.identifier, "pid": app.pid, "name": app.name}
             else:
                 return {"status": "error", "message": "Por favor, abra o aplicativo no iPhone antes de conectar."}
-        except frida.ServerNotRunningError:
-            return {"status": "not_jailbroken"}
-        except frida.TimedOutError:
-            return {"status": "not_jailbroken"}
+        except frida.ServerNotRunningError as e:
+            return {"status": "not_jailbroken", "message": f"ServerNotRunningError: {e}"}
+        except frida.TimedOutError as e:
+            return {"status": "not_jailbroken", "message": f"TimedOutError: {e}"}
         except Exception as e:
             import logging
             logging.error(f"[jailbreak_check] Error: {e}")
-            return {"status": "not_jailbroken"}
+            return {"status": "not_jailbroken", "message": f"Exception: {e}"}
 
     def inject_jailbroken_ios(self):
         import logging
@@ -1374,7 +1374,7 @@ class FridaBridge:
                 return self.ios_deploy_status
 
         elif method == "checkIosJailbreakStatus":
-            return self._check_ios_jailbreak_status()
+            return self._check_ios_jailbreak_status(target_serial=params.get("serial"))
 
         elif method == "injectJailbrokenIos":
             with self._lock:
@@ -1384,7 +1384,8 @@ class FridaBridge:
                 if not self.is_injecting_gadget and (not is_terminal or params.get("force")):
                     logging.info("[rpc] Starting background jailbroken injection thread...")
                     self.is_injecting_gadget = True
-                    threading.Thread(target=self.inject_jailbroken_ios, daemon=True).start()
+                    target_serial = params.get("serial")
+                    threading.Thread(target=self.inject_jailbroken_ios, args=(target_serial,), daemon=True).start()
 
             if self.is_injecting_gadget:
                 status = "running"

@@ -267,12 +267,101 @@ object CommandExecutor {
         state.isFetchingDevices = true
         scope.launch {
             try {
+                val device = state.deviceInfoList.getOrNull(state.selectedDeviceIndex)
+
+                // 1. Ensure Bridge is running
+                if (!RpcClient.ping()) {
+                    val logFile = "${CacheManager.cacheDir()}/bridge.log"
+                    val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
+                    val serialArg = if (device != null && device.serial.isNotEmpty()) " --serial ${device.serial}" else ""
+                    val bridgeCmd = getBridgeCommand(serialArg)
+                    system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
+                    kotlinx.coroutines.delay(1000)
+                    
+                    var bridgeReady = false
+                    for (i in 1..30) {
+                        if (RpcClient.ping()) {
+                            bridgeReady = true
+                            break
+                        }
+                        kotlinx.coroutines.delay(100)
+                    }
+                    if (!bridgeReady) {
+                        state.iosRepackageError = "Failed to start bridge for jailbreak check."
+                        state.isFetchingDevices = false
+                        state.pushMode(AppMode.IOS_APP_SELECTION)
+                        state.sharedIosAppSelectionReady.value = true
+                        return@launch
+                    }
+                }
+
+                // 2. Check Jailbreak Status
+                val targetSerial = device?.serial ?: ""
+                val (status, message) = RpcClient.checkIosJailbreakStatus(targetSerial)
+
+                if (status == "jailbroken") {
+                    // Jailbroken path
+                    state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
+                    state.gadgetErrorMessage = null
+                    state.gadgetSpinnerFrame = 0
+                    state.gadgetInjectionSteps = emptyList()
+                    state.isFetchingDevices = false
+                    
+                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
+                    RpcClient.resetInjection()
+
+                    var isFinished = false
+                    while (!isFinished && state.running) {
+                        val (progress, error) = RpcClient.injectJailbrokenIos(targetSerial)
+                        
+                        if (error != null) {
+                            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error)
+                            isFinished = true
+                        } else if (progress != null) {
+                            state.sharedGadgetSteps.value = progress.steps
+                            state.sharedBridgeLogs.value = progress.logs
+
+                            when (progress.status) {
+                                "completed" -> {
+                                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
+                                    isFinished = true
+                                }
+                                "error" -> {
+                                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, progress.error_message ?: "Unknown error during injection")
+                                    isFinished = true
+                                }
+                                "running" -> {
+                                    kotlinx.coroutines.delay(500)
+                                }
+                            }
+                        } else {
+                            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Empty response from bridge")
+                            isFinished = true
+                        }
+                    }
+                    
+                    return@launch
+                } else if (status == "error") {
+                    // Show error (e.g., please open app) on the app selection screen
+                    state.iosRepackageError = message ?: "Error checking jailbreak status"
+                    discoverIosApps(state)
+                    state.isFetchingDevices = false
+                    state.pushMode(AppMode.IOS_APP_SELECTION)
+                    state.sharedIosAppSelectionReady.value = true
+                    return@launch
+                }
+
+                // 3. Normal path (not jailbroken)
                 discoverIosApps(state)
-                if (state.iosAppPaths.isEmpty()) {
-                    state.iosRepackageError = "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                if (state.iosAppPaths.isEmpty() && state.iosRepackageError == null) {
+                    if (message != null && message.isNotBlank()) {
+                        state.iosRepackageError = "Jailbreak check failed: $message"
+                    } else {
+                        state.iosRepackageError = "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                    }
                 }
             } catch (e: Exception) {
-                state.iosRepackageError = "Error discovering apps: ${e.message}"
+                state.iosRepackageError = "Error initializing iOS selection: ${e.message}"
             }
             state.isFetchingDevices = false
             state.pushMode(AppMode.IOS_APP_SELECTION)
