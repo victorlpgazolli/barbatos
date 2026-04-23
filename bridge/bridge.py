@@ -787,6 +787,79 @@ class FridaBridge:
                 self._in_actual_injection = False
                 self.is_injecting_gadget = False
 
+
+    def _check_ios_jailbreak_status(self):
+        try:
+            if self.serial:
+                device = frida.get_device(self.serial, timeout=3)
+            else:
+                device = frida.get_usb_device(timeout=3)
+                
+            app = device.get_frontmost_application()
+            if app:
+                return {"status": "jailbroken", "app": app.identifier, "pid": app.pid, "name": app.name}
+            else:
+                return {"status": "error", "message": "Por favor, abra o aplicativo no iPhone antes de conectar."}
+        except frida.ServerNotRunningError:
+            return {"status": "not_jailbroken"}
+        except frida.TimedOutError:
+            return {"status": "not_jailbroken"}
+        except Exception as e:
+            import logging
+            logging.error(f"[jailbreak_check] Error: {e}")
+            return {"status": "not_jailbroken"}
+
+    def inject_jailbroken_ios(self):
+        import logging
+        with self._lock:
+            if getattr(self, "_in_actual_injection", False):
+                logging.info("Already in actual injection process, skipping redundant call.")
+                return
+            self._in_actual_injection = True
+            self.is_injecting_gadget = True
+
+        try:
+            self.injection_progress["steps"] = [
+                {"id": "get_target", "title": "Identify target application", "status": "completed"},
+                {"id": "load_agent", "title": "Attach to process and load agent", "status": "pending"}
+            ]
+            self.injection_progress["error_message"] = None
+
+            if self.serial:
+                device = frida.get_device(self.serial, timeout=5)
+            else:
+                device = frida.get_usb_device(timeout=5)
+                
+            app = device.get_frontmost_application()
+            if not app:
+                raise Exception("No frontmost application found. Please open the app on your device.")
+
+            self._update_progress("load_agent", "running")
+            logging.info(f"[root] Attaching to PID {app.pid} via USB frida-server...")
+            self.session = device.attach(app.pid)
+            self.session._pid = app.pid
+
+            from bridge import get_resource_path
+            agent_path = get_resource_path('agent.bundle.js')
+            with open(agent_path, 'r', encoding='utf-8') as f:
+                source = f.read()
+
+            self.script = self.session.create_script(source)
+            self.script.load()
+            logging.info("[root] Agent loaded via frida-server.")
+            self._update_progress("load_agent", "completed")
+
+        except Exception as e:
+            logging.error(f"Error during jailbroken iOS injection: {e}")
+            self.injection_progress["error_message"] = str(e)
+            for s in self.injection_progress["steps"]:
+                if s["status"] == "running":
+                    s["status"] = "error"
+        finally:
+            with self._lock:
+                self.is_injecting_gadget = False
+                self._in_actual_injection = False
+
     # Returns the active Frida session, creating a new attachment and script load if the current one is invalid
     def get_session(self):
         # Wait OUTSIDE the lock — inject_gadget_from_scratch's finally block also acquires
@@ -1299,6 +1372,34 @@ class FridaBridge:
         elif method == "checkIosDeployStatus":
             with self._lock:
                 return self.ios_deploy_status
+
+        elif method == "checkIosJailbreakStatus":
+            return self._check_ios_jailbreak_status()
+
+        elif method == "injectJailbrokenIos":
+            with self._lock:
+                is_terminal = self.injection_progress["error_message"] is not None or \
+                              (all(s["status"] != "pending" for s in self.injection_progress["steps"]))
+
+                if not self.is_injecting_gadget and (not is_terminal or params.get("force")):
+                    logging.info("[rpc] Starting background jailbroken injection thread...")
+                    self.is_injecting_gadget = True
+                    threading.Thread(target=self.inject_jailbroken_ios, daemon=True).start()
+
+            if self.is_injecting_gadget:
+                status = "running"
+            elif self.injection_progress["error_message"]:
+                status = "error"
+            else:
+                status = "completed"
+
+            res = {
+                "status": status,
+                "error_message": self.injection_progress["error_message"],
+                "steps": self.injection_progress["steps"],
+                "logs": self.log_buffer[-20:]
+            }
+            return res
 
         elif method == "getpackagename":
             self.get_session()
