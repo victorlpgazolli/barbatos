@@ -244,6 +244,12 @@ object CommandExecutor {
                     state.selectedPlatform = device.status
                     state.isFetchingDevices = false
 
+                    state.gadgetInstallStatus = GadgetInstallStatus.WAITING_BRIDGE_SETUP
+                    state.gadgetErrorMessage = null
+                    state.gadgetSpinnerFrame = 0
+                    state.gadgetInjectionSteps = emptyList()
+                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
+
                     if (device.status == "iOS") {
                         initIosAppSelection(state, scope)
                     } else {
@@ -267,9 +273,19 @@ object CommandExecutor {
         state.isFetchingDevices = true
         scope.launch {
             try {
-                discoverIosApps(state)
-                if (state.iosAppPaths.isEmpty()) {
-                    state.iosRepackageError = "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                RpcClient.prepareEnvironment()
+                val healthCheck = RpcClient.healthCheck()
+                val isFridaConnected = healthCheck?.checks?.get("frida_connection")?.status == "ok"
+                if (!isFridaConnected) {
+                    discoverIosApps(state)
+                    if (state.iosAppPaths.isEmpty()) {
+                        state.iosRepackageError =
+                            "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                    }
+                } else {
+                    state.isFetchingDevices = false
+                    state.pushMode(AppMode.DEBUG_ENTRYPOINT)
+                    return@launch
                 }
             } catch (e: Exception) {
                 state.iosRepackageError = "Error discovering apps: ${e.message}"

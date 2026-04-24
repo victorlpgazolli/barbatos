@@ -269,7 +269,18 @@ class FridaBridge:
                 logging.warning(f"[_get_front_app_using_adb] ADB fallback failed: {result.stderr}")
         except Exception as e:
             logging.warning(f"ADB fallback exception: {e}")
-
+    def _is_serial_from_adb(self, serial):
+        try:
+            result = subprocess.run(["adb", "devices"], capture_output=True, text=True)
+            if result.returncode == 0:
+                devices = [line.split()[0] for line in result.stdout.strip().splitlines()[1:] if line.strip()]
+                return serial in devices
+            else:
+                logging.warning(f"Failed to list ADB devices: {result.stderr}")
+                return False
+        except Exception as e:
+            logging.warning(f"ADB devices exception: {e}")
+            return False
     # Fallback method to get the PID of a given package name using ADB shell pidof
     def _get_front_app_pid_using_adb(self, package_name):
         adb_cmd = ["adb"]
@@ -396,20 +407,31 @@ class FridaBridge:
     def _prepare_gadget(self, pid):
         self._detach_frida()
 
-        logging.info(f"[_prepare_gadget] Setting up adb forward tcp:{self.gadget_port} jdwp:{pid}")
-        adb_cmd = ["adb"]
-        if self.serial:
-            adb_cmd.extend(["-s", self.serial])
-        adb_cmd.extend(["forward", f"tcp:{self.gadget_port}", f"jdwp:{pid}"])
+        useAdb = self._is_serial_from_adb(self.serial)
+        if useAdb:
+            logging.info(f"[_prepare_gadget] Setting up adb forward tcp:{self.gadget_port} jdwp:{pid}")
+            adb_cmd = ["adb"]
+            if self.serial:
+                adb_cmd.extend(["-s", self.serial])
+            adb_cmd.extend(["forward", f"tcp:{self.gadget_port}", f"jdwp:{pid}"])
 
-        r = subprocess.run(
-            adb_cmd,
-            capture_output=True, text=True
-        )
-        if r.returncode != 0:
-            raise Exception(f"[_prepare_gadget] adb forward failed: {r.stderr}")
+            r = subprocess.run(
+                adb_cmd,
+                capture_output=True, text=True
+            )
+            if r.returncode != 0:
+                raise Exception(f"[_prepare_gadget] adb forward failed: {r.stderr}")
+            logging.info(f"[_prepare_gadget] adb forward ok, waiting for JDWP to initialize...")
+        else:
+            logging.info(f"[_prepare_gadget] Serial {self.serial} does not appear to be an adb device, probably is an iOS device.")
+            try:
+                self.get_session()
+                self._update_ios_progress_jailbroken_device()
+            except Exception as e:
+                # ios is not jailbroken
+                logging.info(f"[_prepare_gadget] Failed to get session on iOS device, likely not jailbroken: {e}")
+                pass
 
-        logging.info(f"[_prepare_gadget] adb forward ok, waiting for JDWP to initialize...")
 
     # Utility method to identify the foreground app's package name and PID directly via ADB commands
     def _get_front_package_and_pid(self):
@@ -477,7 +499,7 @@ class FridaBridge:
             return False
 
     # Establishes connection to the remote Frida Gadget TCP server and conditionally loads the JavaScript agent
-    def _connect_and_load_agent(self, pid):
+    def _connect_to_gadget_and_load_agent(self, pid):
         """Connects the Frida session and loads the agent only if necessary."""
         logging.info(f"[inject] Connecting to remote Gadget at 127.0.0.1:27042... (target PID: {pid})")
         
@@ -519,6 +541,17 @@ class FridaBridge:
             logging.error(f"[inject] All attachment attempts failed: {last_err}")
             raise Exception(f"Failed to attach to Frida Gadget after {max_retries} attempts: {last_err}")
 
+        self._load_agent()
+    def _connect_to_app_and_load_agent(self, pid):
+        """Directly attach to the app's PID without using the Gadget, for iOS non-jailbroken path."""
+        logging.info(f"[inject] Connecting directly to app PID {pid} without Gadget...")
+
+        device = self._get_device()
+        self.session = device.attach(int(pid))
+        self.session._pid = int(pid)
+        logging.info(f"[inject] Attached to app PID {pid} successfully.")
+        self._load_agent()
+    def _load_agent(self):
         # Prevents reloading the JS if it's already injected and active in this session
         if self.script and not getattr(self.script, "is_destroyed", False):
             logging.info("[inject] Agent is already loaded. Skipping JS injection.")
@@ -536,7 +569,6 @@ class FridaBridge:
         except Exception as e:
             logging.error(f"[inject] Failed to load script: {e}")
             raise e
-
     # =================================================================
     # ROOT PATH HELPERS
     # =================================================================
@@ -765,7 +797,7 @@ class FridaBridge:
 
                 # 6. Load Agent
                 self._update_progress("load_agent", "running")
-                self._connect_and_load_agent(pid)
+                self._connect_to_gadget_and_load_agent(pid)
                 self._update_progress("load_agent", "completed")
             else:
                 raise Exception(
@@ -1041,7 +1073,26 @@ class FridaBridge:
         except Exception as e:
             logging.error(f"[_monitor_and_hijack_ios] Error: {e}")
             self._update_ios_progress("hijack_process", "error", global_status="error", error=str(e))
-
+    def _update_ios_progress_jailbroken_device(self):
+        with self._lock:
+            for s in self.ios_deploy_status["steps"]:
+                if s["id"] == "wait_xcode":
+                    s["title"] = "Device is jailbroken, skipping Xcode deploy wait"
+                    s["status"] = "completed"
+                elif s["id"] == "inject_gadget":
+                    s["title"] = "Device is jailbroken, skipping gadget injection step"
+                    s["status"] = "completed"
+                elif s["id"] == "hijack_process":
+                    s["title"] = "Device is jailbroken, skipping process hijack step"
+                    s["status"] = "completed"
+                elif s["id"] == "load_agent":
+                    s["title"] = "Device is jailbroken, loading agent..."
+                    s["status"] = "running"
+            self.ios_deploy_status["error_message"] = None
+        pid, package = self._get_application_pid_and_package()
+        self._update_ios_progress("load_agent", "running")
+        self._connect_to_app_and_load_agent(pid)
+        self._update_ios_progress("load_agent", "completed")
     def _patch_and_install_ios_app(self, source_path: str) -> dict:
         """
         Injects Frida gadget into the local build and spawns a background thread to hijack the Xcode launch.
@@ -1109,7 +1160,15 @@ class FridaBridge:
         if count == -1:
             raise Exception(f"Failed to count instances for {class_name}")
         return count
-
+    def reset_ios_injection(self):
+        with self._lock:
+            if self.ios_deploy_status["status"] == "running":
+                return False
+            for s in self.ios_deploy_status["steps"]:
+                s["status"] = "pending"
+            self.ios_deploy_status["error_message"] = None
+            logging.info("[reset] iOS injection state reset.")
+            return True
     # Resets the injection progress state to allow for a clean retry
     def reset_injection(self):
         with self._lock:
@@ -1146,15 +1205,27 @@ class FridaBridge:
             report["adb"] = {"status": "error", "message": str(e), "fix": "Ensure adb is installed and in PATH"}
 
         # Check 2: Frida can see the device
+        device = None
         try:
             if self.serial:
-                frida.get_device(self.serial, timeout=5)
+                device = frida.get_device(self.serial, timeout=5)
             else:
-                frida.get_usb_device(timeout=5)
+                device = frida.get_usb_device(timeout=5)
             report["frida_device"] = {"status": "ok", "message": "Frida device enumeration succeeded"}
         except Exception as e:
             serial_hint = f" --serial {self.serial}" if self.serial else ""
             report["frida_device"] = {
+                "status": "error",
+                "message": str(e),
+                "fix": f"Check USB debugging is enabled; re-run: barbatos-bridge{serial_hint}"
+            }
+        # Check 2: Frida can connect with the device
+        try:
+            self.get_session()
+            report["frida_connection"] = {"status": "ok", "message": "Frida device connection succeeded"}
+        except Exception as e:
+            serial_hint = f" --serial {self.serial}" if self.serial else ""
+            report["frida_connection"] = {
                 "status": "error",
                 "message": str(e),
                 "fix": f"Check USB debugging is enabled; re-run: barbatos-bridge{serial_hint}"
@@ -1181,10 +1252,13 @@ class FridaBridge:
 
         statuses = [v["status"] for v in report.values()]
         overall = "degraded" if "error" in statuses else "ok"
+        import logging
+        logging.info(f"[health_check] Overall status: {overall} | Details: {report}")
         return {"overall": overall, "checks": report}
 
     # Routing logic mapping string method names from the JSON-RPC payload to their internal Python implementations
     def handle_rpc(self, method, params):
+        self.serial = params.get("serial", self.serial)
         if method == "listClasses":
             return self.list_classes(
                 search_param=params.get("search_param", ""),
@@ -1231,7 +1305,8 @@ class FridaBridge:
                 "pid": pid,
                 "package_name": package_name,
                 "port": self.gadget_port,
-                "target": self.gadget_target
+                "target": self.gadget_target,
+                "is_debuggable": self._is_app_debuggable(package_name)
             }
 
         elif method == "checkOrPushGadget":
@@ -1246,6 +1321,7 @@ class FridaBridge:
                 return { "status": "error", "error_message": "Cannot reset while injection is in progress" }
 
         elif method == "injectGadgetFromScratch":
+            import logging
             # Initiates the background injection thread if not already active and NOT in a terminal state
             with self._lock:
                 # A state is terminal if we have an error or if all steps are no longer 'pending' and we're not 'running'
@@ -1298,6 +1374,8 @@ class FridaBridge:
 
         elif method == "checkIosDeployStatus":
             with self._lock:
+                import logging
+                logging.info(f"[checkIosDeployStatus] Current iOS deploy status: {self.ios_deploy_status}")
                 return self.ios_deploy_status
 
         elif method == "getpackagename":

@@ -1,3 +1,4 @@
+import RpcClient.client
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -26,6 +27,24 @@ data class JsonRpcRequestListClasses(
     val method: String,
     val params: ListClassesParams,
     val id: Int = 1
+)
+@Serializable
+data class CheckResponse(
+    val status: String,
+    val message: String,
+    val fix: String? = null
+)
+@Serializable
+data class HealthCheckResponse(
+    val overall: String,
+    val checks: Map<String, CheckResponse>
+)
+@Serializable
+data class JsonRpcResponseHealthCheck(
+    val jsonrpc: String = "2.0",
+    val result: HealthCheckResponse? = null,
+    val error: JsonRpcError? = null,
+    val id: Int? = null
 )
 
 @Serializable
@@ -634,6 +653,23 @@ object RpcClient {
             response.status.value in 200..299
         } catch (e: Exception) {
             false
+        }
+    }
+    suspend fun healthCheck(): HealthCheckResponse? {
+        return try {
+            val requestBody = JsonRpcRequestSimple(method = "healthCheck")
+            val response: HttpResponse = withTimeoutOrNull(5000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return null
+
+            if (response.status.value in 200..299) {
+                response.body<JsonRpcResponseHealthCheck>().result
+            } else null
+        } catch (e: Exception) {
+            null
         }
     }
 
