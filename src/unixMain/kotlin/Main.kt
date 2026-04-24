@@ -63,7 +63,7 @@ fun main(args: Array<String>) {
         return
     }
 
-    val state = AppState(adbSerial = adbSerial, mode = initialMode)
+    val state = AppState(serial = adbSerial, mode = initialMode)
     if (args.contains("--mode")) {
         state.isSubPane = true
     }
@@ -654,7 +654,7 @@ fun main(args: Array<String>) {
                 } else if (state.mode == AppMode.DEBUG_DEVICE_SELECTION) {
                     if (state.deviceInfoList.isNotEmpty() && state.selectedDeviceIndex in state.deviceInfoList.indices) {
                         val selectedDevice = state.deviceInfoList[state.selectedDeviceIndex]
-                        state.adbSerial = selectedDevice.serial
+                        state.serial = selectedDevice.serial
                         state.selectedPlatform = selectedDevice.status
                         state.popMode()
                         
@@ -957,8 +957,8 @@ fun main(args: Array<String>) {
 
                             Renderer.render(state)
 
-                            // iOS goes directly to class filtering, Android uses tmux
-                            if (state.selectedPlatform == "iOS") {
+                            // iOS repackaged goes directly to class filtering, Android and Jailbroken iOS use the menu/tmux flow
+                            if (state.selectedPlatform == "iOS" && !state.isIosJailbroken) {
                                 CommandExecutor.initDebugClassFilter(state, scope)
                             } else {
                                 CommandExecutor.proceedWithTmux(state)

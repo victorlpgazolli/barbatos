@@ -1,3 +1,4 @@
+import RpcClient.client
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -10,6 +11,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Serializable
@@ -26,6 +30,24 @@ data class JsonRpcRequestListClasses(
     val method: String,
     val params: ListClassesParams,
     val id: Int = 1
+)
+@Serializable
+data class CheckResponse(
+    val status: String,
+    val message: String,
+    val fix: String? = null
+)
+@Serializable
+data class HealthCheckResponse(
+    val overall: String,
+    val checks: Map<String, CheckResponse>
+)
+@Serializable
+data class JsonRpcResponseHealthCheck(
+    val jsonrpc: String = "2.0",
+    val result: HealthCheckResponse? = null,
+    val error: JsonRpcError? = null,
+    val id: Int? = null
 )
 
 @Serializable
@@ -58,6 +80,13 @@ data class JsonRpcRequestCountInstances(
 data class JsonRpcRequestSimple(
     val jsonrpc: String = "2.0",
     val method: String,
+    val id: Int = 1
+)
+@Serializable
+data class JsonRpcRequestSimpleWithSerial(
+    val jsonrpc: String = "2.0",
+    val method: String,
+    val params: Map<String, String>,
     val id: Int = 1
 )
 
@@ -350,6 +379,27 @@ data class JsonRpcRequestPatchAndInstallIosApp(
 )
 
 @Serializable
+data class IosJailbreakParams(
+    val serial: String
+)
+
+@Serializable
+data class JsonRpcRequestCheckIosJailbreakStatus(
+    val jsonrpc: String = "2.0",
+    val method: String = "checkIosJailbreakStatus",
+    val params: IosJailbreakParams,
+    val id: Int = 1
+)
+
+@Serializable
+data class JsonRpcRequestInjectJailbrokenIos(
+    val jsonrpc: String = "2.0",
+    val method: String = "injectJailbrokenIos",
+    val params: IosJailbreakParams,
+    val id: Int = 1
+)
+
+@Serializable
 data class JsonRpcRequestCheckIosDeployStatus(
     val jsonrpc: String = "2.0",
     val method: String = "checkIosDeployStatus",
@@ -563,14 +613,14 @@ object RpcClient {
         }
     }
 
-    suspend fun prepareEnvironment(): Pair<PrepareEnvResult?, String?> {
+    suspend fun prepareEnvironment(serial: String): Pair<PrepareEnvResult?, String?> {
         val serverUp = ping()
         if (!serverUp) {
             return Pair(null, "Bridge server is not running")
         }
 
         return try {
-            val requestBody = JsonRpcRequestSimple(method = "prepareEnvironment")
+            val requestBody = JsonRpcRequestSimpleWithSerial(method = "prepareEnvironment", params = mapOf("serial" to serial))
             val response: HttpResponse = withTimeoutOrNull(20000) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
@@ -595,36 +645,10 @@ object RpcClient {
         }
     }
 
-    suspend fun checkOrPushGadget(): Pair<String?, String?> {
-        return try {
-            val requestBody = JsonRpcRequestSimple(method = "checkOrPushGadget")
-            val response: HttpResponse = withTimeoutOrNull(60000) {
-                client.post("http://127.0.0.1:8080/rpc") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestBody)
-                }
-            } ?: return Pair(null, "Timeout checking or pushing gadget")
 
-            if (response.status.value in 200..299) {
-                val rpcResponse = response.body<JsonRpcGenericStatusResponse>()
-                if (rpcResponse.result != null) {
-                    Pair(rpcResponse.result.status, rpcResponse.result.error_message)
-                } else if (rpcResponse.error != null) {
-                    Pair(null, rpcResponse.error.message)
-                } else {
-                    Pair(null, "Unexpected empty response")
-                }
-            } else {
-                Pair(null, "RPC HTTP Error: ${response.status.value}")
-            }
-        } catch (e: Exception) {
-            Pair(null, "RPC Internal Error: ${e.message}")
-        }
-    }
-
-    suspend fun resetInjection(): Boolean {
+    suspend fun resetInjection(serial: String): Boolean {
         return try {
-            val requestBody = JsonRpcRequestSimple(method = "resetInjection")
+            val requestBody = JsonRpcRequestSimpleWithSerial(method = "resetInjection", params = mapOf("serial" to serial))
             val response: HttpResponse = withTimeoutOrNull(5000) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
@@ -634,6 +658,23 @@ object RpcClient {
             response.status.value in 200..299
         } catch (e: Exception) {
             false
+        }
+    }
+    suspend fun healthCheck(serial: String): HealthCheckResponse? {
+        return try {
+            val requestBody = JsonRpcRequestSimpleWithSerial(method = "healthCheck", params = mapOf("serial" to serial))
+            val response: HttpResponse = withTimeoutOrNull(5000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return null
+
+            if (response.status.value in 200..299) {
+                response.body<JsonRpcResponseHealthCheck>().result
+            } else null
+        } catch (e: Exception) {
+            null
         }
     }
 
