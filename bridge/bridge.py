@@ -1252,7 +1252,6 @@ class FridaBridge:
 
         statuses = [v["status"] for v in report.values()]
         overall = "degraded" if "error" in statuses else "ok"
-        import logging
         logging.info(f"[health_check] Overall status: {overall} | Details: {report}")
         return {"overall": overall, "checks": report}
 
@@ -1321,7 +1320,6 @@ class FridaBridge:
                 return { "status": "error", "error_message": "Cannot reset while injection is in progress" }
 
         elif method == "injectGadgetFromScratch":
-            import logging
             # Initiates the background injection thread if not already active and NOT in a terminal state
             with self._lock:
                 # A state is terminal if we have an error or if all steps are no longer 'pending' and we're not 'running'
@@ -1374,7 +1372,6 @@ class FridaBridge:
 
         elif method == "checkIosDeployStatus":
             with self._lock:
-                import logging
                 logging.info(f"[checkIosDeployStatus] Current iOS deploy status: {self.ios_deploy_status}")
                 return self.ios_deploy_status
 
