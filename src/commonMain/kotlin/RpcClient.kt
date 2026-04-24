@@ -11,6 +11,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Serializable
@@ -365,6 +368,27 @@ data class JsonRpcRequestPatchAndInstallIosApp(
     val jsonrpc: String = "2.0",
     val method: String = "patchAndInstallIosApp",
     val params: PatchAndInstallIosAppParams,
+    val id: Int = 1
+)
+
+@Serializable
+data class IosJailbreakParams(
+    val serial: String
+)
+
+@Serializable
+data class JsonRpcRequestCheckIosJailbreakStatus(
+    val jsonrpc: String = "2.0",
+    val method: String = "checkIosJailbreakStatus",
+    val params: IosJailbreakParams,
+    val id: Int = 1
+)
+
+@Serializable
+data class JsonRpcRequestInjectJailbrokenIos(
+    val jsonrpc: String = "2.0",
+    val method: String = "injectJailbrokenIos",
+    val params: IosJailbreakParams,
     val id: Int = 1
 )
 
@@ -896,6 +920,59 @@ object RpcClient {
             }
         } catch (e: Exception) {
             Pair(false, e.message ?: "Error connecting to bridge")
+        }
+    }
+
+    suspend fun checkIosJailbreakStatus(serial: String): Pair<String, String?> {
+        return try {
+            val requestBody = JsonRpcRequestCheckIosJailbreakStatus(
+                params = IosJailbreakParams(serial)
+            )
+            val response: HttpResponse = withTimeoutOrNull(10000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return Pair("not_jailbroken", "Timeout connecting to bridge")
+
+            val jsonStr = response.bodyAsText()
+            val json = Json { ignoreUnknownKeys = true }
+            val element = json.parseToJsonElement(jsonStr).jsonObject
+
+            if (element.containsKey("error")) {
+                return Pair("error", element["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content)
+            }
+
+            val result = element["result"]?.jsonObject
+            val status = result?.get("status")?.jsonPrimitive?.content ?: "not_jailbroken"
+            val message = result?.get("message")?.jsonPrimitive?.content
+
+            Pair(status, message)
+        } catch (e: Exception) {
+            Pair("not_jailbroken", e.message)
+        }
+    }
+
+    suspend fun injectJailbrokenIos(serial: String): Pair<InjectionProgressResult?, String?> {
+        return try {
+            val requestBody = JsonRpcRequestInjectJailbrokenIos(
+                params = IosJailbreakParams(serial)
+            )
+            val response: HttpResponse = withTimeoutOrNull(5000) {
+                client.post("http://127.0.0.1:8080/rpc") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }
+            } ?: return Pair(null, "Timeout connecting to bridge")
+
+            if (response.status.value in 200..299) {
+                val rpcResponse = response.body<JsonRpcInjectionProgressResponse>()
+                Pair(rpcResponse.result, null)
+            } else {
+                Pair(null, "RPC HTTP Error: ${response.status.value}")
+            }
+        } catch (e: Exception) {
+            Pair(null, e.message ?: "Error connecting to bridge")
         }
     }
 
