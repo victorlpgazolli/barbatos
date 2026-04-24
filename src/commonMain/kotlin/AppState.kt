@@ -66,7 +66,7 @@ sealed class InspectRow {
 }
 
 data class AppState(
-    var adbSerial: String? = null,
+    var serial: String? = null,
     var inputBuffer: String = "",
     var cursorPosition: Int = 0,
     var suggestions: List<Command> = emptyList(),
@@ -83,7 +83,7 @@ data class AppState(
     var debugEntrypointIndex: Int = 0,
     var appPackageName: String = "",
     val sharedAppPackageName: AtomicReference<String?> = AtomicReference(null),
-    
+
     var lastInputTimestamp: Long = 0L,
     var lastSearchedParam: String = "",
     val sharedFetchedClasses: AtomicReference<List<String>?> = AtomicReference(null),
@@ -100,7 +100,7 @@ data class AppState(
     var selectedPlatform: String = "Android",
     var rpcError: String? = null,
     val sharedDeviceSelectionReady: AtomicReference<Boolean?> = AtomicReference(null),
-    
+
     var instanceCounts: MutableMap<String, Int> = mutableMapOf(),
     var isFetchingInstances: Boolean = false,
     val sharedInstanceCountResult: AtomicReference<Pair<String, Int>?> = AtomicReference(null),

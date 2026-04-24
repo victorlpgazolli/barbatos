@@ -82,6 +82,13 @@ data class JsonRpcRequestSimple(
     val method: String,
     val id: Int = 1
 )
+@Serializable
+data class JsonRpcRequestSimpleWithSerial(
+    val jsonrpc: String = "2.0",
+    val method: String,
+    val params: Map<String, String>,
+    val id: Int = 1
+)
 
 @Serializable
 data class InjectGadgetParams(
@@ -606,14 +613,14 @@ object RpcClient {
         }
     }
 
-    suspend fun prepareEnvironment(): Pair<PrepareEnvResult?, String?> {
+    suspend fun prepareEnvironment(serial: String): Pair<PrepareEnvResult?, String?> {
         val serverUp = ping()
         if (!serverUp) {
             return Pair(null, "Bridge server is not running")
         }
 
         return try {
-            val requestBody = JsonRpcRequestSimple(method = "prepareEnvironment")
+            val requestBody = JsonRpcRequestSimpleWithSerial(method = "prepareEnvironment", params = mapOf("serial" to serial))
             val response: HttpResponse = withTimeoutOrNull(20000) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
@@ -638,36 +645,10 @@ object RpcClient {
         }
     }
 
-    suspend fun checkOrPushGadget(): Pair<String?, String?> {
-        return try {
-            val requestBody = JsonRpcRequestSimple(method = "checkOrPushGadget")
-            val response: HttpResponse = withTimeoutOrNull(60000) {
-                client.post("http://127.0.0.1:8080/rpc") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestBody)
-                }
-            } ?: return Pair(null, "Timeout checking or pushing gadget")
 
-            if (response.status.value in 200..299) {
-                val rpcResponse = response.body<JsonRpcGenericStatusResponse>()
-                if (rpcResponse.result != null) {
-                    Pair(rpcResponse.result.status, rpcResponse.result.error_message)
-                } else if (rpcResponse.error != null) {
-                    Pair(null, rpcResponse.error.message)
-                } else {
-                    Pair(null, "Unexpected empty response")
-                }
-            } else {
-                Pair(null, "RPC HTTP Error: ${response.status.value}")
-            }
-        } catch (e: Exception) {
-            Pair(null, "RPC Internal Error: ${e.message}")
-        }
-    }
-
-    suspend fun resetInjection(): Boolean {
+    suspend fun resetInjection(serial: String): Boolean {
         return try {
-            val requestBody = JsonRpcRequestSimple(method = "resetInjection")
+            val requestBody = JsonRpcRequestSimpleWithSerial(method = "resetInjection", params = mapOf("serial" to serial))
             val response: HttpResponse = withTimeoutOrNull(5000) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
@@ -679,9 +660,9 @@ object RpcClient {
             false
         }
     }
-    suspend fun healthCheck(): HealthCheckResponse? {
+    suspend fun healthCheck(serial: String): HealthCheckResponse? {
         return try {
-            val requestBody = JsonRpcRequestSimple(method = "healthCheck")
+            val requestBody = JsonRpcRequestSimpleWithSerial(method = "healthCheck", params = mapOf("serial" to serial))
             val response: HttpResponse = withTimeoutOrNull(5000) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
@@ -920,59 +901,6 @@ object RpcClient {
             }
         } catch (e: Exception) {
             Pair(false, e.message ?: "Error connecting to bridge")
-        }
-    }
-
-    suspend fun checkIosJailbreakStatus(serial: String): Pair<String, String?> {
-        return try {
-            val requestBody = JsonRpcRequestCheckIosJailbreakStatus(
-                params = IosJailbreakParams(serial)
-            )
-            val response: HttpResponse = withTimeoutOrNull(10000) {
-                client.post("http://127.0.0.1:8080/rpc") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestBody)
-                }
-            } ?: return Pair("not_jailbroken", "Timeout connecting to bridge")
-
-            val jsonStr = response.bodyAsText()
-            val json = Json { ignoreUnknownKeys = true }
-            val element = json.parseToJsonElement(jsonStr).jsonObject
-
-            if (element.containsKey("error")) {
-                return Pair("error", element["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content)
-            }
-
-            val result = element["result"]?.jsonObject
-            val status = result?.get("status")?.jsonPrimitive?.content ?: "not_jailbroken"
-            val message = result?.get("message")?.jsonPrimitive?.content
-
-            Pair(status, message)
-        } catch (e: Exception) {
-            Pair("not_jailbroken", e.message)
-        }
-    }
-
-    suspend fun injectJailbrokenIos(serial: String): Pair<InjectionProgressResult?, String?> {
-        return try {
-            val requestBody = JsonRpcRequestInjectJailbrokenIos(
-                params = IosJailbreakParams(serial)
-            )
-            val response: HttpResponse = withTimeoutOrNull(5000) {
-                client.post("http://127.0.0.1:8080/rpc") {
-                    contentType(ContentType.Application.Json)
-                    setBody(requestBody)
-                }
-            } ?: return Pair(null, "Timeout connecting to bridge")
-
-            if (response.status.value in 200..299) {
-                val rpcResponse = response.body<JsonRpcInjectionProgressResponse>()
-                Pair(rpcResponse.result, null)
-            } else {
-                Pair(null, "RPC HTTP Error: ${response.status.value}")
-            }
-        } catch (e: Exception) {
-            Pair(null, e.message ?: "Error connecting to bridge")
         }
     }
 

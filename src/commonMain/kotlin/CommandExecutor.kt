@@ -1,7 +1,6 @@
+import RpcClient.healthCheck
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
-import kotlinx.cinterop.allocArray
-import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
@@ -126,7 +125,7 @@ object CommandExecutor {
             state.bridgeLogs = emptyList()
             val logFile = "${CacheManager.cacheDir()}/bridge.log"
             val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
-            val serialArg = if (state.adbSerial != null) " --serial ${state.adbSerial}" else ""
+            val serialArg = if (state.serial != null) " --serial ${state.serial}" else ""
             val bridgeCmd = getBridgeCommand(serialArg)
             system("$bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
         }
@@ -240,7 +239,7 @@ object CommandExecutor {
                 allDevices.size == 1 -> {
                     // Auto-select single device
                     val device = allDevices[0]
-                    state.adbSerial = device.serial
+                    state.serial = device.serial
                     state.selectedPlatform = device.status
                     state.isFetchingDevices = false
 
@@ -310,63 +309,26 @@ object CommandExecutor {
                 }
 
                 // 2. Check Jailbreak Status
-                val (status, message) = RpcClient.checkIosJailbreakStatus(targetSerial)
+                state.serial?.let { serial ->
+                    RpcClient.prepareEnvironment(serial)
+                    val healthCheck = RpcClient.healthCheck(serial)
 
-                if (status == "jailbroken") {
-                    // Jailbroken path
-                    state.isIosJailbroken = true
-                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
-                    RpcClient.resetInjection()
+                    val isFridaConnected = healthCheck?.checks?.get("frida_connection")?.status == "ok"
 
-                    var isFinished = false
-                    while (!isFinished && state.running) {
-                        val (progress, error) = RpcClient.injectJailbrokenIos(targetSerial)
-                        
-                        if (error != null) {
-                            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, error)
-                            isFinished = true
-                        } else if (progress != null) {
-                            state.sharedGadgetSteps.value = progress.steps
-                            state.sharedBridgeLogs.value = progress.logs
 
-                            when (progress.status) {
-                                "completed" -> {
-                                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
-                                    isFinished = true
-                                }
-                                "error" -> {
-                                    state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, progress.error_message ?: "Unknown error during injection")
-                                    isFinished = true
-                                }
-                                "running" -> {
-                                    kotlinx.coroutines.delay(500)
-                                }
-                            }
-                        } else {
-                            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Empty response from bridge")
-                            isFinished = true
-                        }
-                    }
-                    
-                    return@launch
-                } else if (status == "error") {
-                    // Show error (e.g., please open app) on the app selection screen
-                    state.iosRepackageError = message ?: "Error checking jailbreak status"
-                    discoverIosApps(state)
-                    state.isIosJailbroken = false
-                    state.gadgetInstallStatus = GadgetInstallStatus.IDLE
-                    state.pushMode(AppMode.IOS_APP_SELECTION)
-                    state.sharedIosAppSelectionReady.value = true
-                    return@launch
-                }
-
-                // 3. Normal path (not jailbroken)
-                discoverIosApps(state)
-                if (state.iosAppPaths.isEmpty() && state.iosRepackageError == null) {
-                    if (message != null && message.isNotBlank()) {
-                        state.iosRepackageError = "Jailbreak check failed: $message"
+                    if (isFridaConnected) {
+                        state.isIosJailbroken = true
+                        state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
+                        state.serial?.let { RpcClient.resetInjection(it) }
+                        state.isFetchingDevices = false
+                        state.pushMode(AppMode.DEBUG_ENTRYPOINT)
+                        return@launch
                     } else {
-                        state.iosRepackageError = "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                        discoverIosApps(state)
+                        if (state.iosAppPaths.isEmpty()) {
+                            state.iosRepackageError =
+                                "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -409,7 +371,7 @@ object CommandExecutor {
                 // Start bridge in background
                 val logFile = "${CacheManager.cacheDir()}/bridge.log"
                 val pidFile = "${CacheManager.cacheDir()}/bridge.pid"
-                val serialArg = if (state.adbSerial != null) " --serial ${state.adbSerial}" else ""
+                val serialArg = if (state.serial != null) " --serial ${state.serial}" else ""
                 val bridgeCmd = getBridgeCommand(serialArg)
                 system("PYTHONUNBUFFERED=1 $bridgeCmd > \"$logFile\" 2>&1 & echo \$! > \"$pidFile\"")
                 delay(1000) // Give bridge time to start before first ping
@@ -430,7 +392,9 @@ object CommandExecutor {
             }
 
             // Ensure bridge is in a clean state before starting injection
-            RpcClient.resetInjection()
+            state.serial?.let {
+                RpcClient.resetInjection(it)
+            }
 
             // Start polling for progress and logs
             var isFinished = false

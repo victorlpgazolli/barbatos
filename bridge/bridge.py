@@ -256,6 +256,10 @@ class FridaBridge:
     def _get_front_app_using_adb(self):
         logging.info("[_get_front_app_using_adb] Failed to get frontmost app after retries, attempting fallback via adb...")
         try:
+            useAdb = self._is_serial_from_adb(self.serial)
+            if not useAdb:
+                logging.warning(f"Serial {self.serial} does not appear to be an adb device, skipping adb fallback.")
+                return None
             adb_cmd = ["adb"]
             if self.serial:
                 adb_cmd.extend(["-s", self.serial])
@@ -283,6 +287,10 @@ class FridaBridge:
             return False
     # Fallback method to get the PID of a given package name using ADB shell pidof
     def _get_front_app_pid_using_adb(self, package_name):
+        useAdb = self._is_serial_from_adb(self.serial)
+        if not useAdb:
+            logging.warning(f"Serial {self.serial} does not appear to be an adb device, skipping adb fallback.")
+            return None
         adb_cmd = ["adb"]
         if self.serial:
             adb_cmd.extend(["-s", self.serial])
@@ -575,6 +583,10 @@ class FridaBridge:
 
     def _is_device_rooted(self):
         """Check if the device is rooted by running 'which su' via ADB."""
+        useAdb = self._is_serial_from_adb(self.serial)
+        if not useAdb:
+            logging.warning(f"Serial {self.serial} does not appear to be an adb device, skipping adb fallback.")
+            return None
         adb_cmd = ["adb"]
         if self.serial:
             adb_cmd.extend(["-s", self.serial])
@@ -588,6 +600,10 @@ class FridaBridge:
 
     def _is_app_debuggable(self, package_name):
         """Check if the target app has debuggable=true in its manifest."""
+        useAdb = self._is_serial_from_adb(self.serial)
+        if not useAdb:
+            logging.warning(f"Serial {self.serial} does not appear to be an adb device, skipping adb fallback.")
+            return None
         adb_cmd = ["adb"]
         if self.serial:
             adb_cmd.extend(["-s", self.serial])
@@ -601,6 +617,10 @@ class FridaBridge:
 
     def _ensure_frida_server_binary(self):
         """Download frida-server matching the current frida version and push it to the device."""
+        useAdb = self._is_serial_from_adb(self.serial)
+        if not useAdb:
+            logging.warning(f"Serial {self.serial} does not appear to be an adb device, skipping adb fallback.")
+            return None
         adb_base = ["adb"]
         if self.serial:
             adb_base.extend(["-s", self.serial])
@@ -1447,7 +1467,7 @@ class FridaBridge:
                 return self.ios_deploy_status
 
         elif method == "checkIosJailbreakStatus":
-            return self._check_ios_jailbreak_status(target_serial=params.get("serial"))
+            return self._check_ios_jailbreak_status()
 
         elif method == "injectJailbrokenIos":
             with self._lock:
@@ -1458,7 +1478,7 @@ class FridaBridge:
                     logging.info("[rpc] Starting background jailbroken injection thread...")
                     self.is_injecting_gadget = True
                     target_serial = params.get("serial")
-                    threading.Thread(target=self.inject_jailbroken_ios, args=(target_serial,), daemon=True).start()
+                    threading.Thread(target=self.inject_jailbroken_ios, daemon=True).start()
 
             if self.is_injecting_gadget:
                 status = "running"
