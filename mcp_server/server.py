@@ -34,7 +34,7 @@ async def call_rpc(method: str, params: dict = None) -> dict:
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(RPC_URL, json=payload, timeout=10.0)
+            response = await client.post(RPC_URL, json=payload, timeout=120.0)
             # Parse JSON first so error_message is never discarded on HTTP 500
             try:
                 data = response.json()

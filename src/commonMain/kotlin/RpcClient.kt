@@ -406,6 +406,8 @@ data class JsonRpcRequestCheckIosDeployStatus(
     val id: Int = 1
 )
 
+val TIMEOUT = 60000L
+
 object RpcClient {
     var client: HttpClient = HttpClient(
         getRpcClientEngine()
@@ -421,7 +423,7 @@ object RpcClient {
 
     suspend fun ping(): Boolean {
         return try {
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.get("http://127.0.0.1:8080/ping")
             } ?: return false
             response.status.value in 200..299
@@ -437,12 +439,12 @@ object RpcClient {
                 params = ListClassesParams(searchParam, appPackage, offset, limit)
             )
 
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
                 }
-            } ?: return Pair(null, "RPC Timeout (5s)")
+            } ?: return Pair(null, "RPC Timeout (1 min), try one more time using a more specific search term")
 
             if (response.status.value in 200..299) {
                 val rpcResponse = response.body<JsonRpcResponse>()
@@ -466,12 +468,12 @@ object RpcClient {
                 params = InspectClassParams(className)
             )
 
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
                 }
-            } ?: return Pair(null, "RPC Timeout (5s)")
+            } ?: return Pair(null, "RPC Timeout (1 min)")
 
             if (response.status.value in 200..299) {
                 val rpcResponse = response.body<JsonRpcInspectResponse>()
@@ -649,7 +651,7 @@ object RpcClient {
     suspend fun resetInjection(serial: String): Boolean {
         return try {
             val requestBody = JsonRpcRequestSimpleWithSerial(method = "resetInjection", params = mapOf("serial" to serial))
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
@@ -663,7 +665,7 @@ object RpcClient {
     suspend fun healthCheck(serial: String): HealthCheckResponse? {
         return try {
             val requestBody = JsonRpcRequestSimpleWithSerial(method = "healthCheck", params = mapOf("serial" to serial))
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
@@ -721,12 +723,12 @@ object RpcClient {
         return try {
             val requestBody = JsonRpcRequestSimple(method = "getpackagename")
 
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
                 }
-            } ?: return Pair(null, "RPC Timeout (5s)")
+            } ?: return Pair(null, "RPC Timeout (1 min)")
 
             if (response.status.value in 200..299) {
                 val rpcResponse = response.body<JsonRpcStringResponse>()
@@ -747,12 +749,12 @@ object RpcClient {
         return try {
             val requestBody = JsonRpcRequestInjectGadget()
 
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
                 }
-            } ?: return Pair(null, "RPC Timeout (5s)")
+            } ?: return Pair(null, "RPC Timeout (1 min)")
 
 
             if (response.status.value in 200..299) {
@@ -850,7 +852,7 @@ object RpcClient {
             val requestBody = JsonRpcRequestGetInstanceAddresses(
                 params = GetInstanceAddressesParams(className)
             )
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
@@ -907,7 +909,7 @@ object RpcClient {
     suspend fun checkIosDeployStatus(): Pair<GadgetInstallStatus, InjectionProgressResult?> {
         return try {
             val requestBody = JsonRpcRequestCheckIosDeployStatus()
-            val response: HttpResponse = withTimeoutOrNull(5000) {
+            val response: HttpResponse = withTimeoutOrNull(TIMEOUT) {
                 client.post("http://127.0.0.1:8080/rpc") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)

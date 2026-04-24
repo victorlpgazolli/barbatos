@@ -14,6 +14,7 @@ if __name__ == '__main__' and len(sys.argv) == 2 and sys.argv[1] == '--version':
     print(f'barbatos-bridge {_early_get_version()}')
     sys.exit(0)
 
+import asyncio
 import time
 import traceback
 import lzma
@@ -565,9 +566,24 @@ class FridaBridge:
             logging.info("[inject] Agent is already loaded. Skipping JS injection.")
             return
 
-        logging.info("[inject] Loading Frida agent bundle...")
+        # Detect target platform to select the correct agent bundle
+        platform = "linux"
         try:
-            agent_path = get_resource_path('agent.bundle.js')
+            platform_script = self.session.create_script("send(Process.platform);")
+            def on_platform_message(message, data):
+                nonlocal platform
+                if message['type'] == 'send':
+                    platform = message['payload']
+            platform_script.on('message', on_platform_message)
+            platform_script.load()
+            platform_script.unload()
+        except Exception as e:
+            logging.warning(f"[inject] Platform detection failed, defaulting to linux: {e}")
+
+        agent_file = 'agent.objc.bundle.js' if platform == 'darwin' else 'agent.bundle.js'
+        logging.info(f"[inject] Loading Frida agent bundle ({agent_file})...")
+        try:
+            agent_path = get_resource_path(agent_file)
             with open(agent_path, 'r', encoding='utf-8') as f:
                 source = f.read()
 
@@ -886,17 +902,35 @@ class FridaBridge:
 
             self._update_progress("load_agent", "running")
             logging.info(f"[root] Attaching to PID {app.pid} via USB frida-server...")
-            self.session = device.attach(app.pid)
-            self.session._pid = app.pid
+            attach_result = [None]
+            attach_error = [None]
+            def _do_attach_root():
+                try:
+                    attach_result[0] = device.attach(app.pid)
+                except Exception as e:
+                    attach_error[0] = e
+            t = threading.Thread(target=_do_attach_root, daemon=True)
+            t.start()
+            t.join(timeout=8)
+            spawned_root_pid = None
+            if attach_result[0] is not None:
+                self.session = attach_result[0]
+                self.session._pid = app.pid
+            else:
+                reason = attach_error[0] or "timeout"
+                logging.warning(f"[root] attach() blocked ({reason})")
 
             from bridge import get_resource_path
-            agent_path = get_resource_path('agent.bundle.js')
+            agent_path = get_resource_path('agent.objc.bundle.js')
             with open(agent_path, 'r', encoding='utf-8') as f:
                 source = f.read()
 
             self.script = self.session.create_script(source)
             self.script.load()
             logging.info("[root] Agent loaded via frida-server.")
+            if spawned_root_pid is not None:
+                device.resume(spawned_root_pid)
+                logging.info(f"[root] Resumed PID {spawned_root_pid} after agent injection.")
             self._update_progress("load_agent", "completed")
 
         except Exception as e:
@@ -938,19 +972,35 @@ class FridaBridge:
             except Exception as e:
                 logging.warning(f"[get_session] get_frontmost_application failed: {e}. Trying to attach to Gadget directly...")
             
+            # spawned_pid: non-None when we spawned a new process (must resume AFTER agent load)
+            spawned_pid = None
+
             if front_app:
                 logging.info(f"[get_session] Attaching to {front_app.identifier} (PID: {front_app.pid})")
-                self.session = device.attach(front_app.pid)
-                self.session._pid = front_app.pid
+                # Try attach with a wall-clock timeout. Some apps (e.g. PT_DENY_ATTACH on iOS)
+                # block attach indefinitely; fall back to spawn so we can still instrument them.
+                attach_result = [None]
+                attach_error = [None]
+                def _do_attach():
+                    try:
+                        attach_result[0] = device.attach(front_app.pid)
+                    except Exception as e:
+                        attach_error[0] = e
+                attach_thread = threading.Thread(target=_do_attach, daemon=True)
+                attach_thread.start()
+                attach_thread.join(timeout=8)
+                if attach_result[0] is not None:
+                    self.session = attach_result[0]
+                    self.session._pid = front_app.pid
+                else:
+                    reason = attach_error[0] or "timeout"
+                    logging.warning(f"[get_session] attach() blocked ({reason})")
             else:
-                # Fallback for iOS Gadget: Try attaching by name 'Gadget' or by finding the first app
-                try:
-                    logging.info("[get_session] Attempting to attach to 'Gadget'...")
-                    self.session = device.attach("Gadget")
-                    self.session._pid = 0 # PID might not be easily available if attached by name
-                except Exception as e:
-                    logging.error(f"[get_session] Failed to attach to Gadget: {e}")
-                    raise Exception("No frontmost application found on device and could not attach to Gadget")
+                # get_frontmost_application() returned None (screen locked or no foreground app).
+                raise Exception(
+                    "No frontmost application found on device. "
+                    "Please unlock the device and bring the target app to the foreground, then retry."
+                )
 
             # Detect platform to load correct agent
             platform_script = self.session.create_script("send(Process.platform);")
@@ -980,7 +1030,20 @@ class FridaBridge:
 
             self.script = self.session.create_script(source)
 
+            def on_agent_message(message, data):
+                if message.get('type') == 'error':
+                    logging.error(f"[get_session] Agent error: {message.get('description')}")
+            self.script.on('message', on_agent_message)
+
+            logging.info("[get_session] Calling script.load()...")
             self.script.load()
+            logging.info("[get_session] Agent loaded and ready.")
+
+            # Resume spawned process only AFTER agent is injected, so anti-debugging hooks
+            # (like PT_DENY_ATTACH checks in early app init) run with our agent already in place.
+            if spawned_pid is not None:
+                logging.info(f"[get_session] Resuming spawned PID {spawned_pid}...")
+                device.resume(spawned_pid)
 
             return self.session
 
@@ -1214,7 +1277,7 @@ class FridaBridge:
     # RPC endpoint: Retrieves loaded Java classes with a custom sorting heuristic based on target package
     def list_classes(self, search_param="", app_package="", offset=0, limit=200):
         self.get_session()
-        classes = self.script.exports_sync.listclasses(search_param)
+        classes = asyncio.run(self.script.exports_async.listclasses(search_param))
         
         def get_priority(class_name):
             priority = 0
@@ -1405,7 +1468,9 @@ class FridaBridge:
             return { "status": "ok" }
 
         elif method == "resetInjection":
-            if self.reset_injection():
+            is_adb = self._is_serial_from_adb(self.serial)
+            has_reset = self.reset_injection() if is_adb else self.reset_ios_injection()
+            if has_reset:
                 return { "status": "ok" }
             else:
                 return { "status": "error", "error_message": "Cannot reset while injection is in progress" }

@@ -1,3 +1,7 @@
+import io.ktor.util.date.getTimeMillis
+import platform.posix.time
+import kotlin.time.Clock
+
 object Renderer {
     private const val C_ORANGE   = "\u001b[38;5;208m"  // keywords / modifiers
     private const val C_PURPLE   = "\u001b[38;5;176m"  // field / attribute (soft purple like AS)
@@ -485,11 +489,22 @@ object Renderer {
             buf.append("   ${Ansi.RED}Setup failed: $errorMsg${Ansi.RESET}\n")
         }
     }
+    var lastRenderTime: Long? = null
 
     private fun renderClassFetchStatus(buf: StringBuilder, state: AppState) {
+        if(!state.isFetchingClasses) {
+            lastRenderTime = null
+        }
         if (state.isFetchingClasses) {
+            lastRenderTime = lastRenderTime ?: getTimeMillis()
+
             val frame = ListRenderer.spinnerFrame(state.gadgetSpinnerFrame)
-            val suffix = if (state.inputBuffer.length < 2) " (this could take a while)" else ""
+            val suffix = when {
+                getTimeMillis() - lastRenderTime!! > 10000 -> " (still working on it...next time try using a more specific query)"
+                state.inputBuffer.length < 2 -> " (this could take a while)"
+                else -> ""
+            }
+
             buf.append("   $LIGHT_GRAY$frame Fetching available classes$suffix$RESET\n")
         } else if (state.isFetchingInstances) {
             val frame = ListRenderer.spinnerFrame(state.gadgetSpinnerFrame)

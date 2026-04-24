@@ -196,28 +196,41 @@ rpc.exports = {
         }
     },
 
-    listclasses: function(searchParam) {
-        var classes = [];
+    listclasses: async function(searchParam) {
         var lowercaseSearch = searchParam ? searchParam.toLowerCase() : "";
-        
-        // Fetch all Objective-C classes
-        for (var className in ObjC.classes) {
-            if (ObjC.classes.hasOwnProperty(className)) {
-                if (!lowercaseSearch || className.toLowerCase().includes(lowercaseSearch)) {
-                    classes.push(className);
+        const fetchObjcClassesPromise = new Promise((resolve) => {
+            const classes = [];
+            // Fetch all Objective-C classes
+            for (var className in ObjC.classes) {
+                if (ObjC.classes.hasOwnProperty(className)) {
+                    if (!lowercaseSearch || className.toLowerCase().includes(lowercaseSearch)) {
+                        classes.push(className);
+                    }
                 }
             }
-        }
-        
-        // Also try to list Swift classes if available
-        try {
+            return classes
+        });
+        const fetchSwiftClassesPromise = new Promise((resolve) => {
+            const classes = [];
+            
+            // Also enumerate pure Swift classes (not exposed to ObjC runtime)
             if (Swift.available) {
-                // Swift classes are usually also registered in ObjC, but we can be thorough
-                // For now, ObjC.classes covers most cases in iOS apps.
+                var swiftClasses = Swift.classes;
+                for (var swiftName in swiftClasses) {
+                    if (swiftClasses.hasOwnProperty(swiftName)) {
+                        if (!lowercaseSearch || swiftName.toLowerCase().includes(lowercaseSearch)) {
+                            if (classes.indexOf(swiftName) === -1) {
+                                classes.push(swiftName);
+                            }
+                        }
+                    }
+                }
             }
-        } catch (e) {}
-
-        return classes.sort();
+            return classes
+        })
+        return Promise.all([fetchObjcClassesPromise, fetchSwiftClassesPromise]).then(results => {
+            return results.flat().sort();
+        })
     },
 
     countinstances: function(className) {

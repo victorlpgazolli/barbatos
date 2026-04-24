@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import sys
 import os
 
@@ -73,7 +73,6 @@ class TestFridaBridge(unittest.TestCase):
         
         # Test cases for handle_rpc routing: (method_name, params, expected_export_name, expected_args)
         test_cases = [
-            ("listClasses", {"search_param": "S"}, "listclasses", ("S",)),
             ("inspectClass", {"className": "C"}, "inspectclass", ("C",)),
             ("countInstances", {"className": "C"}, "countinstances", ("C",)),
             ("listInstances", {"className": "C"}, "listinstances", ("C",)),
@@ -93,6 +92,19 @@ class TestFridaBridge(unittest.TestCase):
             
             self.bridge.handle_rpc(method, params)
             export_mock.assert_called_with(*expected_args)
+
+    @patch('bridge.FridaBridge.get_session')
+    def test_list_classes_awaits_async_export(self, mock_get_session):
+        mock_script = MagicMock()
+        mock_script.exports_async.listclasses = AsyncMock(
+            return_value=["pkg.Zebra", "pkg.Alpha", "other.Class"]
+        )
+        self.bridge.script = mock_script
+
+        result = self.bridge.handle_rpc("listClasses", {"search_param": "A", "app_package": "pkg"})
+
+        self.assertEqual(result, ["pkg.Alpha", "other.Class"])
+        mock_script.exports_async.listclasses.assert_awaited_once_with("A")
 
     @patch('bridge.FridaBridge._get_application_pid_and_package')
     @patch('bridge.FridaBridge._prepare_gadget')
