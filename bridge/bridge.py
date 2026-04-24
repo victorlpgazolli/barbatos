@@ -837,12 +837,10 @@ class FridaBridge:
         except frida.TimedOutError as e:
             return {"status": "not_jailbroken", "message": f"TimedOutError: {e}"}
         except Exception as e:
-            import logging
             logging.error(f"[jailbreak_check] Error: {e}")
             return {"status": "not_jailbroken", "message": f"Exception: {e}"}
 
     def inject_jailbroken_ios(self):
-        import logging
         with self._lock:
             if getattr(self, "_in_actual_injection", False):
                 logging.info("Already in actual injection process, skipping redundant call.")
