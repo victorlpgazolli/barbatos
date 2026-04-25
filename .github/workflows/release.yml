@@ -59,14 +59,14 @@ jobs:
           git push origin HEAD:master
 
       - name: Create GitHub Release
-        if: github.event_name != 'workflow_dispatch'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create ${RELEASE_TAG} \
             --title "Release ${RELEASE_TAG}" \
-            --generate-notes
+            --generate-notes || echo "Release already exists or couldn't be created"
 
       - name: Export release tag
         id: release
