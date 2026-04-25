@@ -1,4 +1,4 @@
-import RpcClient.healthCheck
+import CommandExecutor.initIosAppSelection
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
@@ -195,7 +195,7 @@ object CommandExecutor {
         }
     }
 
-    fun proceedWithTmux(state: AppState) {
+    fun proceedWithTmux() {
         val sessionId = generateSessionId()
 
         if (!TmuxManager.createSession(sessionId)) {
@@ -301,9 +301,6 @@ object CommandExecutor {
                     }
                     if (!bridgeReady) {
                         state.iosRepackageError = "Failed to start bridge for jailbreak check."
-                        state.gadgetInstallStatus = GadgetInstallStatus.IDLE
-                        state.pushMode(AppMode.IOS_APP_SELECTION)
-                        state.sharedIosAppSelectionReady.value = true
                         return@launch
                     }
                 }
@@ -312,23 +309,40 @@ object CommandExecutor {
                 state.serial?.let { serial ->
                     RpcClient.prepareEnvironment(serial)
                     val healthCheck = RpcClient.healthCheck(serial)
+                    val checkResponse = healthCheck?.checks?.get("frida_connection")
 
-                    val isFridaConnected = healthCheck?.checks?.get("frida_connection")?.status == "ok"
+                    checkResponse?.let { response ->
 
-
-                    if (isFridaConnected) {
-                        state.isIosJailbroken = true
-                        state.sharedGadgetResult.value = Pair(GadgetInstallStatus.WAITING_BRIDGE_SETUP, null)
-                        state.serial?.let { RpcClient.resetInjection(it) }
-                        state.isFetchingDevices = false
-                        state.pushMode(AppMode.DEBUG_ENTRYPOINT)
-                        return@launch
-                    } else {
-                        discoverIosApps(state)
-                        if (state.iosAppPaths.isEmpty()) {
-                            state.iosRepackageError =
-                                "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                        val (isFridaConnected, errorMessage) = when(response.status) {
+                            "ok" -> Pair(true, "")
+                            "error" -> Pair(false, response.message)
+                            else -> Pair(false, "${response.status}: ${response.message}")
                         }
+
+                        if (isFridaConnected) {
+                            state.isIosJailbroken = true
+                            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.SUCCESS, null)
+                            state.serial?.let { RpcClient.resetInjection(it) }
+                            state.isFetchingDevices = false
+                            return@launch
+                        } else if (errorMessage.isNotEmpty() && errorMessage.contains("expected:true").not()) {
+                            state.isFetchingDevices = false
+                            state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, errorMessage)
+                            state.gadgetSpinnerFrame = 0
+                            state.gadgetInjectionSteps = emptyList()
+                            return@launch
+                        } else {
+                            discoverIosApps(state)
+                            if (state.iosAppPaths.isEmpty()) {
+                                state.iosRepackageError =
+                                    "No Xcode-built .app found. Ensure you've built the app in Xcode within the last 48 hours."
+                            }
+                        }
+                    } ?: run {
+                        state.sharedGadgetResult.value = Pair(GadgetInstallStatus.ERROR, "Unknown error during jailbreak check.")
+                        state.gadgetSpinnerFrame = 0
+                        state.gadgetInjectionSteps = emptyList()
+                        state.isFetchingDevices = false
                     }
                 }
             } catch (e: Exception) {

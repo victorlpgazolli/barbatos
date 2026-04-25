@@ -425,7 +425,7 @@ object Renderer {
         // Show only the last 10 lines of logs to keep it compact and prevent UI glitches
         val displayLogs = logs.takeLast(10)
         for (logLine in displayLogs) {
-            val truncatedLog = if (logLine.length > logWidth - 2) logLine.substring(0, logWidth - 5) + "..." else logLine
+            val truncatedLog = if (logLine.length > logWidth - 2) logLine.take(logWidth - 5) + "..." else logLine
             append("  │ ")
             append("\u001b[38;5;244m") // Discrete gray color
             append(truncatedLog.padEnd(logWidth - 1))

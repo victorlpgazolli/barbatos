@@ -869,6 +869,13 @@ fun main(args: Array<String>) {
                         state.isFetchingInspection = false
                     }
                 } else {
+                    state.gadgetInstallStatus = GadgetInstallStatus.IDLE
+                    state.gadgetErrorMessage = null
+                    state.gadgetInjectionSteps = emptyList()
+                    state.sharedGadgetResult.value = null
+                    state.sharedGadgetSteps.value = null
+                    state.bridgeLogs = emptyList()
+                    state.sharedBridgeLogs.value = null
                     val prevMode = state.popMode()
                     if (prevMode == null && state.startedAsInspectPane) {
                         state.running = false
@@ -928,6 +935,15 @@ fun main(args: Array<String>) {
                     }
                 }
 
+                if (state.gadgetInstallStatus == GadgetInstallStatus.ERROR) {
+                    val gadgetUpdate = state.sharedGadgetResult.value
+                    if (gadgetUpdate != null) {
+                        state.sharedGadgetResult.value = null
+                        state.gadgetInstallStatus = gadgetUpdate.first
+                        state.gadgetErrorMessage = gadgetUpdate.second
+                    }
+                    needsRender = true
+                }
                 // Gadget install status polling - always render for smooth spinner animation
                 if (state.gadgetInstallStatus == GadgetInstallStatus.WAITING_BRIDGE_SETUP) {
                     state.gadgetSpinnerFrame++
@@ -961,8 +977,7 @@ fun main(args: Array<String>) {
                             if (state.selectedPlatform == "iOS" && !state.isIosJailbroken) {
                                 CommandExecutor.initDebugClassFilter(state, scope)
                             } else {
-                                CommandExecutor.proceedWithTmux(state)
-                                state.mode = AppMode.DEBUG_ENTRYPOINT
+                                CommandExecutor.proceedWithTmux()
                             }
                             needsRender = true
                         }
