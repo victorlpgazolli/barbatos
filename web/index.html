@@ -88,12 +88,12 @@
             <h2>MCP Server Setup</h2>
             <p>Add this to your <code>claude_desktop_config.json</code>:</p>
 <div class="install-box" style="padding: 0; margin: 0; margin-top: 1em;" id="json-box" 
-data-payload='{"mcpServers": {"barbatos-debugger": {"command": "barbatos-mcp", "args": []}}}' >
+data-payload='{"mcpServers": {"barbatos-debugger": {"command": "barbatos-bridge", "args": ["mcp"]}}}' >
 <pre style="margin: 0; line-height: 125%;"><span></span><span style="color: #F8F8F2">{</span>
 <span style="color: #F8F8F2">    </span><span style="color: #FF79C6">&quot;mcpServers&quot;</span><span style="color: #F8F8F2">: {</span>
 <span style="color: #F8F8F2">        </span><span style="color: #FF79C6">&quot;barbatos-debugger&quot;</span><span style="color: #F8F8F2">: {</span>
-<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;command&quot;</span><span style="color: #F8F8F2">: </span><span style="color: #BD93F9">&quot;barbatos-mcp&quot;</span><span style="color: #F8F8F2">,</span>
-<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;args&quot;</span><span style="color: #F8F8F2">: []</span>
+<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;command&quot;</span><span style="color: #F8F8F2">: </span><span style="color: #BD93F9">&quot;barbatos-bridge&quot;</span><span style="color: #F8F8F2">,</span>
+<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;args&quot;</span><span style="color: #F8F8F2">: [</span><span style="color: #BD93F9">&quot;mcp&quot;</span><span style="color: #F8F8F2">]</span>
 <span style="color: #F8F8F2">        }</span>
 <span style="color: #F8F8F2">    }</span>
 <span style="color: #F8F8F2">}</span>
@@ -103,7 +103,7 @@ data-payload='{"mcpServers": {"barbatos-debugger": {"command": "barbatos-mcp", "
 
 
             <br>
-            <p>Note: Ensure the <code>barbatos-bridge</code> is running (listening on port <code>8080</code>) before using the MCP tools.</p>
+            <p>Note: The unified bridge automatically handles Frida connection for the MCP server.</p>
         </section>
     </div>
 

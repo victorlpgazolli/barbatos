@@ -10,7 +10,6 @@ on:
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'bridge/**'
-      - 'mcp_server/**'
       - '.github/workflows/ci-validation.yml'
   workflow_dispatch:
     inputs:
@@ -26,12 +25,6 @@ on:
           - 'false'
         description: 'Run Bridge validation'
         default: 'false'
-      mcp:
-        options:
-          - 'true'
-          - 'false'
-        description: 'Run MCP validation'
-        default: 'false'
 
 jobs:
   detect-changes:
@@ -41,7 +34,6 @@ jobs:
     outputs:
       kotlin: ${{ steps.filter.outputs.kotlin }}
       bridge: ${{ steps.filter.outputs.bridge }}
-      mcp: ${{ steps.filter.outputs.mcp }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -55,11 +47,9 @@ jobs:
           
           KOTLIN=$(echo "$FILES" | grep -E '^(src/|gradle/|build\.gradle\.kts|settings\.gradle\.kts)' || true)
           BRIDGE=$(echo "$FILES" | grep -E '^bridge/' || true)
-          MCP=$(echo "$FILES" | grep -E '^mcp_server/' || true)
           
           if [ ! -z "$KOTLIN" ]; then echo "kotlin=true" >> $GITHUB_OUTPUT; fi
           if [ ! -z "$BRIDGE" ]; then echo "bridge=true" >> $GITHUB_OUTPUT; fi
-          if [ ! -z "$MCP" ]; then echo "mcp=true" >> $GITHUB_OUTPUT; fi
 
   kotlin-test-and-linux-build:
     name: Kotlin (${{ matrix.target }})
@@ -155,28 +145,3 @@ jobs:
           make install_dependencies && make compile_bridge
           cd bridge
           python3 -m py_compile bridge.py
-
-  mcp-validation:
-    name: MCP Validation
-    needs: detect-changes
-    if: needs.detect-changes.outputs.mcp == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mcp == 'true')
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install MCP Dependencies
-        run: |
-          cd mcp_server
-          pip install -r requirements.txt
-
-      - name: Validate MCP Syntax
-        run: |
-          make install_dependencies && make compile_mcp
-          cd mcp_server
-          python3 -m py_compile server.py

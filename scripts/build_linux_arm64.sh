@@ -18,7 +18,6 @@ if [ "$HOST_ARCH" = "aarch64" ] && [ "$HOST_OS" = "Linux" ]; then
     if [ "$BUILD_TYPE" == "Debug" ]; then
         ./gradlew linkDebugExecutableLinuxArm64 --no-daemon
         make compile_bridge
-        make compile_mcp
     else
         make compile_all
     fi
@@ -31,23 +30,21 @@ else
     echo "Building Kotlin Native TUI..."
     ./gradlew "link${BUILD_TYPE}ExecutableLinuxArm64" --no-daemon
     
-    # 3 & 4. Build Python components inside ARM64 Docker
+    # 3. Build Python bridge component inside ARM64 Docker
     docker run --rm --platform linux/arm64 \
         -v "$(pwd):/app" -w /app \
         python:3.11-slim \
         bash -c "apt-get update && apt-get install -y binutils && \
-                 pip install -r bridge/requirements.txt && cd bridge && python3 -m PyInstaller bridge.spec && \
-                 cd ../mcp_server && pip install -r requirements.txt && python3 -m PyInstaller mcp.spec"
+                 pip install -r bridge/requirements.txt && cd bridge && python3 -m PyInstaller bridge.spec"
 fi
 
-# 5. Prepare Output
+# 4. Prepare Output
 echo "Preparing dist/ directory..."
 if [ "$BUILD_TYPE" == "Debug" ]; then
     mkdir -p dist
     cp build/bin/linuxArm64/debugExecutable/barbatos.kexe dist/barbatos
     cp bridge/dist/barbatos-bridge dist/barbatos-bridge
-    cp mcp_server/dist/barbatos-mcp dist/barbatos-mcp
-    chmod +x dist/barbatos dist/barbatos-bridge dist/barbatos-mcp
+    chmod +x dist/barbatos dist/barbatos-bridge
 elif [ "$HOST_ARCH" = "aarch64" ]; then
     make prepare_release
 else
@@ -55,8 +52,7 @@ else
     mkdir -p dist
     cp build/bin/linuxArm64/releaseExecutable/barbatos.kexe dist/barbatos
     cp bridge/dist/barbatos-bridge dist/barbatos-bridge
-    cp mcp_server/dist/barbatos-mcp dist/barbatos-mcp
-    chmod +x dist/barbatos dist/barbatos-bridge dist/barbatos-mcp
+    chmod +x dist/barbatos dist/barbatos-bridge
 fi
 
 echo "Build complete. Artifacts in dist/"

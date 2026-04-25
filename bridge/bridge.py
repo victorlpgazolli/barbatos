@@ -29,6 +29,7 @@ import subprocess
 import argparse
 import os
 import sys
+from mcp.server.fastmcp import FastMCP
 from jdwp_frida import run_jdwp
 
 logging.basicConfig(level=logging.INFO)
@@ -274,6 +275,23 @@ class FridaBridge:
                 logging.warning(f"[_get_front_app_using_adb] ADB fallback failed: {result.stderr}")
         except Exception as e:
             logging.warning(f"ADB fallback exception: {e}")
+    def _get_first_device_from_adb(self):
+        try:
+            result = subprocess.run(["adb", "devices"], capture_output=True, text=True)
+            if result.returncode == 0:
+                devices = [line.split()[0] for line in result.stdout.strip().splitlines()[1:] if line.strip()]
+                if devices:
+                    logging.info(f"[_get_first_device_from_adb] Found ADB devices: {devices}, using {devices[0]}")
+                    return devices[0]
+                else:
+                    logging.warning("[_get_first_device_from_adb] No ADB devices found.")
+                    return None
+            else:
+                logging.warning(f"[_get_first_device_from_adb] Failed to list ADB devices: {result.stderr}")
+                return None
+        except Exception as e:
+            logging.warning(f"ADB devices exception: {e}")
+            return None
     def _is_serial_from_adb(self, serial):
         try:
             result = subprocess.run(["adb", "devices"], capture_output=True, text=True)
@@ -980,9 +998,10 @@ class FridaBridge:
                     "No frontmost application found on device. "
                     "Please unlock the device and bring the target app to the foreground, then retry."
                 )
+            spawned_pid = front_app.pid
+            has_spawned_a_new_process = False
             try:
                 self.session = device.attach(front_app.pid)
-                spawned_pid = front_app.pid
                 logging.info(f"[get_session] Attached to frontmost app PID {front_app.pid} successfully.")
             except Exception as e:
                 logging.warning(f"[get_session] attach() to frontmost app failed: {e}")
@@ -990,19 +1009,21 @@ class FridaBridge:
                 try:
                     import time
                     device.kill(front_app.name)
+                    spawned_pid = None
                     logging.info(f"[get_session] Spawned a new instance of {front_app.identifier} after kill.")
                     spawned_pid = device.spawn([front_app.identifier])
                     logging.info(f"[get_session] Spawned PID {spawned_pid} for {front_app.identifier}, now attaching...")
                     time.sleep(1)
                     device.resume(spawned_pid)
+                    has_spawned_a_new_process = True
                     time.sleep(1)
                     self.session = device.attach(spawned_pid)
                 except Exception as e:
                     logging.warning(f"[get_session] spawn() or attach() blocked ({e})")
                     raise Exception(
                         "Failed to attach to the frontmost application. "
-                        "This may be due to iOS restrictions on non-jailbroken devices. "
-                        "Please ensure the device is unlocked and the target app is in the foreground, then try again. expected:true"
+                        "This may be due to OS restrictions on non-jailbroken/non-rooted devices. "
+                        "Please ensure the device is unlocked, the target app is debuggable and it is in the foreground, then try again. expected:true"
                     )
 
             # get_frontmost_application() returned None (screen locked or no foreground app).
@@ -1045,7 +1066,7 @@ class FridaBridge:
 
             # Resume spawned process only AFTER agent is injected, so anti-debugging hooks
             # (like PT_DENY_ATTACH checks in early app init) run with our agent already in place.
-            if spawned_pid is not None:
+            if spawned_pid is not None and has_spawned_a_new_process:
                 logging.info(f"[get_session] Resuming spawned PID {spawned_pid}...")
                 device.resume(spawned_pid)
 
@@ -1352,26 +1373,61 @@ class FridaBridge:
     # Checks and reports the health of the bridge, ADB connection, Frida device, and session state
     def health_check(self):
         report = {}
-
+        logging.info(f"[health_check] Performing health check for device {self.serial}")
+        serial_from_adb = self._is_serial_from_adb(self.serial)
         # Check 1: ADB device reachable
         try:
-            adb_cmd = ["adb"]
-            if self.serial:
-                adb_cmd.extend(["-s", self.serial])
-            adb_cmd.append("get-state")
-            result = subprocess.run(adb_cmd, capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip() == "device":
-                report["adb"] = {"status": "ok", "message": f"Device state: {result.stdout.strip()}"}
-            else:
-                stderr = result.stderr.strip() or result.stdout.strip()
-                serial_hint = f" -s {self.serial}" if self.serial else ""
-                report["adb"] = {
-                    "status": "error",
-                    "message": f"adb get-state failed: {stderr}",
-                    "fix": f"Run: adb{serial_hint} devices  — ensure a device is listed as 'device'"
-                }
+            if serial_from_adb:
+                adb_cmd = ["adb"]
+                if self.serial:
+                    adb_cmd.extend(["-s", self.serial])
+                adb_cmd.append("get-state")
+                result = subprocess.run(adb_cmd, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout.strip() == "device":
+                    report["adb"] = {"status": "ok", "message": f"Device state: {result.stdout.strip()}"}
+                    self.serial = self.serial or self._get_first_device_from_adb()
+                else:
+                    stderr = result.stderr.strip() or result.stdout.strip()
+                    serial_hint = f" -s {self.serial}" if self.serial else ""
+                    fix = f"Run: adb{serial_hint} devices  — ensure a device is listed as 'device'"
+                    if "more than one device" in stderr and not self.serial:
+                        fix = "Multiple devices detected. Restart the bridge with --serial <device_id>, unplug other devices or use 'adb disconnect' to remove unwanted connections."
+                    
+                    report["adb"] = {
+                        "status": "error",
+                        "message": f"adb get-state failed: {stderr}",
+                        "fix": fix
+                    }
         except Exception as e:
             report["adb"] = {"status": "error", "message": str(e), "fix": "Ensure adb is installed and in PATH"}
+
+        is_rooted = None
+        is_debuggable = None
+        # Opportunistic Android Checks (even if get-state failed, we try to get more info)
+        if serial_from_adb:
+            # Check Root
+            try:
+                is_rooted = self._is_device_rooted()
+                report["android_root"] = {
+                    "status": "ok" if is_rooted else "info",
+                    "message": "Device is rooted" if is_rooted else "Device probably not rooted"
+                }
+            except Exception as e:
+                report["android_root"] = {"status": "unknown", "message": f"Could not check root: {e}"}
+
+            # Check Frontmost App
+            try:
+                pkg_name, pid = self._get_front_package_and_pid()
+                is_debuggable = self._is_app_debuggable(pkg_name)
+                report["android_frontmost_app"] = {
+                    "status": "ok" if is_debuggable or report.get("android_root", {}).get("status") == "ok" else "warning",
+                    "package": pkg_name,
+                    "pid": pid,
+                    "debuggable": is_debuggable,
+                    "message": f"App on screen: {pkg_name} (Debuggable: {is_debuggable})"
+                }
+            except Exception as e:
+                report["android_frontmost_app"] = {"status": "unknown", "message": f"Could not fetch frontmost app: {e}"}
 
         # Check 2: Frida can see the device
         device = None
@@ -1397,8 +1453,28 @@ class FridaBridge:
             report["frida_connection"] = {
                 "status": "error",
                 "message": str(e),
-                "fix": f"Check USB debugging is enabled; re-run: barbatos-bridge{serial_hint}"
+                "fix": f"Please ensure the device is unlocked, the target app is debuggable and it is in the foreground, then try again. expected:true"
             }
+            if "Failed to attach to the frontmost application" in str(e) and is_rooted != is_debuggable and serial_from_adb:
+                report["frida_connection"]["status"] = "warning"
+                report["frida_connection"]["message"] = "Failed to attach to the frontmost application, but the app is debuggable."
+                report["frida_connection"]["fix"] = "To attach you need to inject the gadget first by running 'injectGadgetFromScratch' then try again."
+            if "Failed to attach to the frontmost application" in str(e) and not serial_from_adb:
+                report["frida_connection"]["status"] = "warning"
+                report["frida_connection"]["message"] = "Failed to attach to the frontmost application."
+                report["frida_connection"]["fix"] = "To attach you need to inject the gadget first by running 'patchAndInstallIosApp' to locally patch the app with the gadget. Then the bridge waits untils the app is rebuilt using xcode, the bridge will wait until 'lldb' is running on this pc, after that it will finish lldb and xcode and automatically load the agent, then you can try again. You can check the status by running 'checkIosDeployStatus'."
+            if "Failed to attach to the frontmost application" in str(e) and not is_rooted and not is_debuggable and serial_from_adb:
+                report["frida_connection"]["status"] = "warning"
+                report["frida_connection"]["message"] = "Failed to attach to the frontmost application, and the app is not debuggable. If the device is not rooted, injection will likely fail until you can meet one of those conditions."
+                report["frida_connection"]["fix"] = "This app will probably not work with this tool, ensure the app is debuggable or your device is rooted, then re-run injection before trying again."
+            if "No frontmost application found" in str(e) and is_rooted:
+                report["frida_connection"]["status"] = "warning"
+                report["frida_connection"]["message"] = "No frontmost application found but since the device is rooted, injection may still work."
+                report["frida_connection"]["fix"] = "It probably can receive debug commands, no frontmost app but since the device is rooted it will likely still work."
+            if "No frontmost application found" in str(e) and not is_rooted:
+                report["frida_connection"]["status"] = "warning"
+                report["frida_connection"]["message"] = "No frontmost application found."
+                report["frida_connection"]["fix"] = "Ensure the target app is open and in the foreground before running commands that require a session."
 
         # Check 3: Current session state
         if self.session:
@@ -1421,8 +1497,14 @@ class FridaBridge:
 
         statuses = [v["status"] for v in report.values()]
         overall = "degraded" if "error" in statuses else "ok"
+        recommendation = [
+            v.get("fix") for v in report.values() if (v["status"] == "warning" or v["status"] == "error") and v.get("fix")
+        ]
+        recommendation = recommendation or (["Ready to receive debug commands."] if report.get("frida_connection", {}).get("status") == "ok" else [])
+        recommendation.reverse()
+
         logging.info(f"[health_check] Overall status: {overall} | Details: {report}")
-        return {"overall": overall, "checks": report}
+        return {"overall": overall, "checks": report, "recommendation": recommendation.pop()}
 
     # Routing logic mapping string method names from the JSON-RPC payload to their internal Python implementations
     def handle_rpc(self, method, params):
@@ -1656,6 +1738,410 @@ class FridaBridge:
         else:
             raise Exception(f"Method {method} not found")
 
+# =================================================================
+# MCP TOOLS
+# =================================================================
+
+mcp = FastMCP("barbatos-debugger")
+global_bridge = None
+
+def get_bridge():
+    global global_bridge
+    if global_bridge is None:
+        global_bridge = FridaBridge()
+    return global_bridge
+
+@mcp.tool()
+async def barbatos_list_classes(search_param: str = "", app_package: str = "", offset: int = 0, limit: int = 200) -> list | str:
+    """Retrieves loaded Java classes in the target process.
+    
+    Requirements:
+    - Android/iOS device connected.
+    - Frida Agent must be injected into the target process.
+    
+    Example:
+    barbatos_list_classes(search_param="MainActivity", app_package="com.example.app")
+    
+    Args:
+        search_param: Filter classes by name (case-insensitive).
+        app_package: Package name to prioritize in the result list.
+        offset: Pagination offset.
+        limit: Max results.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.list_classes, search_param, app_package, offset, limit)
+
+@mcp.tool()
+async def barbatos_inspect_class(class_name: str) -> dict | str:
+    """Returns fields and methods of a specific class.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_inspect_class(class_name="com.example.app.MainActivity")
+    
+    Args:
+        class_name: Full class name (e.g., 'java.lang.String').
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "inspectClass", {"className": class_name})
+
+@mcp.tool()
+async def barbatos_count_instances(class_name: str) -> int | str:
+    """Counts live instances of a class on the heap.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_count_instances(class_name="com.example.app.UserSession")
+    
+    Args:
+        class_name: Full class name.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.count_instances, class_name)
+
+@mcp.tool()
+async def barbatos_list_instances(class_name: str) -> list | str:
+    """Returns handles/IDs of live instances for a given class.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_list_instances(class_name="com.example.app.UserSession")
+    
+    Args:
+        class_name: Full class name.
+    """
+    bridge = get_bridge()
+    res = await asyncio.to_thread(bridge.handle_rpc, "listInstances", {"className": class_name})
+    if isinstance(res, dict) and "instances" in res:
+        return res["instances"]
+    return res
+
+@mcp.tool()
+async def barbatos_inspect_instance(class_name: str, instance_id: str, offset: int = 0, limit: int = 50) -> list | str:
+    """Recursively explores an instance's fields.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    - An instance ID obtained from barbatos_list_instances.
+    
+    Example:
+    barbatos_inspect_instance(class_name="com.example.app.UserSession", instance_id="0x12345678")
+    
+    Args:
+        class_name: Full class name.
+        instance_id: HashCode or handle of the instance.
+        offset: Pagination offset for fields.
+        limit: Pagination limit.
+    """
+    bridge = get_bridge()
+    res = await asyncio.to_thread(bridge.handle_rpc, "inspectInstance", {
+        "className": class_name,
+        "id": instance_id,
+        "offset": offset,
+        "limit": limit
+    })
+    if isinstance(res, dict) and "attributes" in res:
+        return res["attributes"]
+    return res
+
+@mcp.tool()
+async def barbatos_set_field_value(class_name: str, instance_id: str, field_name: str, field_type: str, new_value: str) -> str:
+    """Modifies a primitive field and triggers Compose recomposition (if applicable).
+    
+    Requirements:
+    - Frida Agent must be injected.
+    - Target field must be a primitive type (int, string, boolean, etc.).
+    
+    Example:
+    barbatos_set_field_value(class_name="com.example.app.User", instance_id="0x123", field_name="isAdmin", field_type="boolean", new_value="true")
+    
+    Args:
+        class_name: Full class name.
+        instance_id: Instance ID.
+        field_name: The name of the field to modify.
+        field_type: Type (e.g., 'int', 'string', 'boolean').
+        new_value: The new value as a string.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "setFieldValue", {
+        "className": class_name,
+        "id": instance_id,
+        "fieldName": field_name,
+        "type": field_type,
+        "newValue": new_value
+    })
+
+@mcp.tool()
+async def barbatos_hook_method(class_name: str, method_sig: str) -> str:
+    """Intercepts method calls and logs events.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_hook_method(class_name="com.example.app.Auth", method_sig="public void login(java.lang.String)")
+    
+    Args:
+        class_name: Class of the method.
+        method_sig: Full method signature (as returned by inspectClass).
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "hookMethod", {
+        "className": class_name,
+        "methodSig": method_sig
+    })
+
+@mcp.tool()
+async def barbatos_get_hook_events() -> list | str:
+    """Returns the latest method interception events collected by the agent.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    - At least one active hook.
+    
+    Example:
+    barbatos_get_hook_events()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "getHookEvents", {})
+
+@mcp.tool()
+async def barbatos_get_package_name() -> str:
+    """Returns the current target's package name.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_get_package_name()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "getpackagename", {})
+
+@mcp.tool()
+async def barbatos_prepare_environment() -> dict | str:
+    """Initial ADB setup (port forwards, etc.).
+    
+    Requirements:
+    - Android device connected via ADB.
+    
+    Example:
+    barbatos_prepare_environment()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "prepareEnvironment", {})
+
+@mcp.tool()
+async def barbatos_check_or_push_gadget() -> dict | str:
+    """Ensures Frida Gadget is on device.
+    
+    Requirements:
+    - Android device connected via ADB.
+    
+    Example:
+    barbatos_check_or_push_gadget()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "checkOrPushGadget", {})
+
+@mcp.tool()
+async def barbatos_reset_injection() -> dict | str:
+    """Resets the injection state machine.
+    
+    Example:
+    barbatos_reset_injection()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "resetInjection", {})
+
+@mcp.tool()
+async def barbatos_inject_gadget_from_scratch(force: bool = False, with_logs: bool = False, limit: int = 50) -> dict | str:
+    """Orchestrates the full injection sequence (JDWP -> Gadget -> Agent).
+    
+    Requirements:
+    - Android device connected.
+    - App must be debuggable OR device rooted.
+    
+    Example:
+    barbatos_inject_gadget_from_scratch(force=True)
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "injectGadgetFromScratch", {
+        "force": force,
+        "with_logs": with_logs,
+        "limit": limit
+    })
+
+@mcp.tool()
+async def barbatos_inject_jdwp(package_name: str, cmd: str = None, break_on: str = "android.os.Handler.dispatchMessage") -> dict | str:
+    """Directly triggers JDWP injection.
+    
+    Requirements:
+    - Android device connected.
+    - App must be debuggable.
+    
+    Example:
+    barbatos_inject_jdwp(package_name="com.example.app")
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "injectJdwp", {
+        "package_name": package_name,
+        "cmd": cmd,
+        "break_on": break_on
+    })
+
+@mcp.tool()
+async def barbatos_unhook_method(class_name: str, method_sig: str) -> str:
+    """Removes an active method hook.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_unhook_method(class_name="com.example.app.Auth", method_sig="public void login(java.lang.String)")
+    
+    Args:
+        class_name: Full class name.
+        method_sig: Full method signature.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "unhookMethod", {
+        "className": class_name,
+        "methodSig": method_sig
+    })
+
+@mcp.tool()
+async def barbatos_set_method_implementation(class_name: str, method_sig: str, code: str) -> str:
+    """Replaces a method's implementation with custom JavaScript.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_set_method_implementation(class_name="com.example.app.Auth", method_sig="public boolean login(java.lang.String)", code="context.log('Blocked login attempt'); return false;")
+    
+    Args:
+        class_name: Full class name.
+        method_sig: Full method signature.
+        code: JavaScript function body (accepts 'context').
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "setMethodImplementation", {
+        "className": class_name,
+        "methodSig": method_sig,
+        "code": code
+    })
+
+@mcp.tool()
+async def barbatos_get_instance_addresses(class_name: str) -> list | str:
+    """Returns memory addresses of all live instances of a class.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_get_instance_addresses(class_name="com.example.app.User")
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "getInstanceAddresses", {"className": class_name})
+
+@mcp.tool()
+async def barbatos_run_once(class_name: str, method_sig: str, code: str) -> str:
+    """Executes code once in the context of a class/method.
+    
+    Requirements:
+    - Frida Agent must be injected.
+    
+    Example:
+    barbatos_run_once(class_name="com.example.app.Auth", method_sig="public void login(java.lang.String)", code="context.log('Hello from JS');")
+    
+    Args:
+        class_name: Target class.
+        method_sig: Target method signature.
+        code: JavaScript function body.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "runOnce", {
+        "className": class_name,
+        "methodSig": method_sig,
+        "code": code
+    })
+
+@mcp.tool()
+async def barbatos_patch_and_install_ios_app(app_path: str) -> dict | str:
+    """Injects Frida gadget into a local iOS build and starts the deployment process.
+    
+    Requirements:
+    - iOS device connected via USB.
+    
+    Example:
+    barbatos_patch_and_install_ios_app(app_path="/path/to/App.app")
+    
+    Args:
+        app_path: Path to the local .app or .ipa file.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "patchAndInstallIosApp", {"appPath": app_path})
+
+@mcp.tool()
+async def barbatos_check_ios_deploy_status() -> dict | str:
+    """Returns the current status of the iOS app deployment and injection.
+    
+    Example:
+    barbatos_check_ios_deploy_status()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "checkIosDeployStatus", {})
+
+@mcp.tool()
+async def barbatos_check_ios_jailbreak_status() -> dict | str:
+    """Checks if the connected iOS device is jailbroken and identifies the foreground app.
+    
+    Requirements:
+    - iOS device connected via USB.
+    
+    Example:
+    barbatos_check_ios_jailbreak_status()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "checkIosJailbreakStatus", {})
+
+@mcp.tool()
+async def barbatos_inject_jailbroken_ios(force: bool = False, serial: str = None) -> dict | str:
+    """Attaches to an app on a jailbroken iOS device and loads the agent.
+    
+    Requirements:
+    - iOS device connected via USB.
+    - Device must be jailbroken with frida-server running.
+    
+    Example:
+    barbatos_inject_jailbroken_ios(force=True)
+    
+    Args:
+        force: Force a new injection even if already attached.
+        serial: Optional iOS device UDID.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "injectJailbrokenIos", {"force": force, "serial": serial})
+
+@mcp.tool()
+async def barbatos_health_check() -> dict | str:
+    """
+    Checks the health of the barbatos bridge, ADB device connection, and Frida session.
+    Provides Android-specific info (root, frontmost app, debuggable).
+    
+    Example:
+    barbatos_health_check()
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "healthCheck", {})
+
 # Bootstraps and starts the JSON-RPC local HTTP server blocking the main thread
 def run_server(port=8080, serial=None):
     server = ThreadingHTTPServer(('127.0.0.1', port), RpcHandler)
@@ -1682,10 +2168,60 @@ def run_server(port=8080, serial=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='barbatos-bridge: Frida JSON-RPC bridge for Android runtime instrumentation'
+        description='barbatos-bridge: Frida JSON-RPC bridge and MCP server for mobile runtime instrumentation'
     )
-    parser.add_argument('--port', type=int, default=8080, help='Local HTTP port to listen on (default: 8080)')
-    parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554). Omit to use the first USB device.')
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # 'serve' command (HTTP JSON-RPC)
+    serve_parser = subparsers.add_parser("serve", help="Start the JSON-RPC HTTP server (for TUI)")
+    serve_parser.add_argument('--port', type=int, default=8080, help='Local HTTP port to listen on (default: 8080)')
+    serve_parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554)')
+
+    # 'mcp' command (Stdio MCP)
+    mcp_description = """
+Start the MCP Stdio server for AI agents.
+
+This allows agents (like Claude or Gemini) to use barbatos tools directly.
+Key tools available:
+  - barbatos_health_check: Check connection, root status, and frontmost app.
+  - barbatos_inject_gadget_from_scratch: Full Android injection lifecycle.
+  - barbatos_list_classes: Search for loaded classes.
+  - barbatos_inspect_class: Explore fields and methods.
+  - barbatos_list_instances: Find live objects on the heap.
+  - barbatos_hook_method: Intercept calls and view arguments/return values.
+  - barbatos_run_once: Execute custom JS/TS in the target process.
+    """
+    mcp_epilog = """
+Requirements:
+  - Android: ADB enabled, USB debugging authorized.
+  - iOS: USB connection, idevice-installer/devicectl tools.
+  - Target: App must be debuggable OR device rooted (Android).
+
+Example usage:
+  python3 bridge.py mcp
+  python3 bridge.py mcp --serial emulator-5554
+    """
+    mcp_parser = subparsers.add_parser(
+        "mcp", 
+        help="Start the MCP Stdio server (for AI agents)",
+        description=mcp_description,
+        epilog=mcp_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    mcp_parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554)')
+
     args = parser.parse_args()
 
-    run_server(port=args.port, serial=args.serial)
+    if args.command == "mcp":
+        # Initialize bridge with serial if provided
+        global_bridge = FridaBridge(serial=args.serial)
+        mcp.run()
+    elif args.command == "serve":
+        run_server(port=args.port, serial=args.serial)
+    else:
+        # Backward compatibility or default behavior: run 'serve' if no command given
+        # But since we added subparsers, we might want to default to 'serve' if no sub-command
+        if not args.command:
+            run_server(port=8080)
+        else:
+            parser.print_help()

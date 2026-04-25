@@ -30,7 +30,7 @@ The name is inspired by the mythological Barbatos, but in the context of Android
 This project aims to grant the hability to understand deeply about an App, reveal hidden states in the heap, gives knowledge about changes of state (*only past and present tho*), and reconcile the gap between developers and machines (apps) by providing a more intuitive way to interact with them.
 
 ## What is this project?
-here you will find 3 things: A TUI debugger ("barbatos"), a MCP server ("barbatos-mcp") and a core Http API ("barbatos-bridge") that its used by the TUI and MCP server.
+here you will find 2 things: A TUI debugger ("barbatos") and a core bridge ("barbatos-bridge") that includes both the Http API (for TUI) and the MCP server (for AI agents).
 
 **The focus of this project is to bring Frida powerfullness closer to devs and vibe-coders without the need to know how Frida is setup and how it works.**
 
@@ -95,15 +95,15 @@ Barbatos uses a multi-stage pipeline for reliable communication:
 ```mermaid
 graph TD
     A[Native TUI] -->|Ktor/HTTP| C[Python Bridge]
-    B[MCP Client] -->|JSON-RPC| C
+    B[AI Agent] -->|MCP Stdio| C
     C -->|Frida RPC| D[Frida JS Agent]
     D -->|Java Bridge| E[Android Runtime]
     E -->|ART| F[Target App]
 ```
 
 1.  **Native TUI**: Standalone Kotlin Native binary for a deterministic terminal experience.
-2.  **MCP Client**: Integration with AI agents (Claude, Cursor) via Model Context Protocol.
-3.  **Python Bridge**: Mediator exposing a standardized JSON-RPC interface.
+2.  **AI Agent**: Integration with AI agents (Claude, Cursor) via Model Context Protocol.
+3.  **Python Bridge**: Unified mediator exposing both JSON-RPC HTTP and MCP interfaces.
 4.  **Frida Injection**: JS agent injected into the process for runtime interaction.
 
 ---
@@ -155,7 +155,7 @@ For Debian-based systems, you can use our APT repository to keep the tools up to
 3.  **Install the components:**
     ```bash
     sudo apt update
-    sudo apt install barbatos barbatos-bridge barbatos-mcp
+    sudo apt install barbatos barbatos-bridge
     ```
 
 ### **MCP Server Setup**
@@ -165,11 +165,11 @@ To use `barbatos` with **Claude Desktop**, add this to your `claude_desktop_conf
 {
   "mcpServers": {
     "barbatos-debugger": {
-      "command": "barbatos-mcp",
-      "args": []
+      "command": "barbatos-bridge",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-*Note: Ensure the barbatos-bridge is running (listening on port 8080) before using the MCP tools.*
+*Note: The unified bridge automatically handles Frida connection for the MCP server.*
