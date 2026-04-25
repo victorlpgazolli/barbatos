@@ -222,3 +222,9 @@ Open Qodo Gen chat panel in VSCode or IntelliJ → Connect more tools → + Add 
 Click <code>Save</code>.
 
 </details>
+
+### OpenAPI Specification
+
+Barbatos exposes an API via the bridge, allowing you to interact with the debugger programmatically. 
+
+[View API Docs >](https://barbatos.victorlpgazolli.dev/openapi)
