@@ -23,7 +23,6 @@ runs:
         zip -r ./barbatos-macos-arm64.zip ./dist
         cp dist/barbatos barbatos-macos-arm64-tui
         cp dist/barbatos-bridge barbatos-macos-arm64-bridge
-        cp dist/barbatos-mcp barbatos-macos-arm64-mcp
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
@@ -33,5 +32,4 @@ runs:
           barbatos-macos-arm64.zip
           barbatos-macos-arm64-tui
           barbatos-macos-arm64-bridge
-          barbatos-macos-arm64-mcp
         retention-days: 1

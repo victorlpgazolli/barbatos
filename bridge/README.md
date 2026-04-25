@@ -30,15 +30,15 @@ curl -sSL https://barbatos.victorlpgazolli.dev/install.sh | bash
 
 ```bash
 git clone git@github.com:victorlpgazolli/barbatos.git
-cd barbatos/mcp_server
+cd barbatos/bridge
 
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-python3 -m PyInstaller mcp.spec
-# you will find the executable in dist/barbatos-mcp, move it to ~/.local/bin
-mv dist/barbatos-mcp ~/.local/bin/
+python3 -m PyInstaller bridge.spec
+# you will find the executable in dist/barbatos-bridge, move it to ~/.local/bin
+mv dist/barbatos-bridge ~/.local/bin/
 # then follow the MCP Server Setup instructions below
 ```
 
@@ -52,7 +52,10 @@ mv dist/barbatos-mcp ~/.local/bin/
 {
   "mcpServers": {
     "barbatos-debugger": {
-      "command": "barbatos-mcp"
+      "command": "barbatos-bridge",
+      "args": [
+        "mcp"
+      ],
     }
   }
 }
@@ -70,7 +73,10 @@ Add via the Amp VS Code extension settings screen or by updating your `settings.
 ```json
 "amp.mcpServers": {
   "barbatos-debugger": {
-    "command": "barbatos-mcp"
+    "command": "barbatos-bridge",
+    "args": [
+      "mcp"
+    ]
   }
 }
 ```
@@ -80,7 +86,7 @@ Add via the Amp VS Code extension settings screen or by updating your `settings.
 Run the following command in your terminal:
 
 ```bash
-amp mcp add barbatos-debugger -- barbatos-mcp
+amp mcp add barbatos-debugger -- barbatos-bridge mcp
 ```
 
 </details>
@@ -98,7 +104,7 @@ To setup Cline, just add the json above to your MCP settings file.
 Use the Claude Code CLI to add the Barbatos MCP server:
 
 ```bash
-claude mcp add barbatos-debugger -- barbatos-mcp
+claude mcp add barbatos-debugger -- barbatos-bridge mcp
 ```
 </details>
 
@@ -115,14 +121,15 @@ Follow the [MCP install guide](https://modelcontextprotocol.io/quickstart/user),
 Use the Codex CLI to add the Barbatos MCP server:
 
 ```bash
-codex mcp add barbatos-debugger barbatos-mcp
+codex mcp add barbatos-debugger barbatos-bridge mcp
 ```
 
 Alternatively, create or edit the configuration file `~/.codex/config.toml` and add:
 
 ```toml
 [mcp_servers.barbatos-debugger]
-command = "barbatos-mcp"
+command = "barbatos-bridge"
+args = ["mcp"]
 ```
 
 </details>
@@ -143,7 +150,10 @@ You can edit the configuration file `~/.copilot/mcp-config.json` and add:
   "mcpServers": {
     "barbatos-debugger": {
       "type": "local",
-      "command": "barbatos-mcp",
+      "command": "barbatos-bridge",
+      "args": [
+        "mcp"
+      ],
       "tools": ["*"]
     }
   }
@@ -155,7 +165,7 @@ You can edit the configuration file `~/.copilot/mcp-config.json` and add:
 <details>
 <summary>Cursor</summary>
 
-Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `barbatos-mcp`.
+Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `barbatos-bridge`.
 
 </details>
 
@@ -165,7 +175,7 @@ Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, u
 Use the Gemini CLI to add the Barbatos MCP server:
 
 ```bash
-gemini mcp add barbatos-debugger barbatos-mcp
+gemini mcp add barbatos-debugger barbatos-bridge mcp
 ```
 
 </details>
@@ -173,7 +183,7 @@ gemini mcp add barbatos-debugger barbatos-mcp
 <details>
 <summary>Goose</summary>
 
-Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to your liking, use type `STDIO`, and set the `command` to `barbatos-mcp`.
+Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to your liking, use type `STDIO`, and set the `command` to `barbatos-bridge mcp`.
 
 </details>
 
@@ -186,7 +196,10 @@ Follow the MCP Servers [documentation](https://kiro.dev/docs/mcp/). For example 
 {
   "mcpServers": {
     "barbatos-debugger": {
-      "command": "barbatos-mcp"
+      "command": "barbatos-bridge",
+      "args": [
+        "mcp"
+      ],
     }
   }
 }
@@ -205,7 +218,10 @@ Follow the MCP Servers documentation. For example in `~/.config/opencode/opencod
   "mcp": {
     "barbatos-debugger": {
       "type": "local",
-      "command": ["barbatos-mcp"],
+      "command": "barbatos-bridge",
+      "args": [
+        "mcp"
+      ],
       "enabled": true
     }
   }

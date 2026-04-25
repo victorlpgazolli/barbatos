@@ -50,7 +50,6 @@ runs:
         zip -r ./barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}.zip ./dist
         cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-tui
         cp dist/barbatos-bridge barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-bridge
-        cp dist/barbatos-mcp barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-mcp
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
