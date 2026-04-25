@@ -1283,6 +1283,17 @@ class FridaBridge:
         self.get_session()
         classes = asyncio.run(self.script.exports_async.listclasses(search_param))
         
+        # Filter: if search_param is provided, we only keep items from the app_package 
+        # that actually match the search_param as a prefix (either full name or simple name).
+        # Items from OTHER packages are kept if they matched the initial agent search.
+        if search_param and app_package:
+            search_lower = search_param.lower()
+            classes = [
+                c for c in classes 
+                if not (c.startswith(f"{app_package}.") or c == app_package) or 
+                   (c.lower().startswith(search_lower) or c.split(".")[-1].lower().startswith(search_lower))
+            ]
+
         def get_priority(class_name):
             priority = 0
             if app_package:
