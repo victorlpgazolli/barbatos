@@ -1,29 +1,29 @@
 Package: barbatos-bridge
 Architecture: arm64
-Version: 1.4.0
+Version: 1.4.1-alpha01
 Priority: optional
 Section: utils
 Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
 Depends: python3, nodejs, npm, frida
-Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.0/barbatos-bridge_1.4.0_arm64.deb
-Size: 40163614
-MD5sum: 9aaec731793ba173ca9b57cac53ac4ca
-SHA1: 05056b4cb03f20a5ba7d5f4c84874df0816bf036
-SHA256: 09202ab0454a06b42b9ef8d7dec4b930667e6736a0961900be2d7ac9582823e7
-SHA512: cb65cb1f90690b30ce3e38623ba83a7247a7d50e780bc87e2a1ca8edf2f2d5017170ea5139d8ba59edba2155b2489c4116e129554ebbf1cc8598a1e897015039
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.1-alpha01/barbatos-bridge_1.4.1-alpha01_arm64.deb
+Size: 40166484
+MD5sum: cd368455855d2e8f29733509118a3ad8
+SHA1: 13d8f90468fd45f9ee1184198ccf300615d5be67
+SHA256: c13e9b737d97b7c67dd50e0659fc8ff9ea3d054319a211cb37e8e99814e263f9
+SHA512: d890ff8d91a05390be2ddbdd61e8bad3eacc553986ae77eafdf4d1cea5e538f7d937fb1aa72c0f3375969040f5b507a3c749c3deaccd77e28cf3952a11b86639
 Description: Frida bridge for Barbatos debugger
 
 Package: barbatos
 Architecture: arm64
-Version: 1.4.0
+Version: 1.4.1-alpha01
 Priority: optional
 Section: utils
 Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
-Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.0/barbatos_1.4.0_arm64.deb
-Size: 1439082
-MD5sum: 55c0473837728c45643dde0c5ae63003
-SHA1: d4fd53bff1a0079d6314e150cb5517086392f21f
-SHA256: 36eb8fe2df86497788f2968fb5c86cd901f9885819dc0e6bc48fe45cb04bb865
-SHA512: fe8b6b00ca9740dd113b4c2ae128f7e890ebcbe5f90d99c7dcabb979ab313f057976cd53d106671ef058863fb59f6ce347634c1881f8a19c43c973de6cce3aef
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.1-alpha01/barbatos_1.4.1-alpha01_arm64.deb
+Size: 1438986
+MD5sum: 0a4833b26c9932e5a1f3bba3ca3e9a36
+SHA1: af0ac0815f32606217c73356f27268fee98d88e9
+SHA256: 4386cc65bd139aa9d74970e08b0f0eaa9df56454873c4fe8aa178f92dba4b7db
+SHA512: b77bfb4b0d2d3856531bae7473124b5058063176a4d2d3d72ad7a97ba84e94cb46f0cec2ab22ab603142b1ce32fd8ca9ad967a8cc60a86f6e80de16982aa8b43
 Description: Barbatos TUI Debugger for Android
 
