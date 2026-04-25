@@ -1,0 +1,402 @@
+openapi: 3.0.3
+info:
+  title: Barbatos JSON-RPC Bridge API
+  version: 1.1.0
+  description: |
+    API for communication between the barbatos TUI and the Frida agent injected into Android/iOS devices.
+    Uses JSON-RPC 2.0 over HTTP POST.
+
+    ### JSON-RPC Methods Contract
+    
+    Below is the mapping of each `method` name to its required `params` and expected `result` object. You can inspect the structure of these objects in the **Schemas** section at the bottom of the UI.
+
+    | Method Name | Parameters Schema | Result Schema |
+    |---|---|---|
+    | **listClasses** | `ListClassesParams` | Array of Strings |
+    | **inspectClass** | `InspectClassParams` | `ClassInspectionResult` |
+    | **countInstances** | `CountInstancesParams` | Integer |
+    | **listInstances** | `ListInstancesParams` | `ListInstancesResult` |
+    | **inspectInstance** | `InspectInstanceParams` | `InspectInstanceResult` |
+    | **setFieldValue** | `SetFieldValueParams` | String (Success Message) |
+    | **hookMethod** | `HookParams` | String |
+    | **getHookEvents** | (None) | Array of `HookEvent` |
+    | **setMethodImplementation**| `SetMethodImplementationParams`| String |
+    | **getInstanceAddresses** | `GetInstanceAddressesParams` | Array of Strings |
+    | **runOnce** | `RunOnceParams` | String |
+    | **prepareEnvironment** | (None) | `PrepareEnvResult` |
+    | **injectGadgetFromScratch**| `InjectGadgetParams` | `InjectionProgressResult` |
+    | **injectJdwp** | `InjectJdwpParams` | String |
+    | **patchAndInstallIosApp** | `PatchAndInstallIosAppParams` | String |
+    | **checkIosJailbreakStatus**| `IosJailbreakParams` | String |
+    | **injectJailbrokenIos** | `IosJailbreakParams` | String |
+    | **checkIosDeployStatus** | (None) | `GenericStatusResult` |
+    | **healthCheck** | (None) | `HealthCheckResponse` |
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local bridge server
+paths:
+  /ping:
+    get:
+      summary: Health check
+      description: Verifies if the Python bridge is up and running.
+      responses:
+        '200':
+          description: Bridge is operational
+          content:
+            application/json:
+              example: {"status": "pong"}
+  /rpc:
+    post:
+      summary: JSON-RPC 2.0 Endpoint
+      description: Main entry point for all debugger operations. Send a JSON-RPC 2.0 formatted payload here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RpcRequest'
+      responses:
+        '200':
+          description: JSON-RPC Response (Success or Error)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/RpcResponse'
+                  - $ref: '#/components/schemas/RpcErrorResponse'
+components:
+  schemas:
+    # -------------------------
+    # JSON-RPC Base Envelopes
+    # -------------------------
+    RpcRequest:
+      type: object
+      required: [jsonrpc, method, id]
+      properties:
+        jsonrpc:
+          type: string
+          example: "2.0"
+        id:
+          type: integer
+          example: 1
+        method:
+          type: string
+          description: The name of the method to invoke.
+        params:
+          type: object
+          description: Method-specific parameters (See description table).
+    RpcResponse:
+      type: object
+      required: [jsonrpc, result, id]
+      properties:
+        jsonrpc:
+          type: string
+          example: "2.0"
+        id:
+          type: integer
+          example: 1
+        result:
+          description: The successful result of the invoked method.
+    RpcErrorResponse:
+      type: object
+      required: [jsonrpc, error, id]
+      properties:
+        jsonrpc:
+          type: string
+          example: "2.0"
+        id:
+          type: integer
+          example: 1
+        error:
+          $ref: '#/components/schemas/JsonRpcError'
+
+    JsonRpcError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+
+    # -------------------------
+    # Parameter Schemas
+    # -------------------------
+    ListClassesParams:
+      type: object
+      required: [search_param, app_package, offset, limit]
+      properties:
+        search_param:
+          type: string
+        app_package:
+          type: string
+        offset:
+          type: integer
+        limit:
+          type: integer
+
+    InspectClassParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    CountInstancesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    ListInstancesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    InspectInstanceParams:
+      type: object
+      required: [className, id]
+      properties:
+        className:
+          type: string
+        id:
+          type: string
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 50
+
+    SetFieldValueParams:
+      type: object
+      required: [className, id, fieldName, type, newValue]
+      properties:
+        className:
+          type: string
+        id:
+          type: string
+        fieldName:
+          type: string
+        type:
+          type: string
+        newValue:
+          type: string
+
+    HookParams:
+      type: object
+      required: [className, methodSig]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+
+    SetMethodImplementationParams:
+      type: object
+      required: [className, methodSig, code]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+        code:
+          type: string
+
+    RunOnceParams:
+      type: object
+      required: [className, methodSig, code]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+        code:
+          type: string
+
+    GetInstanceAddressesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    InjectGadgetParams:
+      type: object
+      properties:
+        with_logs:
+          type: boolean
+          default: true
+        limit:
+          type: integer
+          default: 100
+
+    InjectJdwpParams:
+      type: object
+      required: [target, port, package_name]
+      properties:
+        target:
+          type: string
+        port:
+          type: integer
+        package_name:
+          type: string
+
+    PatchAndInstallIosAppParams:
+      type: object
+      required: [appPath]
+      properties:
+        appPath:
+          type: string
+
+    IosJailbreakParams:
+      type: object
+      required: [serial]
+      properties:
+        serial:
+          type: string
+
+    # -------------------------
+    # Result Schemas
+    # -------------------------
+    HealthCheckResponse:
+      type: object
+      required: [overall, checks]
+      properties:
+        overall:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CheckResponse'
+        recommendation:
+          type: string
+          nullable: true
+
+    CheckResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        fix:
+          type: string
+          nullable: true
+
+    PrepareEnvResult:
+      type: object
+      required: [pid, package_name, port, target]
+      properties:
+        pid:
+          type: integer
+        package_name:
+          type: string
+        port:
+          type: integer
+        target:
+          type: string
+
+    ListInstancesResult:
+      type: object
+      required: [instances, totalCount]
+      properties:
+        instances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstanceInfo'
+        totalCount:
+          type: integer
+        detectionMethod:
+          type: string
+          default: "heap_scan"
+
+    InstanceInfo:
+      type: object
+      required: [id, handle, summary]
+      properties:
+        id:
+          type: string
+        handle:
+          type: string
+        summary:
+          type: string
+        detectionMethod:
+          type: string
+          default: "heap_scan"
+
+    InspectInstanceResult:
+      type: object
+      required: [attributes]
+      properties:
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstanceAttribute'
+
+    InstanceAttribute:
+      type: object
+      required: [name, type, value]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        value:
+          type: string
+        childId:
+          type: string
+          nullable: true
+        childClassName:
+          type: string
+          nullable: true
+        isPagination:
+          type: boolean
+          default: false
+        nextOffset:
+          type: integer
+          default: 0
+
+    InjectionProgressResult:
+      type: object
+      required: [status, steps]
+      properties:
+        status:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/InjectionStep'
+        logs:
+          type: array
+          items:
+            type: string
+        error_message:
+          type: string
+          nullable: true
+
+    InjectionStep:
+      type: object
+      required: [id, title, status]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+
+    GenericStatusResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        error_message:
+          type: string
+          nullable: true
