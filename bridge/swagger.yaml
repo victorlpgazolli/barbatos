@@ -1,14 +1,40 @@
 openapi: 3.0.3
 info:
-  title: barbatos JSON-RPC Bridge API
-  description: |
-    API for communication between the barbatos TUI and the Frida agent injected into Android.
-    Uses JSON-RPC 2.0 over HTTP POST.
+  title: Barbatos JSON-RPC Bridge API
   version: 1.1.0
+  description: |
+    API for communication between the barbatos TUI and the Frida agent injected into Android/iOS devices.
+    Uses JSON-RPC 2.0 over HTTP POST.
+
+    ### JSON-RPC Methods Contract
+    
+    Below is the mapping of each `method` name to its required `params` and expected `result` object. You can inspect the structure of these objects in the **Schemas** section at the bottom of the UI.
+
+    | Method Name | Parameters Schema | Result Schema |
+    |---|---|---|
+    | **listClasses** | `ListClassesParams` | Array of Strings |
+    | **inspectClass** | `InspectClassParams` | `ClassInspectionResult` |
+    | **countInstances** | `CountInstancesParams` | Integer |
+    | **listInstances** | `ListInstancesParams` | `ListInstancesResult` |
+    | **inspectInstance** | `InspectInstanceParams` | `InspectInstanceResult` |
+    | **setFieldValue** | `SetFieldValueParams` | String (Success Message) |
+    | **hookMethod** | `HookParams` | String |
+    | **getHookEvents** | (None) | Array of `HookEvent` |
+    | **setMethodImplementation**| `SetMethodImplementationParams`| String |
+    | **getInstanceAddresses** | `GetInstanceAddressesParams` | Array of Strings |
+    | **runOnce** | `RunOnceParams` | String |
+    | **prepareEnvironment** | (None) | `PrepareEnvResult` |
+    | **injectGadgetFromScratch**| `InjectGadgetParams` | `InjectionProgressResult` |
+    | **injectJdwp** | `InjectJdwpParams` | String |
+    | **patchAndInstallIosApp** | `PatchAndInstallIosAppParams` | String |
+    | **checkIosJailbreakStatus**| `IosJailbreakParams` | String |
+    | **injectJailbrokenIos** | `IosJailbreakParams` | String |
+    | **checkIosDeployStatus** | (None) | `GenericStatusResult` |
+    | **healthCheck** | (None) | `HealthCheckResponse` |
+
 servers:
   - url: http://127.0.0.1:8080
     description: Local bridge server
-
 paths:
   /ping:
     get:
@@ -20,41 +46,37 @@ paths:
           content:
             application/json:
               example: {"status": "pong"}
-
   /rpc:
     post:
       summary: JSON-RPC 2.0 Endpoint
-      description: Main entry point for all debugger operations.
+      description: Main entry point for all debugger operations. Send a JSON-RPC 2.0 formatted payload here.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RpcRequest'
-    
       responses:
         '200':
-          description: Successful execution of the RPC method.
+          description: JSON-RPC Response (Success or Error)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RpcResponse'
-        '500':
-          description: Internal bridge error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RpcError'
-
+                oneOf:
+                  - $ref: '#/components/schemas/RpcResponse'
+                  - $ref: '#/components/schemas/RpcErrorResponse'
 components:
   schemas:
+    # -------------------------
+    # JSON-RPC Base Envelopes
+    # -------------------------
     RpcRequest:
       type: object
       required: [jsonrpc, method, id]
       properties:
         jsonrpc:
           type: string
-          enum: ["2.0"]
+          example: "2.0"
         id:
           type: integer
           example: 1
@@ -63,10 +85,10 @@ components:
           description: The name of the method to invoke.
         params:
           type: object
-          description: Method-specific parameters.
-
+          description: Method-specific parameters (See description table).
     RpcResponse:
       type: object
+      required: [jsonrpc, result, id]
       properties:
         jsonrpc:
           type: string
@@ -75,11 +97,10 @@ components:
           type: integer
           example: 1
         result:
-          type: object
-          description: The return value of the method.
-
-    RpcError:
+          description: The successful result of the invoked method.
+    RpcErrorResponse:
       type: object
+      required: [jsonrpc, error, id]
       properties:
         jsonrpc:
           type: string
@@ -88,57 +109,55 @@ components:
           type: integer
           example: 1
         error:
-          type: object
-          properties:
-            status:
-              type: string
-              example: "unknown_error"
-            error_message:
-              type: string
+          $ref: '#/components/schemas/JsonRpcError'
 
-    # --- Method Specific Documentation ---
-
-    listClassesParams:
+    JsonRpcError:
       type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+
+    # -------------------------
+    # Parameter Schemas
+    # -------------------------
+    ListClassesParams:
+      type: object
+      required: [search_param, app_package, offset, limit]
       properties:
         search_param:
           type: string
-          default: ""
-          description: Filter classes by name (case-insensitive).
         app_package:
           type: string
-          default: ""
-          description: Package name to prioritize in the result list.
         offset:
           type: integer
-          default: 0
         limit:
           type: integer
-          default: 200
 
-    inspectClassParams:
-      type: object
-      required: [className]
-      properties:
-        className:
-          type: string
-          example: "java.lang.String"
-
-    countInstancesParams:
+    InspectClassParams:
       type: object
       required: [className]
       properties:
         className:
           type: string
 
-    listInstancesParams:
+    CountInstancesParams:
       type: object
       required: [className]
       properties:
         className:
           type: string
 
-    inspectInstanceParams:
+    ListInstancesParams:
+      type: object
+      required: [className]
+      properties:
+        className:
+          type: string
+
+    InspectInstanceParams:
       type: object
       required: [className, id]
       properties:
@@ -146,7 +165,6 @@ components:
           type: string
         id:
           type: string
-          description: HashCode or Frida handle of the instance.
         offset:
           type: integer
           default: 0
@@ -154,7 +172,7 @@ components:
           type: integer
           default: 50
 
-    setFieldValueParams:
+    SetFieldValueParams:
       type: object
       required: [className, id, fieldName, type, newValue]
       properties:
@@ -166,40 +184,10 @@ components:
           type: string
         type:
           type: string
-          enum: [int, string, boolean, float, long]
         newValue:
           type: string
-          description: New value as a string (will be parsed to the correct type).
 
-    injectGadgetFromScratchParams:
-      type: object
-      properties:
-        force:
-          type: boolean
-          default: false
-          description: Force a new injection even if a terminal state was reached.
-        with_logs:
-          type: boolean
-          default: false
-          description: Include the latest bridge logs in the response.
-        limit:
-          type: integer
-          default: 50
-          description: Maximum number of log lines to return.
-
-    injectJdwpParams:
-      type: object
-      required: [package_name]
-      properties:
-        cmd:
-          type: string
-        break_on:
-          type: string
-          default: "android.os.Handler.dispatchMessage"
-        package_name:
-          type: string
-
-    hookMethodParams:
+    HookParams:
       type: object
       required: [className, methodSig]
       properties:
@@ -207,123 +195,208 @@ components:
           type: string
         methodSig:
           type: string
-          description: Full signature (e.g., "public void onCreate(android.os.Bundle)")
 
-    getInstanceAddressesParams:
+    SetMethodImplementationParams:
+      type: object
+      required: [className, methodSig, code]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+        code:
+          type: string
+
+    RunOnceParams:
+      type: object
+      required: [className, methodSig, code]
+      properties:
+        className:
+          type: string
+        methodSig:
+          type: string
+        code:
+          type: string
+
+    GetInstanceAddressesParams:
       type: object
       required: [className]
       properties:
         className:
           type: string
 
-    runOnceParams:
+    InjectGadgetParams:
       type: object
-      required: [className, methodSig, code]
       properties:
-        className:
+        with_logs:
+          type: boolean
+          default: true
+        limit:
+          type: integer
+          default: 100
+
+    InjectJdwpParams:
+      type: object
+      required: [target, port, package_name]
+      properties:
+        target:
           type: string
-        methodSig:
-          type: string
-        code:
+        port:
+          type: integer
+        package_name:
           type: string
 
-    setMethodImplementationParams:
-      type: object
-      required: [className, methodSig, code]
-      properties:
-        className:
-          type: string
-        methodSig:
-          type: string
-        code:
-          type: string
-
-    unhookMethodParams:
-      type: object
-      required: [className, methodSig]
-      properties:
-        className:
-          type: string
-        methodSig:
-          type: string
-
-    patchAndInstallIosAppParams:
+    PatchAndInstallIosAppParams:
       type: object
       required: [appPath]
       properties:
         appPath:
           type: string
-          description: Path to the local .app or .ipa file.
 
-    injectJailbrokenIosParams:
+    IosJailbreakParams:
       type: object
+      required: [serial]
       properties:
-        force:
+        serial:
+          type: string
+
+    # -------------------------
+    # Result Schemas
+    # -------------------------
+    HealthCheckResponse:
+      type: object
+      required: [overall, checks]
+      properties:
+        overall:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CheckResponse'
+        recommendation:
+          type: string
+          nullable: true
+
+    CheckResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        fix:
+          type: string
+          nullable: true
+
+    PrepareEnvResult:
+      type: object
+      required: [pid, package_name, port, target]
+      properties:
+        pid:
+          type: integer
+        package_name:
+          type: string
+        port:
+          type: integer
+        target:
+          type: string
+
+    ListInstancesResult:
+      type: object
+      required: [instances, totalCount]
+      properties:
+        instances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstanceInfo'
+        totalCount:
+          type: integer
+        detectionMethod:
+          type: string
+          default: "heap_scan"
+
+    InstanceInfo:
+      type: object
+      required: [id, handle, summary]
+      properties:
+        id:
+          type: string
+        handle:
+          type: string
+        summary:
+          type: string
+        detectionMethod:
+          type: string
+          default: "heap_scan"
+
+    InspectInstanceResult:
+      type: object
+      required: [attributes]
+      properties:
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstanceAttribute'
+
+    InstanceAttribute:
+      type: object
+      required: [name, type, value]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        value:
+          type: string
+        childId:
+          type: string
+          nullable: true
+        childClassName:
+          type: string
+          nullable: true
+        isPagination:
           type: boolean
           default: false
-        serial:
-          type: string
-          description: Optional iOS device UDID.
+        nextOffset:
+          type: integer
+          default: 0
 
-    prepareEnvironmentParams:
+    InjectionProgressResult:
       type: object
+      required: [status, steps]
       properties:
-        serial:
+        status:
           type: string
-          description: Optional ADB device serial.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/InjectionStep'
+        logs:
+          type: array
+          items:
+            type: string
+        error_message:
+          type: string
+          nullable: true
 
-# x-rpc-methods: Documentation for SDK/TUI developers
-x-rpc-methods:
-  listClasses:
-    description: Retrieves all loaded Java classes in the target process.
-    returns: Array of strings.
-  inspectClass:
-    description: Returns fields and methods of a class.
-    returns: "{staticAttributes: [], instanceAttributes: [], methods: []}"
-  countInstances:
-    description: Counts live instances of a class on the heap.
-    returns: Integer.
-  listInstances:
-    description: Returns handles/IDs of live instances.
-    returns: "Array of {id, handle, instance}"
-  inspectInstance:
-    description: Recursively explores an instance's fields.
-    returns: "Array of {name, value, type, childId?}"
-  setFieldValue:
-    description: Modifies a primitive field of an instance.
-  hookMethod:
-    description: Intercepts method calls and logs events.
-  getHookEvents:
-    description: Returns the latest method interception events collected by the agent.
-    returns: "Array of HookEvent objects."
-  getpackagename:
-    description: Returns the current target's package name.
-  unhookMethod:
-    description: Removes an active hook.
-  setMethodImplementation:
-    description: Replaces a method's body with custom JS/TS.
-  getInstanceAddresses:
-    description: Lists raw memory addresses of instances.
-  runOnce:
-    description: Executes a one-time script in the context of a class/method.
-  prepareEnvironment:
-    description: Initial ADB setup.
-  checkOrPushGadget:
-    description: Ensures Frida Gadget is on device.
-  resetInjection:
-    description: Resets the injection state machine.
-  injectGadgetFromScratch:
-    description: Orchestrates the JDWP -> Gadget -> Agent sequence.
-    returns: "{status: 'running'|'completed'|'error', steps: [], error_message: string?, logs: []?}"
-  injectJdwp:
-    description: Direct JDWP injection trigger.
-  patchAndInstallIosApp:
-    description: Injects Frida gadget into an iOS app and starts the deployment process.
-  checkIosDeployStatus:
-    description: Returns the current status of the iOS app deployment and injection.
-  checkIosJailbreakStatus:
-    description: Checks if the connected iOS device is jailbroken and identifies the foreground app.
-  injectJailbrokenIos:
-    description: Attaches to an app on a jailbroken iOS device and loads the agent.
-  healthCheck:
-    description: Checks bridge and device health status.
+    InjectionStep:
+      type: object
+      required: [id, title, status]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+
+    GenericStatusResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        error_message:
+          type: string
+          nullable: true
