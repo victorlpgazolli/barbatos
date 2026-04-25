@@ -87,13 +87,13 @@ object CommandExecutor {
     private fun getBridgeCommand(serialArg: String): String {
         // 1. Check if we're in development mode (running from source)
         if (access("./bridge/bridge.py", F_OK) == 0) {
-            return "python3 -u ./bridge/bridge.py$serialArg"
+            return "python3 -u ./bridge/bridge.py serve $serialArg"
         }
 
         // 2. Check environment variable
         val envPath = getenv("BARBATOS_BRIDGE_PATH")?.toKString()
         if (!envPath.isNullOrEmpty()) {
-            return "$envPath$serialArg"
+            return "$envPath serve $serialArg"
         }
 
         // 3. Check $PATH via `which`
@@ -107,12 +107,12 @@ object CommandExecutor {
         }.trim()
 
         if (whichResult.isNotEmpty()) {
-            return "$whichResult$serialArg"
+            return "$whichResult serve $serialArg"
         }
 
         // 4. Check current working directory for binary
         if (access("./barbatos-bridge", F_OK) == 0) {
-            return "./barbatos-bridge$serialArg"
+            return "./barbatos-bridge serve $serialArg"
         }
 
         throw RuntimeException("barbatos-bridge not found. Ensure you are in the project root, have Barbatos_BRIDGE_PATH set, or barbatos-bridge is in your PATH.")

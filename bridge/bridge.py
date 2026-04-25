@@ -32,7 +32,16 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from jdwp_frida import run_jdwp
 
-logging.basicConfig(level=logging.INFO)
+log_dir = os.path.expanduser("~/.cache/barbatos")
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "bridge.log")
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler(log_file, encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
 
 def strip_ts_types(code):
     """
