@@ -29,7 +29,7 @@ VENV       := bridge/venv
 PIP        := $(VENV)/bin/pip
 PYTHON     := $(abspath $(VENV)/bin/python)
 
-.PHONY: install_dependencies compile_all compile_bridge_agent compile_bridge compile_mcp compile_binary prepare_release release run run_arm64_qemu
+.PHONY: install_dependencies compile_all compile_bridge_agent compile_bridge compile_binary prepare_release release run run_arm64_qemu
 
 install_dependencies:
 	rm -rf $(VENV)
@@ -46,13 +46,10 @@ compile_bridge_agent:
 compile_bridge: compile_bridge_agent
 	cd bridge && $(PYTHON) -m PyInstaller bridge.spec
 
-compile_mcp: compile_bridge
-	@echo "MCP server is now unified with bridge. Nothing extra to compile."
-
 compile_binary:
 	./gradlew $(GRADLE_TARGET)
 
-compile_all: compile_binary compile_bridge_agent compile_bridge compile_mcp
+compile_all: compile_binary compile_bridge_agent compile_bridge
 
 release: compile_all prepare_release
 
@@ -66,6 +63,5 @@ prepare_release:
 	mkdir -p dist
 	cp $(TUI_BIN) dist/barbatos
 	cp $(BRIDGE_BIN) dist/barbatos-bridge
-	cp $(BRIDGE_BIN) dist/barbatos-mcp
-	chmod +x dist/barbatos dist/barbatos-bridge dist/barbatos-mcp
+	chmod +x dist/barbatos dist/barbatos-bridge
 	@echo "Binaries ready in dist/"
