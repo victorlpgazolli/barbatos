@@ -29,7 +29,6 @@ runs:
       shell: bash
       run: |
         make compile_bridge
-        make compile_mcp
 
     - name: Compile Python Bridge & MCP (ARM64 Docker)
       if: inputs.architecture == 'aarch64'
@@ -59,5 +58,4 @@ runs:
           barbatos-linux-*.zip
           barbatos-linux-*-tui
           barbatos-linux-*-bridge
-          barbatos-linux-*-mcp
         retention-days: 1

@@ -37,7 +37,6 @@ runs:
           ${{ inputs.artifacts-dir }}/barbatos-*.zip \
           ${{ inputs.artifacts-dir }}/barbatos-*-tui \
           ${{ inputs.artifacts-dir }}/barbatos-*-bridge \
-          ${{ inputs.artifacts-dir }}/barbatos-*-mcp \
           --clobber
 
     # APT Repository Publishing
