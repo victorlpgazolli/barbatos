@@ -40,7 +40,8 @@ data class CheckResponse(
 @Serializable
 data class HealthCheckResponse(
     val overall: String,
-    val checks: Map<String, CheckResponse>
+    val checks: Map<String, CheckResponse>,
+    val recommendation: String? = null
 )
 @Serializable
 data class JsonRpcResponseHealthCheck(
