@@ -1555,7 +1555,7 @@ class FridaBridge:
 
         elif method == "checkIosDeployStatus":
             with self._lock:
-                logging.info(f"[checkIosDeployStatus] Current iOS deploy status: {self.ios_deploy_status.get("status")}")
+                logging.info(f"[checkIosDeployStatus] Current iOS deploy status: {self.ios_deploy_status.get('status')}")
                 return self.ios_deploy_status
 
         elif method == "checkIosJailbreakStatus":
