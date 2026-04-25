@@ -252,3 +252,9 @@ footer {
     color: var(--text-secondary);
     font-size: 0.9rem;
 }
+
+a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
