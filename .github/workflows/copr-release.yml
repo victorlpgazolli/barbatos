@@ -1,0 +1,26 @@
+name: Release to COPR
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  copr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Update Spec Version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/Version:        .*/Version:        $VERSION/" packaging/rpm/barbatos.spec
+      
+      - name: Build and push to COPR
+        uses: fmonteirom/copr-build-action@v1
+        with:
+          project: barbatos
+          package: barbatos
+          chroots: fedora-rawhide-x86_64,fedora-40-x86_64,fedora-41-x86_64
+          spec: packaging/rpm/barbatos.spec
+          copr_token: ${{ secrets.COPR_TOKEN }}

@@ -1,0 +1,41 @@
+# Maintainer: Victor Gazolli <victorlpgazolli@users.noreply.github.com>
+pkgname=barbatos-bin
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Interactive Kotlin Native TUI debugger for Android apps via Frida"
+arch=('x86_64' 'aarch64')
+url="https://github.com/victorlpgazolli/barbatos"
+license=('MIT')
+depends=('glibc' 'tmux')
+optdepends=('android-tools: ADB support for Android device interaction')
+provides=('barbatos' 'barbatos-bridge' 'barbatos-mcp')
+conflicts=('barbatos')
+
+source=("LICENSE::https://raw.githubusercontent.com/victorlpgazolli/barbatos/v${pkgver}/LICENSE")
+source_x86_64=("barbatos-linux-x64-tui-${pkgver}::https://github.com/victorlpgazolli/barbatos/releases/download/v${pkgver}/barbatos-linux-x64-tui"
+               "barbatos-linux-x64-bridge-${pkgver}::https://github.com/victorlpgazolli/barbatos/releases/download/v${pkgver}/barbatos-linux-x64-bridge"
+               "barbatos-linux-x64-mcp-${pkgver}::https://github.com/victorlpgazolli/barbatos/releases/download/v${pkgver}/barbatos-linux-x64-mcp")
+
+source_aarch64=("barbatos-linux-arm64-tui-${pkgver}::https://github.com/victorlpgazolli/barbatos/releases/download/v${pkgver}/barbatos-linux-arm64-tui"
+                "barbatos-linux-arm64-bridge-${pkgver}::https://github.com/victorlpgazolli/barbatos/releases/download/v${pkgver}/barbatos-linux-arm64-bridge"
+                "barbatos-linux-arm64-mcp-${pkgver}::https://github.com/victorlpgazolli/barbatos/releases/download/v${pkgver}/barbatos-linux-arm64-mcp")
+
+sha256sums=('SKIP')
+sha256sums_x86_64=('SKIP' 'SKIP' 'SKIP')
+sha256sums_aarch64=('SKIP' 'SKIP' 'SKIP')
+
+package() {
+    install -d "${pkgdir}/usr/bin"
+    
+    if [ "$CARCH" = "x86_64" ]; then
+        install -m755 "${srcdir}/barbatos-linux-x64-tui-${pkgver}" "${pkgdir}/usr/bin/barbatos"
+        install -m755 "${srcdir}/barbatos-linux-x64-bridge-${pkgver}" "${pkgdir}/usr/bin/barbatos-bridge"
+        install -m755 "${srcdir}/barbatos-linux-x64-mcp-${pkgver}" "${pkgdir}/usr/bin/barbatos-mcp"
+    elif [ "$CARCH" = "aarch64" ]; then
+        install -m755 "${srcdir}/barbatos-linux-arm64-tui-${pkgver}" "${pkgdir}/usr/bin/barbatos"
+        install -m755 "${srcdir}/barbatos-linux-arm64-bridge-${pkgver}" "${pkgdir}/usr/bin/barbatos-bridge"
+        install -m755 "${srcdir}/barbatos-linux-arm64-mcp-${pkgver}" "${pkgdir}/usr/bin/barbatos-mcp"
+    fi
+
+    install -Dm644 "${srcdir}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
