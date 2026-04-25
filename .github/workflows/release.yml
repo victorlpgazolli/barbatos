@@ -59,14 +59,15 @@ jobs:
           git push origin HEAD:master
 
       - name: Create GitHub Release
-        if: github.event_name != 'workflow_dispatch'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create ${RELEASE_TAG} \
             --title "Release ${RELEASE_TAG}" \
-            --generate-notes
+            --generate-notes \
+            --draft || echo "Release already exists or failed to create"
 
       - name: Export release tag
         id: release
@@ -182,21 +183,26 @@ jobs:
         run: |
           mkdir -p artifacts/deb
           for arch in x64 arm64; do
-            arch_long=$([[ "$arch" == "x64" ]] && echo "x86_64" || echo "aarch64")
+            PKG_ARCH=$([[ "$arch" == "x64" ]] && echo "amd64" || echo "arm64")
             for package in barbatos barbatos-bridge barbatos-mcp; do
-              PKG_DIR="pkg_tmp_$package"
+              PKG_DIR="pkg_tmp_${package}_${arch}"
               mkdir -p "$PKG_DIR"
               cp -r packaging/debian/$package/* "$PKG_DIR/"
 
               mkdir -p "$PKG_DIR/usr/bin"
-              cp "artifacts/dist/$package" "$PKG_DIR/usr/bin/$package" 2>/dev/null || \
-              cp "dist/$package" "$PKG_DIR/usr/bin/$package"
+              case $package in
+                barbatos) suffix="tui" ;;
+                barbatos-bridge) suffix="bridge" ;;
+                barbatos-mcp) suffix="mcp" ;;
+              esac
+              
+              cp "artifacts/barbatos-linux-$arch-$suffix" "$PKG_DIR/usr/bin/$package"
               chmod +x "$PKG_DIR/usr/bin/$package"
 
               sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
-              sed -i "s/Architecture: .*/Architecture: $arch/" "$PKG_DIR/DEBIAN/control"
+              sed -i "s/Architecture: .*/Architecture: $PKG_ARCH/" "$PKG_DIR/DEBIAN/control"
 
-              DEB_FILE="artifacts/deb/${package}_${VERSION}_$arch.deb"
+              DEB_FILE="artifacts/deb/${package}_${VERSION}_${arch}.deb"
               dpkg-deb --build "$PKG_DIR" "$DEB_FILE"
               rm -rf "$PKG_DIR"
             done
@@ -229,12 +235,28 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Prepare dist (x64)
+        run: |
+          mkdir -p dist
+          cp artifacts/barbatos-linux-x64-tui dist/barbatos
+          cp artifacts/barbatos-linux-x64-bridge dist/barbatos-bridge
+          cp artifacts/barbatos-linux-x64-mcp dist/barbatos-mcp
+          chmod +x dist/*
+
       - name: Build Snap (x64)
         uses: snapcore/action-build@v1
         id: snap-x64
         with:
           path: .
           snapcraft-args: pack --build-for=amd64
+
+      - name: Prepare dist (ARM64)
+        run: |
+          mkdir -p dist
+          cp artifacts/barbatos-linux-arm64-tui dist/barbatos
+          cp artifacts/barbatos-linux-arm64-bridge dist/barbatos-bridge
+          cp artifacts/barbatos-linux-arm64-mcp dist/barbatos-mcp
+          chmod +x dist/*
 
       - name: Build Snap (ARM64)
         uses: snapcore/action-build@v1
