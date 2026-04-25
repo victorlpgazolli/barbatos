@@ -162,9 +162,8 @@ jobs:
     needs: [setup-release, build-linux-x64, build-linux-arm64]
     if: |
       !failure() &&
-      startsWith(github.ref, 'refs/tags/v') &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish-apt == true) ||
-       (github.event_name == 'push'))
+       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     permissions:
       contents: write
     steps:
@@ -218,9 +217,8 @@ jobs:
     needs: [setup-release, build-linux-x64, build-linux-arm64]
     if: |
       !failure() &&
-      startsWith(github.ref, 'refs/tags/v') &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish-snapcraft == true) ||
-       (github.event_name == 'push'))
+       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
