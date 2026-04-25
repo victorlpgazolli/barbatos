@@ -29,6 +29,7 @@ import subprocess
 import argparse
 import os
 import sys
+from mcp.server.fastmcp import FastMCP
 from jdwp_frida import run_jdwp
 
 logging.basicConfig(level=logging.INFO)
@@ -1656,6 +1657,253 @@ class FridaBridge:
         else:
             raise Exception(f"Method {method} not found")
 
+# =================================================================
+# MCP TOOLS
+# =================================================================
+
+mcp = FastMCP("barbatos-debugger")
+global_bridge = None
+
+def get_bridge():
+    global global_bridge
+    if global_bridge is None:
+        global_bridge = FridaBridge()
+    return global_bridge
+
+@mcp.tool()
+async def barbatos_list_classes(search_param: str = "", app_package: str = "", offset: int = 0, limit: int = 200) -> list | str:
+    """Retrieves loaded Java classes in the target process.
+    Args:
+        search_param: Filter classes by name (case-insensitive).
+        app_package: Package name to prioritize in the result list.
+        offset: Pagination offset.
+        limit: Max results.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.list_classes, search_param, app_package, offset, limit)
+
+@mcp.tool()
+async def barbatos_inspect_class(class_name: str) -> dict | str:
+    """Returns fields and methods of a specific class.
+    Args:
+        class_name: Full class name (e.g., 'java.lang.String').
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "inspectClass", {"className": class_name})
+
+@mcp.tool()
+async def barbatos_count_instances(class_name: str) -> int | str:
+    """Counts live instances of a class on the heap.
+    Args:
+        class_name: Full class name.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.count_instances, class_name)
+
+@mcp.tool()
+async def barbatos_list_instances(class_name: str) -> list | str:
+    """Returns handles/IDs of live instances for a given class.
+    Args:
+        class_name: Full class name.
+    """
+    bridge = get_bridge()
+    res = await asyncio.to_thread(bridge.handle_rpc, "listInstances", {"className": class_name})
+    if isinstance(res, dict) and "instances" in res:
+        return res["instances"]
+    return res
+
+@mcp.tool()
+async def barbatos_inspect_instance(class_name: str, instance_id: str, offset: int = 0, limit: int = 50) -> list | str:
+    """Recursively explores an instance's fields.
+    Args:
+        class_name: Full class name.
+        instance_id: HashCode or handle of the instance.
+        offset: Pagination offset for fields.
+        limit: Pagination limit.
+    """
+    bridge = get_bridge()
+    res = await asyncio.to_thread(bridge.handle_rpc, "inspectInstance", {
+        "className": class_name,
+        "id": instance_id,
+        "offset": offset,
+        "limit": limit
+    })
+    if isinstance(res, dict) and "attributes" in res:
+        return res["attributes"]
+    return res
+
+@mcp.tool()
+async def barbatos_set_field_value(class_name: str, instance_id: str, field_name: str, field_type: str, new_value: str) -> str:
+    """Modifies a primitive field and triggers Compose recomposition (if applicable).
+    Args:
+        class_name: Full class name.
+        instance_id: Instance ID.
+        field_name: The name of the field to modify.
+        field_type: Type (e.g., 'int', 'string', 'boolean').
+        new_value: The new value as a string.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "setFieldValue", {
+        "className": class_name,
+        "id": instance_id,
+        "fieldName": field_name,
+        "type": field_type,
+        "newValue": new_value
+    })
+
+@mcp.tool()
+async def barbatos_hook_method(class_name: str, method_sig: str) -> str:
+    """Intercepts method calls and logs events.
+    Args:
+        class_name: Class of the method.
+        method_sig: Full method signature (as returned by inspectClass).
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "hookMethod", {
+        "className": class_name,
+        "methodSig": method_sig
+    })
+
+@mcp.tool()
+async def barbatos_get_hook_events() -> list | str:
+    """Returns the latest method interception events collected by the agent."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "getHookEvents", {})
+
+@mcp.tool()
+async def barbatos_get_package_name() -> str:
+    """Returns the current target's package name."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "getpackagename", {})
+
+@mcp.tool()
+async def barbatos_prepare_environment() -> dict | str:
+    """Initial ADB setup (port forwards, etc.)."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "prepareEnvironment", {})
+
+@mcp.tool()
+async def barbatos_check_or_push_gadget() -> dict | str:
+    """Ensures Frida Gadget is on device."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "checkOrPushGadget", {})
+
+@mcp.tool()
+async def barbatos_reset_injection() -> dict | str:
+    """Resets the injection state machine."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "resetInjection", {})
+
+@mcp.tool()
+async def barbatos_inject_gadget_from_scratch(force: bool = False, with_logs: bool = False, limit: int = 50) -> dict | str:
+    """Orchestrates the full injection sequence (JDWP -> Gadget -> Agent)."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "injectGadgetFromScratch", {
+        "force": force,
+        "with_logs": with_logs,
+        "limit": limit
+    })
+
+@mcp.tool()
+async def barbatos_inject_jdwp(package_name: str, cmd: str = None, break_on: str = "android.os.Handler.dispatchMessage") -> dict | str:
+    """Directly triggers JDWP injection."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "injectJdwp", {
+        "package_name": package_name,
+        "cmd": cmd,
+        "break_on": break_on
+    })
+
+@mcp.tool()
+async def barbatos_unhook_method(class_name: str, method_sig: str) -> str:
+    """Removes an active method hook.
+    Args:
+        class_name: Full class name.
+        method_sig: Full method signature.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "unhookMethod", {
+        "className": class_name,
+        "methodSig": method_sig
+    })
+
+@mcp.tool()
+async def barbatos_set_method_implementation(class_name: str, method_sig: str, code: str) -> str:
+    """Replaces a method's implementation with custom JavaScript.
+    Args:
+        class_name: Full class name.
+        method_sig: Full method signature.
+        code: JavaScript function body (accepts 'context').
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "setMethodImplementation", {
+        "className": class_name,
+        "methodSig": method_sig,
+        "code": code
+    })
+
+@mcp.tool()
+async def barbatos_get_instance_addresses(class_name: str) -> list | str:
+    """Returns memory addresses of all live instances of a class."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "getInstanceAddresses", {"className": class_name})
+
+@mcp.tool()
+async def barbatos_run_once(class_name: str, method_sig: str, code: str) -> str:
+    """Executes code once in the context of a class/method.
+    Args:
+        class_name: Target class.
+        method_sig: Target method signature.
+        code: JavaScript function body.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "runOnce", {
+        "className": class_name,
+        "methodSig": method_sig,
+        "code": code
+    })
+
+@mcp.tool()
+async def barbatos_patch_and_install_ios_app(app_path: str) -> dict | str:
+    """Injects Frida gadget into a local iOS build and starts the deployment process.
+    Args:
+        app_path: Path to the local .app or .ipa file.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "patchAndInstallIosApp", {"appPath": app_path})
+
+@mcp.tool()
+async def barbatos_check_ios_deploy_status() -> dict | str:
+    """Returns the current status of the iOS app deployment and injection."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "checkIosDeployStatus", {})
+
+@mcp.tool()
+async def barbatos_check_ios_jailbreak_status() -> dict | str:
+    """Checks if the connected iOS device is jailbroken and identifies the foreground app."""
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "checkIosJailbreakStatus", {})
+
+@mcp.tool()
+async def barbatos_inject_jailbroken_ios(force: bool = False, serial: str = None) -> dict | str:
+    """Attaches to an app on a jailbroken iOS device and loads the agent.
+    Args:
+        force: Force a new injection even if already attached.
+        serial: Optional iOS device UDID.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "injectJailbrokenIos", {"force": force, "serial": serial})
+
+@mcp.tool()
+async def barbatos_health_check() -> dict | str:
+    """
+    Checks the health of the barbatos bridge, ADB device connection, and Frida session.
+    Returns a human-readable status report with actionable fix suggestions.
+    Call this first when any tool returns an error.
+    """
+    bridge = get_bridge()
+    return await asyncio.to_thread(bridge.handle_rpc, "healthCheck", {})
+
 # Bootstraps and starts the JSON-RPC local HTTP server blocking the main thread
 def run_server(port=8080, serial=None):
     server = ThreadingHTTPServer(('127.0.0.1', port), RpcHandler)
@@ -1682,10 +1930,31 @@ def run_server(port=8080, serial=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='barbatos-bridge: Frida JSON-RPC bridge for Android runtime instrumentation'
+        description='barbatos-bridge: Frida JSON-RPC bridge and MCP server for mobile runtime instrumentation'
     )
-    parser.add_argument('--port', type=int, default=8080, help='Local HTTP port to listen on (default: 8080)')
-    parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554). Omit to use the first USB device.')
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # 'serve' command (HTTP JSON-RPC)
+    serve_parser = subparsers.add_parser("serve", help="Start the JSON-RPC HTTP server (for TUI)")
+    serve_parser.add_argument('--port', type=int, default=8080, help='Local HTTP port to listen on (default: 8080)')
+    serve_parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554)')
+
+    # 'mcp' command (Stdio MCP)
+    mcp_parser = subparsers.add_parser("mcp", help="Start the MCP Stdio server (for AI agents)")
+    mcp_parser.add_argument('--serial', type=str, help='Target ADB device serial number (e.g. emulator-5554)')
+
     args = parser.parse_args()
 
-    run_server(port=args.port, serial=args.serial)
+    if args.command == "mcp":
+        # Initialize bridge with serial if provided
+        global_bridge = FridaBridge(serial=args.serial)
+        mcp.run()
+    elif args.command == "serve":
+        run_server(port=args.port, serial=args.serial)
+    else:
+        # Backward compatibility or default behavior: run 'serve' if no command given
+        # But since we added subparsers, we might want to default to 'serve' if no sub-command
+        if not args.command:
+            run_server(port=8080)
+        else:
+            parser.print_help()

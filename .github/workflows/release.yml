@@ -184,7 +184,7 @@ jobs:
           mkdir -p artifacts/deb
           for arch in x64 arm64; do
             PKG_ARCH=$([[ "$arch" == "x64" ]] && echo "amd64" || echo "arm64")
-            for package in barbatos barbatos-bridge barbatos-mcp; do
+            for package in barbatos barbatos-bridge; do
               PKG_DIR="pkg_tmp_${package}_${arch}"
               mkdir -p "$PKG_DIR"
               cp -r packaging/debian/$package/* "$PKG_DIR/"
@@ -193,7 +193,6 @@ jobs:
               case $package in
                 barbatos) suffix="tui" ;;
                 barbatos-bridge) suffix="bridge" ;;
-                barbatos-mcp) suffix="mcp" ;;
               esac
               
               cp "artifacts/barbatos-linux-$arch-$suffix" "$PKG_DIR/usr/bin/$package"
@@ -241,7 +240,6 @@ jobs:
           mkdir -p dist
           cp artifacts/barbatos-linux-x64-tui dist/barbatos
           cp artifacts/barbatos-linux-x64-bridge dist/barbatos-bridge
-          cp artifacts/barbatos-linux-x64-mcp dist/barbatos-mcp
           chmod +x dist/*
 
       - name: Build Snap (x64)
@@ -256,7 +254,6 @@ jobs:
           mkdir -p dist
           cp artifacts/barbatos-linux-arm64-tui dist/barbatos
           cp artifacts/barbatos-linux-arm64-bridge dist/barbatos-bridge
-          cp artifacts/barbatos-linux-arm64-mcp dist/barbatos-mcp
           chmod +x dist/*
 
       - name: Build Snap (ARM64)
