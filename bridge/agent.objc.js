@@ -196,6 +196,52 @@ rpc.exports = {
         }
     },
 
+    listclassesstream: function(searchParam, streamId) {
+        var lowercaseSearch = searchParam ? searchParam.toLowerCase() : "";
+        var batch = [];
+        var batchSize = 100;
+        var seen = new Set();
+
+        function flushBatch() {
+            if (batch.length > 0) {
+                send({ type: "class_chunk", streamId: streamId, chunk: batch });
+                batch = [];
+            }
+        }
+
+        // Fetch all Objective-C classes
+        for (var className in ObjC.classes) {
+            if (ObjC.classes.hasOwnProperty(className)) {
+                if (!lowercaseSearch || className.toLowerCase().includes(lowercaseSearch)) {
+                    if (!seen.has(className)) {
+                        seen.add(className);
+                        batch.push(className);
+                        if (batch.length >= batchSize) flushBatch();
+                    }
+                }
+            }
+        }
+        
+        // Fetch Swift classes
+        if (Swift.available) {
+            var swiftClasses = Swift.classes;
+            for (var swiftName in swiftClasses) {
+                if (swiftClasses.hasOwnProperty(swiftName)) {
+                    if (!lowercaseSearch || swiftName.toLowerCase().includes(lowercaseSearch)) {
+                        if (!seen.has(swiftName)) {
+                            seen.add(swiftName);
+                            batch.push(swiftName);
+                            if (batch.length >= batchSize) flushBatch();
+                        }
+                    }
+                }
+            }
+        }
+        
+        flushBatch();
+        send({ type: "class_stream_end", streamId: streamId });
+    },
+
     listclasses: async function(searchParam) {
         var lowercaseSearch = searchParam ? searchParam.toLowerCase() : "";
         const fetchObjcClassesPromise = new Promise((resolve) => {

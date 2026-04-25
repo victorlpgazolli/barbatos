@@ -58,12 +58,19 @@ object CommandExecutor {
                     state.sharedAppPackageName.value = pkgResult
                 }
                 state.lastSearchedParam = state.inputBuffer
-                val (result, error) = RpcClient.listClasses(state.inputBuffer, state.appPackageName, 0, 200)
-                state.sharedFetchedClasses.value = result ?: emptyList()
+                state.sharedStreamedClasses.value = emptyList()
+                state.sharedStreamCompleted.value = false
+
+                val error = RpcClient.listClassesStream(state.inputBuffer, state.appPackageName) { chunk ->
+                    val current = state.sharedStreamedClasses.value
+                    state.sharedStreamedClasses.value = current + chunk
+                }
+                
                 state.sharedRpcError.value = error
+                state.sharedStreamCompleted.value = true
                 state.isFetchingClasses = false
                 
-                if (error == null && result != null) {
+                if (error == null) {
                     state.gadgetInstallStatus = GadgetInstallStatus.SUCCESS
                 } else {
                     state.gadgetInstallStatus = GadgetInstallStatus.ERROR

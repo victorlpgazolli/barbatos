@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 fun onInputChanged(state: AppState, resetCtrlC: Boolean = true) {
     if (resetCtrlC) state.ctrlCPressed = false
@@ -1024,25 +1025,53 @@ fun main(args: Array<String>) {
                     if (currentTimeMillis() - state.lastInputTimestamp > 500 && state.inputBuffer != state.lastSearchedParam) {
                         state.lastSearchedParam = state.inputBuffer
                         state.isFetchingClasses = true
+                        state.sharedStreamedClasses.value = emptyList()
+                        state.sharedStreamCompleted.value = false
                         needsRender = true
-                        
+
                         scope.launch {
-                            val (res, err) = RpcClient.listClasses(state.lastSearchedParam, state.appPackageName, 0, 200)
-                            state.sharedFetchedClasses.value = res ?: emptyList()
-                            state.sharedRpcError.value = err
+                            state.sharedSearchFunctionCancel.value?.invoke()
+                            suspendCancellableCoroutine { continuation ->
+                                val slice = mutableListOf<String>()
+                                scope.launch {
+                                    val err = RpcClient.listClassesStream(
+                                        state.lastSearchedParam,
+                                        state.appPackageName
+                                    ) { chunk ->
+                                        slice.addAll(chunk)
+                                        if (slice.size > 5) {
+                                            val current = state.sharedStreamedClasses.value
+                                            state.sharedStreamedClasses.value =
+                                                current + chunk
+                                            slice.clear()
+                                        }
+                                    }
+                                    state.sharedRpcError.value = err
+                                    state.sharedStreamCompleted.value = true
+
+                                    state.sharedSearchFunctionCancel.value = {
+                                        continuation.cancel()
+                                        state.isFetchingClasses = false
+
+                                    }
+                                }
+                            }
                         }
+
                     }
-                    
-                    val fetched = state.sharedFetchedClasses.value
-                    if (fetched != null) {
-                        state.allFetchedClasses = fetched
-                        state.displayedClasses = CommandExecutor.sortClasses(fetched, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
+
+                    val currentStreamed = state.sharedStreamedClasses.value
+                    if (currentStreamed != state.allFetchedClasses) {
+                        state.allFetchedClasses = currentStreamed
+                        state.displayedClasses = CommandExecutor.sortClasses(currentStreamed, state.appPackageName, state.lastSearchedParam, state.showSyntheticClasses)
                         state.selectedClassIndex = if (state.displayedClasses.isNotEmpty()) 0 else -1
-                        state.sharedFetchedClasses.value = null
+                        needsRender = true
+                    }
+
+                    if (state.sharedStreamCompleted.value && state.isFetchingClasses) {
                         state.isFetchingClasses = false
                         needsRender = true
-                    }
-                    
+                    }                    
                     val err = state.sharedRpcError.value
                     if (err != null) {
                         state.rpcError = err

@@ -92,6 +92,9 @@ data class AppState(
     var displayedClasses: List<String> = emptyList(),
     var selectedClassIndex: Int = -1,
     var isFetchingClasses: Boolean = false,
+    val sharedStreamedClasses: AtomicReference<List<String>> = AtomicReference(emptyList()),
+    val sharedStreamCompleted: AtomicReference<Boolean> = AtomicReference(false),
+    val sharedSearchFunctionCancel: AtomicReference<(suspend () -> Unit)?> = AtomicReference(null),
     var showSyntheticClasses: Boolean = false,
     // Device Selection
     var deviceInfoList: List<DeviceInfo> = emptyList(),

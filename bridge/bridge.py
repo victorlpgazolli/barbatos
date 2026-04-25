@@ -118,6 +118,54 @@ class RpcHandler(BaseHTTPRequestHandler):
 
     # Handles incoming POST requests for the JSON-RPC interface on '/rpc', parsing parameters and returning results
     def do_POST(self):
+        if self.path == '/stream/classes':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                import uuid
+                import queue
+                req = json.loads(post_data.decode('utf-8'))
+                search_param = req.get('search_param', '')
+                
+                stream_id = str(uuid.uuid4())
+                q = queue.Queue()
+                
+                with self.server.bridge.stream_queues_lock:
+                    self.server.bridge.stream_queues[stream_id] = q
+
+                # Call the agent method in a background thread to not block the stream response
+                self.server.bridge.get_session()
+                def run_agent_stream():
+                    try:
+                        self.server.bridge.script.exports_sync.listclassesstream(search_param, stream_id)
+                    except Exception as e:
+                        logging.error(f"Error calling agent listclassesstream: {e}")
+                
+                threading.Thread(target=run_agent_stream, daemon=True).start()
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/x-ndjson')
+                self.end_headers()
+                
+                while True:
+                    msg = q.get(timeout=120)
+                    if msg["type"] == "end":
+                        break
+                    elif msg["type"] == "chunk":
+                        chunk_res = {"chunk": msg["data"]}
+                        self.wfile.write((json.dumps(chunk_res) + "\n").encode('utf-8'))
+                        self.wfile.flush()
+                        
+            except Exception as e:
+                logging.error(f"Error in /stream/classes: {e}")
+                self.send_response(500)
+                self.end_headers()
+            finally:
+                if 'stream_id' in locals():
+                    with self.server.bridge.stream_queues_lock:
+                        self.server.bridge.stream_queues.pop(stream_id, None)
+            return
+
         if self.path == '/rpc':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
@@ -196,6 +244,8 @@ class FridaBridge:
         self.gadget_port = 8700
         self.gadget_target = "127.0.0.1"
         self.is_injecting_gadget = False
+        self.stream_queues = {}
+        self.stream_queues_lock = threading.Lock()
         
         # Buffer to store the last N logs for the TUI to fetch
         self.log_buffer = []
@@ -615,6 +665,27 @@ class FridaBridge:
                 source = f.read()
 
             self.script = self.session.create_script(source)
+            
+            def on_agent_message(message, data):
+                if message.get('type') == 'error':
+                    logging.error(f"Agent error: {message.get('description')}")
+                elif message.get('type') == 'send':
+                    payload = message.get('payload', {})
+                    if isinstance(payload, dict):
+                        ptype = payload.get('type')
+                        if ptype == "class_chunk":
+                            stream_id = payload.get('streamId')
+                            chunk = payload.get('chunk', [])
+                            with self.stream_queues_lock:
+                                if stream_id in self.stream_queues:
+                                    self.stream_queues[stream_id].put({"type": "chunk", "data": chunk})
+                        elif ptype == "class_stream_end":
+                            stream_id = payload.get('streamId')
+                            with self.stream_queues_lock:
+                                if stream_id in self.stream_queues:
+                                    self.stream_queues[stream_id].put({"type": "end"})
+            self.script.on('message', on_agent_message)
+            
             self.script.load()
             logging.info("[inject] Agent loaded successfully.")
         except Exception as e:
@@ -953,6 +1024,27 @@ class FridaBridge:
                 source = f.read()
 
             self.script = self.session.create_script(source)
+            
+            def on_agent_message(message, data):
+                if message.get('type') == 'error':
+                    logging.error(f"Agent error: {message.get('description')}")
+                elif message.get('type') == 'send':
+                    payload = message.get('payload', {})
+                    if isinstance(payload, dict):
+                        ptype = payload.get('type')
+                        if ptype == "class_chunk":
+                            stream_id = payload.get('streamId')
+                            chunk = payload.get('chunk', [])
+                            with self.stream_queues_lock:
+                                if stream_id in self.stream_queues:
+                                    self.stream_queues[stream_id].put({"type": "chunk", "data": chunk})
+                        elif ptype == "class_stream_end":
+                            stream_id = payload.get('streamId')
+                            with self.stream_queues_lock:
+                                if stream_id in self.stream_queues:
+                                    self.stream_queues[stream_id].put({"type": "end"})
+            self.script.on('message', on_agent_message)
+            
             self.script.load()
             logging.info("[root] Agent loaded via frida-server.")
             if spawned_root_pid is not None:
@@ -1067,6 +1159,21 @@ class FridaBridge:
             def on_agent_message(message, data):
                 if message.get('type') == 'error':
                     logging.error(f"[get_session] Agent error: {message.get('description')}")
+                elif message.get('type') == 'send':
+                    payload = message.get('payload', {})
+                    if isinstance(payload, dict):
+                        ptype = payload.get('type')
+                        if ptype == "class_chunk":
+                            stream_id = payload.get('streamId')
+                            chunk = payload.get('chunk', [])
+                            with self.stream_queues_lock:
+                                if stream_id in self.stream_queues:
+                                    self.stream_queues[stream_id].put({"type": "chunk", "data": chunk})
+                        elif ptype == "class_stream_end":
+                            stream_id = payload.get('streamId')
+                            with self.stream_queues_lock:
+                                if stream_id in self.stream_queues:
+                                    self.stream_queues[stream_id].put({"type": "end"})
             self.script.on('message', on_agent_message)
 
             logging.info("[get_session] Calling script.load()...")
