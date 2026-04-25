@@ -41,36 +41,6 @@ runs:
           --clobber
 
     # APT Repository Publishing
-    - name: Install APT signing tools
-      if: inputs.platform == 'apt'
-      shell: bash
-      run: sudo apt-get update && sudo apt-get install -y dpkg-sig
-
-    - name: Import GPG Key
-      if: inputs.platform == 'apt'
-      env:
-        GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
-      shell: bash
-      run: |
-        mkdir -p ~/.gnupg
-        chmod 700 ~/.gnupg
-        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-        gpgconf --kill gpg-agent
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-    - name: Sign Debian Packages
-      if: inputs.platform == 'apt'
-      env:
-        GPG_PASSPHRASE: ${{ inputs.gpg-passphrase }}
-        GPG_KEY_ID: ${{ inputs.gpg-key-id }}
-      shell: bash
-      run: |
-        for deb in ${{ inputs.artifacts-dir }}/deb/*.deb; do
-          dpkg-sig --gpg-options "--batch --pinentry-mode loopback --passphrase \"$GPG_PASSPHRASE\"" \
-            -k "$GPG_KEY_ID" \
-            --sign builder "$deb"
-        done
-
     - name: Update APT Repository
       if: inputs.platform == 'apt'
       env:
@@ -80,6 +50,14 @@ runs:
       run: |
         sudo apt-get update && sudo apt-get install -y apt-utils
         mkdir -p apt_meta
+        
+        # Import GPG Key
+        mkdir -p ~/.gnupg
+        chmod 700 ~/.gnupg
+        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+        gpgconf --kill gpg-agent
+        echo "${{ inputs.gpg-private-key }}" | gpg --batch --import
+
         bash scripts/update-apt-repo.sh \
           ${{ inputs.artifacts-dir }}/deb \
           apt_meta \
@@ -97,9 +75,12 @@ runs:
     # Snapcraft Publishing
     - name: Publish to Snap Store
       if: inputs.platform == 'snapcraft'
-      uses: snapcore/action-publish@v1
+      shell: bash
       env:
         SNAPCRAFT_STORE_CREDENTIALS: ${{ inputs.snapcraft-token }}
-      with:
-        snap: ${{ inputs.artifacts-dir }}/snap/*.snap
-        release: stable
+      run: |
+        for snap in ${{ inputs.artifacts-dir }}/snap/*.snap; do
+          if [ -f "$snap" ]; then
+            snapcraft upload "$snap" --release stable
+          fi
+        done

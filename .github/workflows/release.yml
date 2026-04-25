@@ -269,8 +269,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/snap
-          cp ${{ steps.snap-x64.outputs.snap }} artifacts/snap/
-          cp ${{ steps.snap-arm64.outputs.snap }} artifacts/snap/
+          echo "Built snaps:"
+          find . -name "*.snap"
+          cp *.snap artifacts/snap/ || echo "No snaps found in root"
 
       - name: Publish to Snapcraft Store
         uses: ./.github/actions/publish-to-platform
