@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <b>Android Runtime Debugger & MCP Server.</b><br>
+  <b>Multiplatform Runtime Debugger & MCP Server.</b><br>
   <i>"Understanding the language of systems, revealing hidden states, and reconciling the gap between developer and machine."</i>
 </p>
 
@@ -23,7 +23,7 @@ The Terminal User Interface (TUI) demo:
 
 ## Why the name "Barbatos?"
 
-The name is inspired by the mythological Barbatos, but in the context of Android debugging.
+The name is inspired by the mythological Barbatos, but in the context of debugging.
 
 >Barbatos is a spirit ([wikipedia](https://en.wikipedia.org/wiki/Barbatos)) that grants the ability to understand the spoken language of animals. He reveals hidden treasures that have been concealed by the enchantment of magicians, gives knowledge of past and future events, and reconciles disputes between friends and those who hold power.
 
@@ -97,7 +97,7 @@ graph TD
     A[Native TUI] -->|Ktor/HTTP| C[Python Bridge]
     B[AI Agent] -->|MCP Stdio| C
     C -->|Frida RPC| D[Frida JS Agent]
-    D -->|Java Bridge| E[Android Runtime]
+    D -->|Java Bridge| E[Multiplatform Runtime]
     E -->|ART| F[Target App]
 ```
 
