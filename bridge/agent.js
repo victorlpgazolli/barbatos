@@ -242,6 +242,36 @@ function resolveActiveInstances(className) {
 }
 
 rpc.exports = {
+    listclassesstream: function(searchParam, streamId) {
+        var lowercaseSearch = searchParam ? searchParam.toLowerCase() : "";
+        var batch = [];
+        var batchSize = 100;
+        var seen = new Set();
+
+        Java.perform(function() {
+            Java.enumerateLoadedClasses({
+                onMatch: function(className) {
+                    if (!lowercaseSearch || className.toLowerCase().includes(lowercaseSearch)) {
+                        if (!seen.has(className)) {
+                            seen.add(className);
+                            batch.push(className);
+                            if (batch.length >= batchSize) {
+                                send({ type: "class_chunk", streamId: streamId, chunk: batch });
+                                batch = [];
+                            }
+                        }
+                    }
+                },
+                onComplete: function() {
+                    if (batch.length > 0) {
+                        send({ type: "class_chunk", streamId: streamId, chunk: batch });
+                    }
+                    send({ type: "class_stream_end", streamId: streamId });
+                }
+            });
+        });
+    },
+
     listclasses: function(searchParam) {
         var classes = [];
         var lowercaseSearch = searchParam ? searchParam.toLowerCase() : "";

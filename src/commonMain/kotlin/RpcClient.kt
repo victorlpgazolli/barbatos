@@ -15,6 +15,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.withTimeoutOrNull
+import io.ktor.client.request.preparePost
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.client.statement.HttpStatement
+import io.ktor.utils.io.readUTF8Line
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonArray
 
 @Serializable
 data class ListClassesParams(
@@ -430,6 +437,44 @@ object RpcClient {
             response.status.value in 200..299
         } catch (e: Exception) {
             false
+        }
+    }
+
+    suspend fun listClassesStream(searchParam: String, appPackage: String, onChunk: (List<String>) -> Unit): String? {
+        return try {
+            val requestBody = buildJsonObject {
+                put("search_param", searchParam)
+                put("app_package", appPackage)
+            }
+
+            client.preparePost("http://127.0.0.1:8080/stream/classes") {
+                contentType(ContentType.Application.Json)
+                setBody(requestBody)
+            }.execute { response ->
+                if (response.status.value !in 200..299) {
+                    return@execute "HTTP Error: ${response.status.value}"
+                }
+                
+                val channel = response.bodyAsChannel()
+                while (!channel.isClosedForRead) {
+                    val line = channel.readUTF8Line() ?: break
+                    if (line.isBlank()) continue
+                    
+                    try {
+                        val json = Json.parseToJsonElement(line).jsonObject
+                        val chunkArray = json["chunk"]?.jsonArray
+                        if (chunkArray != null) {
+                            val chunk = chunkArray.map { it.jsonPrimitive.content }
+                            onChunk(chunk)
+                        }
+                    } catch (e: Exception) {
+                        // ignore malformed line
+                    }
+                }
+                null // return null on success
+            }
+        } catch (e: Exception) {
+            e.message ?: "Unknown streaming error"
         }
     }
 
