@@ -9,10 +9,18 @@ inputs:
     description: 'Directory containing build artifacts'
     required: true
     default: 'artifacts'
-
-env:
-  GITHUB_TOKEN: ${{ github.token }}
-  RELEASE_TAG: ${{ github.ref_name }}
+  gpg-private-key:
+    description: 'GPG Private Key for signing'
+    required: false
+  gpg-passphrase:
+    description: 'GPG Passphrase for signing'
+    required: false
+  gpg-key-id:
+    description: 'GPG Key ID for signing'
+    required: false
+  snapcraft-token:
+    description: 'Snapcraft Store Login Token'
+    required: false
 
 runs:
   using: 'composite'
@@ -21,6 +29,9 @@ runs:
     - name: Publish to GitHub Release
       if: inputs.platform == 'github'
       shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.ref_name }}
       run: |
         gh release upload ${RELEASE_TAG} \
           ${{ inputs.artifacts-dir }}/barbatos-*.zip \
@@ -38,7 +49,7 @@ runs:
     - name: Import GPG Key
       if: inputs.platform == 'apt'
       env:
-        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        GPG_PRIVATE_KEY: ${{ inputs.gpg-private-key }}
       shell: bash
       run: |
         mkdir -p ~/.gnupg
@@ -50,8 +61,8 @@ runs:
     - name: Sign Debian Packages
       if: inputs.platform == 'apt'
       env:
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        GPG_PASSPHRASE: ${{ inputs.gpg-passphrase }}
+        GPG_KEY_ID: ${{ inputs.gpg-key-id }}
       shell: bash
       run: |
         for deb in ${{ inputs.artifacts-dir }}/deb/*.deb; do
@@ -64,6 +75,7 @@ runs:
       if: inputs.platform == 'apt'
       env:
         PACKAGES_BASE_URL: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+        GITHUB_TOKEN: ${{ github.token }}
       shell: bash
       run: |
         sudo apt-get update && sudo apt-get install -y apt-utils
@@ -71,8 +83,8 @@ runs:
         bash scripts/update-apt-repo.sh \
           ${{ inputs.artifacts-dir }}/deb \
           apt_meta \
-          ${{ secrets.GPG_KEY_ID }} \
-          "${{ secrets.GPG_PASSPHRASE }}" \
+          ${{ inputs.gpg-key-id }} \
+          "${{ inputs.gpg-passphrase }}" \
           "$PACKAGES_BASE_URL"
 
         cp -r apt_meta/dists ./web
@@ -87,7 +99,7 @@ runs:
       if: inputs.platform == 'snapcraft'
       uses: snapcore/action-publish@v1
       env:
-        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ inputs.snapcraft-token }}
       with:
         snap: ${{ inputs.artifacts-dir }}/snap/*.snap
         release: stable

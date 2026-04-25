@@ -208,6 +208,9 @@ jobs:
         with:
           platform: apt
           artifacts-dir: artifacts
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
 
   publish-snapcraft:
     name: Publish to Snapcraft Store
@@ -254,3 +257,4 @@ jobs:
         with:
           platform: snapcraft
           artifacts-dir: artifacts
+          snapcraft-token: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
