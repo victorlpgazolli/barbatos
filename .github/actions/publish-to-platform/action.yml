@@ -65,15 +65,18 @@ runs:
           "${{ inputs.gpg-passphrase }}" \
           "$PACKAGES_BASE_URL"
 
-        cp -r apt_meta/dists ./web
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add ./web
+        # Surgically update master branch
+        git clone --depth 1 --branch master https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} master_clone
+        cp -r apt_meta/dists/* master_clone/web/dists/
+        cd master_clone
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add web/dists
         if ! git diff --cached --quiet; then
           git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
-          git pull origin master --rebase
-          git push origin HEAD:master
+          git push origin master
         fi
+        cd ..
 
     # Snapcraft Publishing
     - name: Publish to Snap Store
@@ -84,6 +87,18 @@ runs:
       run: |
         for snap in ${{ inputs.artifacts-dir }}/snap/*.snap; do
           if [ -f "$snap" ]; then
-            snapcraft upload "$snap" --release stable
+            echo "Publishing $snap..."
+            # Retry up to 3 times on failure
+            for i in {1..3}; do
+              snapcraft upload "$snap" --release stable && break || {
+                if [ $i -lt 3 ]; then
+                  echo "Upload failed, retrying in 10s... ($i/3)"
+                  sleep 10
+                else
+                  echo "Upload failed after 3 attempts."
+                  exit 1
+                fi
+              }
+            done
           fi
         done
