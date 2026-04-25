@@ -19,7 +19,6 @@ if [ "$BUILD_TYPE" == "Debug" ]; then
     # Manually override for Debug if needed, as Makefile defaults to Release
     ./gradlew linkDebugExecutableLinuxX64 --no-daemon
     make compile_bridge
-    make compile_mcp
 else
     make compile_all
 fi
@@ -31,8 +30,7 @@ if [ "$BUILD_TYPE" == "Debug" ]; then
     mkdir -p dist
     cp build/bin/linuxX64/debugExecutable/barbatos.kexe dist/barbatos
     cp bridge/dist/barbatos-bridge dist/barbatos-bridge
-    cp mcp_server/dist/barbatos-mcp dist/barbatos-mcp
-    chmod +x dist/barbatos dist/barbatos-bridge dist/barbatos-mcp
+    chmod +x dist/barbatos dist/barbatos-bridge
 else
     make prepare_release
 fi

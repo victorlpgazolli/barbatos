@@ -83,4 +83,4 @@ venv
 web/*.gpg
 !web/barbatos-repo.gpg
 *.deb
-web/pool/
+web/pool/.worktrees/

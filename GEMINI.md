@@ -2,12 +2,13 @@
 
 ## Project Overview
 
-`barbatos` (Interactive Debug Kit) is a **Kotlin Native TUI debugger** for Android apps. While primarily built for **macOS ARM64**, it supports **Linux (x64 and ARM64)** to ensure cross-platform compatibility. It provides an interactive terminal UI for live debugging via Frida, with no external TUI libraries — everything is built from scratch using POSIX `termios` and ANSI escape codes.
+`barbatos` (Interactive Debug Kit) is a **Kotlin Native TUI debugger** for Android and iOS apps. While primarily built for **macOS ARM64**, it supports **Linux (x64 and ARM64)** to ensure cross-platform compatibility. It provides an interactive terminal UI for live debugging via Frida, with no external TUI libraries — everything is built from scratch using POSIX `termios` and ANSI escape codes.
 
 The tool bridges:
 - **Kotlin Native binary** (`src/nativeMain/kotlin/`) — the TUI shell and state machine.
 - **Python bridge** (`bridge/bridge.py`) — Frida host-side, exposes a JSON-RPC HTTP server.
 - **Frida JS agent** (`bridge/agent.js`) — injected into the Android process, exports RPC functions.
+- **Frida JS agent** (`bridge/agent.objc.js`) — injected into the iOS process, exports RPC functions.
 - **MCP Server** (`mcp_server/server.py`) — wraps the Python bridge's RPC calls into standardized tools for AI agents.
 
 tmux is used to manage debug sessions and side-by-side inspection panels.
@@ -22,7 +23,7 @@ Main.kt → AppState.kt (state machine)
        → Renderer.kt (ANSI output & layout)
        → ListRenderer.kt (Shared viewport & selection utilities)
        → CommandExecutor.kt (command dispatch & async orchestration)
-       → RpcClient.kt (Ktor HTTP → bridge.py → agent.js → Frida → Android)
+       → RpcClient.kt (Ktor HTTP → bridge.py → agent.js → Frida → Android/iOS)
        → TmuxManager.kt (tmux session/window/pane management)
        → HistoryStore.kt (~/.cache/barbatos/history.txt)
        → SessionStore.kt (~/.cache/barbatos/sessions.toml)

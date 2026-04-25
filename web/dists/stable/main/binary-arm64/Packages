@@ -1,44 +1,44 @@
 Package: barbatos-bridge
 Architecture: arm64
-Version: 0.0.0-snapshot
+Version: 1.4.0-alpha02
 Priority: optional
 Section: utils
 Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
 Depends: python3, nodejs, npm, frida
-Filename: https://github.com/victorlpgazolli/barbatos/releases/download/fix/release-workflow/barbatos-bridge_0.0.0-snapshot_arm64.deb
-Size: 32812946
-MD5sum: e2a981de597f3a8a9b26909180a8b934
-SHA1: 03c2b37abfb14b3a997e87467fc08b091c0cc744
-SHA256: b26f72f319007c56e17261338f7227035bc9c2109957eda91c3afa90c72591aa
-SHA512: 400b775944dd8869d0a7081f5a76eedf17174b02e7ae6726ac7a24e72fa641770853da767eb3d88d6d4fa10b1b2e43bccda2052cce0b1bd79da4e8d0d08a7b5b
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.0-alpha02/barbatos-bridge_1.4.0-alpha02_arm64.deb
+Size: 32813806
+MD5sum: d85efbd0da798ade64def800fc9c2dcb
+SHA1: f838f93cd27dff47837b843859aec106cef9f916
+SHA256: c5d0bb64d0ed9fa432a6da35cfb19ecf871c69e4ac039d233de83ed4e106e86e
+SHA512: 8d7cc8e12f9fb110c5969b7a541315b1240f3af761c45265c557874a724f1b56efde2031101a501cf7203ca83792c730d77ca00c412a45a2b75ff199cb21c211
 Description: Frida bridge for Barbatos debugger
 
 Package: barbatos-mcp
 Architecture: arm64
-Version: 0.0.0-snapshot
+Version: 1.4.0-alpha02
 Priority: optional
 Section: utils
 Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
 Depends: python3, python3-mcp
-Filename: https://github.com/victorlpgazolli/barbatos/releases/download/fix/release-workflow/barbatos-mcp_0.0.0-snapshot_arm64.deb
-Size: 17147912
-MD5sum: 305da075c34f482a308406b67f1c4139
-SHA1: 146a4030799842129fd1225a85f45dfbd3192e12
-SHA256: f58fb0e1271508294ea1ce8bd0d613b38aca92c5ec38b60ec9f2898e76fdac7b
-SHA512: 79e75c1e960370304b12390a8483f4003f77ea1005b0b795775b2bd95347c7859557c14473e32fc2e0797b22381c7b9b451beab5adf37e448d335c2ce31b11f1
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.0-alpha02/barbatos-mcp_1.4.0-alpha02_arm64.deb
+Size: 17149790
+MD5sum: f88c1ed7391aef4cd9195f9167556246
+SHA1: 9cff99d3faddf8e806918e41eff4939ceadeeae9
+SHA256: 18b5b0668cbf0638fca6267db616e725854f138f4ab535a6e82ab3848a662bab
+SHA512: fc4b747bcb673c1a52e35c28c030a0c07e5bb93a7a9b64355b794515974b564674f18dc6e567494a5bed4988195aea3bb16845a764b4381638d2c672e2aa786b
 Description: MCP server for Barbatos debugger
 
 Package: barbatos
 Architecture: arm64
-Version: 0.0.0-snapshot
+Version: 1.4.0-alpha02
 Priority: optional
 Section: utils
 Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
-Filename: https://github.com/victorlpgazolli/barbatos/releases/download/fix/release-workflow/barbatos_0.0.0-snapshot_arm64.deb
-Size: 1438392
-MD5sum: 9578e4b2300cb0adb7587a69e293917d
-SHA1: 7e1070bb07e192969e92a3337bdc62ac3611cc6b
-SHA256: f0a523ab613d6427a7bd3725919797d136311f51df04aae48ab465da0bb351f1
-SHA512: 80ac95224f308838f53d71eb320035b14bcfd89b165fa9b4fdf3806880e0a26d4c7e9c4cb2a38f6cd06cb895ce5e1415bf85c203d4e1e3e12bb18a24c1686b0a
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.0-alpha02/barbatos_1.4.0-alpha02_arm64.deb
+Size: 1438284
+MD5sum: e50830a31afde0501d84652a68512e46
+SHA1: e24013aa35af25c711938a2eebafcf7997763e5d
+SHA256: 07827d4a82109a38d5afdd2418d0fd6f49da7e495a262ee58087e7bd64834c16
+SHA512: 17c86e84ff3d734eda295f151f58b9c001bea9b9c124e8b0e6ee54b4a105d7b32b7004045e2d75ae22cca40192462f147b7c9820c4d8f7fc141c7ffe88e90382
 Description: Barbatos TUI Debugger for Android
 
