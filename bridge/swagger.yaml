@@ -247,6 +247,31 @@ components:
         methodSig:
           type: string
 
+    patchAndInstallIosAppParams:
+      type: object
+      required: [appPath]
+      properties:
+        appPath:
+          type: string
+          description: Path to the local .app or .ipa file.
+
+    injectJailbrokenIosParams:
+      type: object
+      properties:
+        force:
+          type: boolean
+          default: false
+        serial:
+          type: string
+          description: Optional iOS device UDID.
+
+    prepareEnvironmentParams:
+      type: object
+      properties:
+        serial:
+          type: string
+          description: Optional ADB device serial.
+
 # x-rpc-methods: Documentation for SDK/TUI developers
 x-rpc-methods:
   listClasses:
@@ -292,3 +317,13 @@ x-rpc-methods:
     returns: "{status: 'running'|'completed'|'error', steps: [], error_message: string?, logs: []?}"
   injectJdwp:
     description: Direct JDWP injection trigger.
+  patchAndInstallIosApp:
+    description: Injects Frida gadget into an iOS app and starts the deployment process.
+  checkIosDeployStatus:
+    description: Returns the current status of the iOS app deployment and injection.
+  checkIosJailbreakStatus:
+    description: Checks if the connected iOS device is jailbroken and identifies the foreground app.
+  injectJailbrokenIos:
+    description: Attaches to an app on a jailbroken iOS device and loads the agent.
+  healthCheck:
+    description: Checks bridge and device health status.

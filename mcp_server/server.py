@@ -240,6 +240,33 @@ async def barbatos_run_once(class_name: str, method_sig: str, code: str) -> str:
         "code": code
     })
 
+@mcp.tool()
+async def barbatos_patch_and_install_ios_app(app_path: str) -> dict | str:
+    """Injects Frida gadget into a local iOS build and starts the deployment process.
+    Args:
+        app_path: Path to the local .app or .ipa file.
+    """
+    return await call_rpc("patchAndInstallIosApp", {"appPath": app_path})
+
+@mcp.tool()
+async def barbatos_check_ios_deploy_status() -> dict | str:
+    """Returns the current status of the iOS app deployment and injection."""
+    return await call_rpc("checkIosDeployStatus")
+
+@mcp.tool()
+async def barbatos_check_ios_jailbreak_status() -> dict | str:
+    """Checks if the connected iOS device is jailbroken and identifies the foreground app."""
+    return await call_rpc("checkIosJailbreakStatus")
+
+@mcp.tool()
+async def barbatos_inject_jailbroken_ios(force: bool = False, serial: str = None) -> dict | str:
+    """Attaches to an app on a jailbroken iOS device and loads the agent.
+    Args:
+        force: Force a new injection even if already attached.
+        serial: Optional iOS device UDID.
+    """
+    return await call_rpc("injectJailbrokenIos", {"force": force, "serial": serial})
+
 MCP_TOOLS_DESCRIPTION = """
 Available MCP tools (Model Context Protocol capabilities):
 
@@ -260,6 +287,10 @@ Available MCP tools (Model Context Protocol capabilities):
   barbatos_check_or_push_gadget  Ensure Frida Gadget is present on the device
   barbatos_inject_gadget_from_scratch  Orchestrate the full injection sequence
   barbatos_inject_jdwp           Directly trigger JDWP injection
+  barbatos_patch_and_install_ios_app   Inject gadget and deploy iOS app (non-jailbroken)
+  barbatos_check_ios_deploy_status     Check iOS app deployment progress
+  barbatos_check_ios_jailbreak_status  Check if iOS device is jailbroken
+  barbatos_inject_jailbroken_ios       Attach to app on jailbroken iOS device
   barbatos_reset_injection       Reset the injection state machine
   barbatos_health_check          Check bridge and device health status
 
@@ -267,12 +298,13 @@ Requires barbatos-bridge to be running on port 8080.
 """
 
 @mcp.tool()
-async def barbatos_health_check() -> str:
+async def barbatos_health_check() -> dict | str:
     """
     Checks the health of the barbatos bridge, ADB device connection, and Frida session.
     Returns a human-readable status report with actionable fix suggestions.
     Call this first when any tool returns an error.
     """
+    return await call_rpc("healthCheck")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
