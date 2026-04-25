@@ -9,10 +9,18 @@ inputs:
     description: 'Directory containing build artifacts'
     required: true
     default: 'artifacts'
-
-env:
-  GITHUB_TOKEN: ${{ github.token }}
-  RELEASE_TAG: ${{ github.ref_name }}
+  gpg-private-key:
+    description: 'GPG Private Key for signing'
+    required: false
+  gpg-passphrase:
+    description: 'GPG Passphrase for signing'
+    required: false
+  gpg-key-id:
+    description: 'GPG Key ID for signing'
+    required: false
+  snapcraft-token:
+    description: 'Snapcraft Store Login Token'
+    required: false
 
 runs:
   using: 'composite'
@@ -21,6 +29,9 @@ runs:
     - name: Publish to GitHub Release
       if: inputs.platform == 'github'
       shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.ref_name }}
       run: |
         gh release upload ${RELEASE_TAG} \
           ${{ inputs.artifacts-dir }}/barbatos-*.zip \
@@ -30,64 +41,64 @@ runs:
           --clobber
 
     # APT Repository Publishing
-    - name: Install APT signing tools
-      if: inputs.platform == 'apt'
-      shell: bash
-      run: sudo apt-get update && sudo apt-get install -y dpkg-sig
-
-    - name: Import GPG Key
-      if: inputs.platform == 'apt'
-      env:
-        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      shell: bash
-      run: |
-        mkdir -p ~/.gnupg
-        chmod 700 ~/.gnupg
-        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-        gpgconf --kill gpg-agent
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-
-    - name: Sign Debian Packages
-      if: inputs.platform == 'apt'
-      env:
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-      shell: bash
-      run: |
-        for deb in ${{ inputs.artifacts-dir }}/deb/*.deb; do
-          dpkg-sig --gpg-options "--batch --pinentry-mode loopback --passphrase \"$GPG_PASSPHRASE\"" \
-            -k "$GPG_KEY_ID" \
-            --sign builder "$deb"
-        done
-
     - name: Update APT Repository
       if: inputs.platform == 'apt'
       env:
         PACKAGES_BASE_URL: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+        GITHUB_TOKEN: ${{ github.token }}
       shell: bash
       run: |
         sudo apt-get update && sudo apt-get install -y apt-utils
         mkdir -p apt_meta
+        
+        # Import GPG Key
+        mkdir -p ~/.gnupg
+        chmod 700 ~/.gnupg
+        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+        gpgconf --kill gpg-agent
+        echo "${{ inputs.gpg-private-key }}" | gpg --batch --import
+
         bash scripts/update-apt-repo.sh \
           ${{ inputs.artifacts-dir }}/deb \
           apt_meta \
-          ${{ secrets.GPG_KEY_ID }} \
-          "${{ secrets.GPG_PASSPHRASE }}" \
+          ${{ inputs.gpg-key-id }} \
+          "${{ inputs.gpg-passphrase }}" \
           "$PACKAGES_BASE_URL"
 
-        cp -r apt_meta/dists ./web
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add ./web
-        git diff --cached --quiet || git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
-        git push origin HEAD:master
+        # Surgically update master branch
+        git clone --depth 1 --branch master https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} master_clone
+        cp -r apt_meta/dists/* master_clone/web/dists/
+        cd master_clone
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add web/dists
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
+          git push origin master
+        fi
+        cd ..
 
     # Snapcraft Publishing
     - name: Publish to Snap Store
       if: inputs.platform == 'snapcraft'
-      uses: snapcore/action-publish@v1
+      shell: bash
       env:
-        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-      with:
-        snap: ${{ inputs.artifacts-dir }}/snap/*.snap
-        release: stable
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ inputs.snapcraft-token }}
+      run: |
+        for snap in ${{ inputs.artifacts-dir }}/snap/*.snap; do
+          if [ -f "$snap" ]; then
+            echo "Publishing $snap..."
+            # Retry up to 3 times on failure
+            for i in {1..3}; do
+              snapcraft upload "$snap" --release stable && break || {
+                if [ $i -lt 3 ]; then
+                  echo "Upload failed, retrying in 10s... ($i/3)"
+                  sleep 10
+                else
+                  echo "Upload failed after 3 attempts."
+                  exit 1
+                fi
+              }
+            done
+          fi
+        done

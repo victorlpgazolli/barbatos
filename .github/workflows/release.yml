@@ -183,21 +183,26 @@ jobs:
         run: |
           mkdir -p artifacts/deb
           for arch in x64 arm64; do
-            arch_long=$([[ "$arch" == "x64" ]] && echo "x86_64" || echo "aarch64")
+            PKG_ARCH=$([[ "$arch" == "x64" ]] && echo "amd64" || echo "arm64")
             for package in barbatos barbatos-bridge barbatos-mcp; do
-              PKG_DIR="pkg_tmp_$package"
+              PKG_DIR="pkg_tmp_${package}_${arch}"
               mkdir -p "$PKG_DIR"
               cp -r packaging/debian/$package/* "$PKG_DIR/"
 
               mkdir -p "$PKG_DIR/usr/bin"
-              cp "artifacts/dist/$package" "$PKG_DIR/usr/bin/$package" 2>/dev/null || \
-              cp "dist/$package" "$PKG_DIR/usr/bin/$package"
+              case $package in
+                barbatos) suffix="tui" ;;
+                barbatos-bridge) suffix="bridge" ;;
+                barbatos-mcp) suffix="mcp" ;;
+              esac
+              
+              cp "artifacts/barbatos-linux-$arch-$suffix" "$PKG_DIR/usr/bin/$package"
               chmod +x "$PKG_DIR/usr/bin/$package"
 
               sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
-              sed -i "s/Architecture: .*/Architecture: $arch/" "$PKG_DIR/DEBIAN/control"
+              sed -i "s/Architecture: .*/Architecture: $PKG_ARCH/" "$PKG_DIR/DEBIAN/control"
 
-              DEB_FILE="artifacts/deb/${package}_${VERSION}_$arch.deb"
+              DEB_FILE="artifacts/deb/${package}_${VERSION}_${arch}.deb"
               dpkg-deb --build "$PKG_DIR" "$DEB_FILE"
               rm -rf "$PKG_DIR"
             done
@@ -208,6 +213,9 @@ jobs:
         with:
           platform: apt
           artifacts-dir: artifacts
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gpg-key-id: ${{ secrets.GPG_KEY_ID }}
 
   publish-snapcraft:
     name: Publish to Snapcraft Store
@@ -228,12 +236,28 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Prepare dist (x64)
+        run: |
+          mkdir -p dist
+          cp artifacts/barbatos-linux-x64-tui dist/barbatos
+          cp artifacts/barbatos-linux-x64-bridge dist/barbatos-bridge
+          cp artifacts/barbatos-linux-x64-mcp dist/barbatos-mcp
+          chmod +x dist/*
+
       - name: Build Snap (x64)
         uses: snapcore/action-build@v1
         id: snap-x64
         with:
           path: .
           snapcraft-args: pack --build-for=amd64
+
+      - name: Prepare dist (ARM64)
+        run: |
+          mkdir -p dist
+          cp artifacts/barbatos-linux-arm64-tui dist/barbatos
+          cp artifacts/barbatos-linux-arm64-bridge dist/barbatos-bridge
+          cp artifacts/barbatos-linux-arm64-mcp dist/barbatos-mcp
+          chmod +x dist/*
 
       - name: Build Snap (ARM64)
         uses: snapcore/action-build@v1
@@ -246,11 +270,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/snap
-          cp ${{ steps.snap-x64.outputs.snap }} artifacts/snap/
-          cp ${{ steps.snap-arm64.outputs.snap }} artifacts/snap/
+          cp *.snap artifacts/snap/ || echo "No snaps found in root"
 
       - name: Publish to Snapcraft Store
         uses: ./.github/actions/publish-to-platform
         with:
           platform: snapcraft
           artifacts-dir: artifacts
+          snapcraft-token: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
