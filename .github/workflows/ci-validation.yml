@@ -21,7 +21,7 @@ on:
 jobs:
   detect-changes:
     name: Detect Changed Parts
-    if: github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     outputs:
       bridge: ${{ steps.filter.outputs.bridge }}
