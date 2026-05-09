@@ -18,6 +18,10 @@ runs:
       shell: bash
       run: make install_dependencies
 
+    - name: Compile JS Agents
+      shell: bash
+      run: make compile_bridge_agent
+
     - name: Compile Python Bridge & MCP (x86_64 native)
       if: inputs.architecture == 'x86_64'
       shell: bash
