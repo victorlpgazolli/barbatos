@@ -6,6 +6,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'bridge/**'
+      - 'Makefile'
+      - '.github/actions/**'
       - '.github/workflows/ci-validation.yml'
   workflow_dispatch:
     inputs:
@@ -33,7 +35,8 @@ jobs:
         run: |
           FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           BRIDGE=$(echo "$FILES" | grep -E '^bridge/' || true)
-          if [ ! -z "$BRIDGE" ]; then echo "bridge=true" >> $GITHUB_OUTPUT; fi
+          INFRA=$(echo "$FILES" | grep -E '^(Makefile|.github/actions/)' || true)
+          if [ ! -z "$BRIDGE" ] || [ ! -z "$INFRA" ]; then echo "bridge=true" >> $GITHUB_OUTPUT; fi
 
   bridge-validation:
     name: Bridge Validation
