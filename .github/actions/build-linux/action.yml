@@ -1,5 +1,5 @@
 name: 'Build Linux Binaries'
-description: 'Compile Kotlin, Bridge, and MCP binaries for Linux (x86_64 or aarch64)'
+description: 'Compile Bridge and MCP binaries for Linux (x86_64 or aarch64)'
 
 inputs:
   architecture:
@@ -17,12 +17,6 @@ runs:
     - name: Install dependencies
       shell: bash
       run: make install_dependencies
-
-    - name: Compile JS Agent & Kotlin Binary
-      shell: bash
-      run: |
-        make compile_bridge_agent
-        make compile_binary ARCH=${{ inputs.architecture }}
 
     - name: Compile Python Bridge & MCP (x86_64 native)
       if: inputs.architecture == 'x86_64'
@@ -47,8 +41,7 @@ runs:
       shell: bash
       run: |
         zip -r ./barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}.zip ./dist
-        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-tui
-        cp dist/barbatos-bridge barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-bridge
+        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
@@ -56,6 +49,5 @@ runs:
         name: linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}
         path: |
           barbatos-linux-*.zip
-          barbatos-linux-*-tui
-          barbatos-linux-*-bridge
+          barbatos-linux-*
         retention-days: 1
