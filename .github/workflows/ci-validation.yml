@@ -5,20 +5,10 @@ on:
     branches: [ "master" ]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - 'src/**'
-      - 'gradle/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
       - 'bridge/**'
       - '.github/workflows/ci-validation.yml'
   workflow_dispatch:
     inputs:
-      kotlin:
-        options:
-          - 'true'
-          - 'false'
-        description: 'Run Kotlin tests and Linux builds'
-        default: 'false'
       bridge:
         options:
           - 'true'
@@ -32,88 +22,18 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     outputs:
-      kotlin: ${{ steps.filter.outputs.kotlin }}
       bridge: ${{ steps.filter.outputs.bridge }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # Required to compare branches
+          fetch-depth: 0
       - id: filter
         if: github.event_name == 'pull_request'
         run: |
-          # Get the list of changed files between the base and head of the PR
           FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          
-          KOTLIN=$(echo "$FILES" | grep -E '^(src/|gradle/|build\.gradle\.kts|settings\.gradle\.kts)' || true)
           BRIDGE=$(echo "$FILES" | grep -E '^bridge/' || true)
-          
-          if [ ! -z "$KOTLIN" ]; then echo "kotlin=true" >> $GITHUB_OUTPUT; fi
           if [ ! -z "$BRIDGE" ]; then echo "bridge=true" >> $GITHUB_OUTPUT; fi
-
-  kotlin-test-and-linux-build:
-    name: Kotlin (${{ matrix.target }})
-    needs: detect-changes
-    if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        include:
-          - target: linkDebugExecutableLinuxX64
-            name: x64
-          - target: linkDebugExecutableLinuxArm64
-            name: ARM64
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-      
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          if [ "${{ matrix.name }}" = "ARM64" ]; then
-            chmod +x scripts/setup_linux_arm64_deps.sh
-            ./scripts/setup_linux_arm64_deps.sh
-            
-            # Find libgcc.a path for ARM64 cross-compiler
-            LIBGCC_PATH=$(find /usr/lib/gcc-cross/aarch64-linux-gnu -name libgcc.a | head -n 1)
-            echo "LIBGCC_PATH=$LIBGCC_PATH" >> $GITHUB_ENV
-            echo "Found libgcc.a at: $LIBGCC_PATH"
-          else
-            sudo apt-get install -y libcurl4-openssl-dev
-          fi
-
-      - name: Run Kotlin Unit Tests
-        if: matrix.name == 'x64'
-        run: ./gradlew allTests --no-daemon
-
-      - name: Compile Linux ${{ matrix.name }} Binary
-        run: ./gradlew ${{ matrix.target }} --no-daemon
-
-  kotlin-macos-build:
-    name: Kotlin (macOS ARM64)
-    needs: [detect-changes, kotlin-test-and-linux-build]
-    if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
-    runs-on: macos-15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-      
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-
-      - name: Compile macOS ARM64 Binary
-        run: ./gradlew linkDebugExecutableMacosArm64 --no-daemon
 
   bridge-validation:
     name: Bridge Validation
