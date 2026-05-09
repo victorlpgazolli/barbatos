@@ -9,19 +9,22 @@ class StdioTransport {
     @OptIn(ExperimentalForeignApi::class)
     fun readMessages(): Flow<String> = flow {
         val buffer = ByteArray(4096)
-        while (true) {
-            val pfd = alloc<pollfd>()
-            pfd.fd = STDIN_FILENO
-            pfd.events = POLLIN.toShort()
-            val ready = poll(pfd.ptr, 1u, 100)
-            
-            if (ready > 0) {
-                buffer.usePinned { pinned ->
-                    val bytesRead = read(STDIN_FILENO, pinned.addressOf(0), buffer.size.toULong())
-                    if (bytesRead > 0) {
-                        emit(pinned.get().toKString().trim())
-                    } else if (bytesRead == 0L) {
-                        break // EOF
+        var running = true
+        while (running) {
+            memScoped {
+                val pfd = alloc<pollfd>()
+                pfd.fd = STDIN_FILENO
+                pfd.events = POLLIN.toShort()
+                val ready = poll(pfd.ptr, 1u, 100)
+                
+                if (ready > 0) {
+                    buffer.usePinned { pinned ->
+                        val bytesRead = read(STDIN_FILENO, pinned.addressOf(0), buffer.size.toULong())
+                        if (bytesRead > 0) {
+                            emit(pinned.get().toKString().trim())
+                        } else if (bytesRead == 0L) {
+                            running = false
+                        }
                     }
                 }
             }
