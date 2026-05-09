@@ -1,61 +1,21 @@
 name: barbatos
 base: core24
-version: '1.0.0'
-summary: Frictionless Android/iOS Runtime Debugger & MCP Server
+version: 'git'
+summary: Barbatos MCP Debugger
 description: |
-  Barbatos is a zero-setup mobile runtime debugger designed to bring the power of 
-  Frida to developers and AI agents without the complexity of manual setup. 
-  It grants the ability to deeply understand an app's behavior, reveal hidden 
-  states in the heap, and modify execution flow in real-time.
-
-  Main Features:
-  - Class Discovery: Real-time enumeration of loaded Java/Kotlin/ObjC classes.
-  - Deep Inspection: Recursive traversal of object hierarchies (Fields, Maps, 
-    Collections).
-  - Method Hooking: Intercept execution flow, inspect arguments, and capture 
-    return values.
-  - Live Field Editing: Modify primitive field values (String, Int, Boolean) 
-    instantly.
-  - AI-Driven Debugging: Built-in MCP (Model Context Protocol) Server to let 
-    LLMs (Claude/Cursor) debug your app autonomously.
-
-  This snap includes:
-  - 'barbatos': The interactive TUI shell.
-  - 'barbatos.bridge': The unified Frida RPC bridge and MCP server.
-
-  Note: After installation, run 'sudo snap connect barbatos:adb-support' 
-  to allow the debugger to communicate with your Android devices.
+  Barbatos is an interactive debugger for Android and iOS,
+  now focused on the Model Context Protocol (MCP).
 
 grade: stable
-confinement: strict
-
-# We define that we just want to package for these architectures
-platforms:
-  amd64:
-    build-on: [amd64]
-    build-for: [amd64]
-  arm64:
-    build-on: [amd64]
-    build-for: [arm64]
-
-apps:
-  barbatos:
-    command: bin/barbatos
-    plugs: [network, network-bind, adb-support, home]
-  bridge:
-    command: bin/barbatos-bridge
-    plugs: [network, network-bind, adb-support]
-  mcp:
-    command: bin/barbatos-bridge mcp
-    plugs: [network, adb-support]
+confinement: classic
 
 parts:
-  # We just "dump" the pre-built binaries from our 'dist/' directory
-  binaries:
+  barbatos:
     plugin: dump
     source: dist/
     organize:
       barbatos: bin/barbatos
-      barbatos-bridge: bin/barbatos-bridge
-    stage-packages:
-      - libcurl4
+
+apps:
+  barbatos:
+    command: bin/barbatos

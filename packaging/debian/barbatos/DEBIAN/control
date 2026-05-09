@@ -4,4 +4,4 @@ Section: utils
 Priority: optional
 Architecture: arm64
 Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
-Description: Barbatos TUI Debugger for Android
+Description: Barbatos MCP Debugger for Android
