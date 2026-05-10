@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.flow
 class StdioTransport {
     @OptIn(ExperimentalForeignApi::class)
     fun readMessages(): Flow<String> = flow {
-        val buffer = ByteArray(4096)
+        val buffer = ByteArray(8192)
         var running = true
         while (running) {
             memScoped {
@@ -21,11 +21,20 @@ class StdioTransport {
                     buffer.usePinned { pinned ->
                         val bytesRead = read(STDIN_FILENO, pinned.addressOf(0), buffer.size.toULong())
                         if (bytesRead > 0) {
-                            emit(pinned.get().toKString().trim())
+                            // Extract only the actual bytes read to avoid stale data/reading past end
+                            val message = pinned.get().toKString().substring(0, bytesRead.toInt()).trim()
+                            if (message.isNotEmpty()) {
+                                emit(message)
+                            }
                         } else if (bytesRead == 0L) {
+                            running = false // EOF
+                        } else {
+                            // Error -1: handle or break
                             running = false
                         }
                     }
+                } else if (ready < 0) {
+                    running = false // Poll error
                 }
             }
         }
@@ -34,8 +43,17 @@ class StdioTransport {
     @OptIn(ExperimentalForeignApi::class)
     fun writeMessage(message: String) {
         val bytes = (message + "\n").encodeToByteArray()
+        var totalWritten = 0L
         bytes.usePinned { pinned ->
-            write(STDOUT_FILENO, pinned.addressOf(0), bytes.size.toULong())
+            while (totalWritten < bytes.size) {
+                val written = write(STDOUT_FILENO, pinned.addressOf(totalWritten.toInt()), (bytes.size - totalWritten).toULong())
+                if (written < 0) {
+                    // Error - handle errno or throw
+                    break
+                }
+                if (written == 0L) break
+                totalWritten += written
+            }
         }
     }
 }

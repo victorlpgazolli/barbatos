@@ -1,5 +1,4 @@
 package ios
-
 import utils.Shell
 import platform.posix.getenv
 import kotlinx.cinterop.toKString
@@ -20,10 +19,17 @@ object IosRepacker {
         val home = getenv("HOME")?.toKString() ?: "/tmp"
         val cachePath = "$home/.cache/frida/gadget-ios.dylib"
         
-        Shell.execute("mkdir -p $appPath/Frameworks")
-        Shell.execute("cp $cachePath $appPath/Frameworks/frida-gadget-ios.dylib")
+        // Escape paths for shell execution to handle spaces and prevent injection
+        val escapedAppPath = "'${appPath.replace("'", "'\\''")}'"
+        val escapedCachePath = "'${cachePath.replace("'", "'\\''")}'"
         
-        val bundleId = Shell.execute("plutil -extract CFBundleIdentifier raw $appPath/Info.plist").trim()
+        Shell.execute("mkdir -p $escapedAppPath/Frameworks")
+        Shell.execute("cp $escapedCachePath $escapedAppPath/Frameworks/frida-gadget-ios.dylib")
+        
+        val bundleId = Shell.execute("plutil -extract CFBundleIdentifier raw $escapedAppPath/Info.plist").trim()
+        if (bundleId.isEmpty() || bundleId.contains("error")) {
+            throw RuntimeException("Failed to extract Bundle ID from Info.plist")
+        }
         return Pair(deviceId, bundleId)
     }
 }

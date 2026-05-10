@@ -8,10 +8,6 @@ repositories {
 }
 
 kotlin {
-    val hostOs = System.getProperty("os.name")
-    val isMac = hostOs.startsWith("Mac")
-    val isLinux = hostOs.startsWith("Linux")
-
     val nativeTargets = listOf(
         macosArm64(),
         linuxX64(),
@@ -22,7 +18,6 @@ kotlin {
         target.compilations.getByName("main") {
             cinterops.create("frida") {
                 defFile("src/nativeInterop/cinterop/frida.def")
-                // Note: Actual header parsing requires frida-core-devkit to be present.
             }
         }
         target.binaries {
@@ -39,7 +34,7 @@ kotlin {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-                implementation("io.ktor:ktor-network:2.3.11") // Required for JDWP
+                implementation("io.ktor:ktor-network:2.3.11")
             }
         }
         val commonTest by getting {
