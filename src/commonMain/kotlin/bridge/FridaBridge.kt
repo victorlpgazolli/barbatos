@@ -19,4 +19,9 @@ interface FridaBridge {
     fun setMethodImplementation(className: String, methodSig: String, code: String): String
     fun runOnce(className: String, methodSig: String, code: String): String
     fun getInstanceAddresses(className: String): List<String>
+    
+    fun prepareEnvironment(): rpc.PrepareEnvResult
+    fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult
+    fun injectJdwp(target: String, port: Int, packageName: String): String
+    fun healthCheck(): rpc.HealthCheckResponse
 }

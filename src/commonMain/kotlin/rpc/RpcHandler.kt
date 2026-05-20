@@ -77,6 +77,24 @@ class RpcHandler(private val bridge: FridaBridge) {
                 val res = bridge.getInstanceAddresses(p.className)
                 jsonParser.encodeToJsonElement(res)
             }
+            "prepareEnvironment" -> {
+                val res = bridge.prepareEnvironment()
+                jsonParser.encodeToJsonElement(res)
+            }
+            "injectGadgetFromScratch" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<InjectGadgetParams>(it) } ?: InjectGadgetParams()
+                val res = bridge.injectGadgetFromScratch(p.with_logs, p.limit)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "injectJdwp" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<InjectJdwpParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.injectJdwp(p.target, p.port, p.package_name)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "healthCheck" -> {
+                val res = bridge.healthCheck()
+                jsonParser.encodeToJsonElement(res)
+            }
             else -> throw Exception("Method $method not found")
         }
     }

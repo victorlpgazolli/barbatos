@@ -36,3 +36,14 @@ data class RpcErrorResponse(val jsonrpc: String = "2.0", val error: RpcError, va
 @Serializable data class SetMethodImplementationParams(val className: String, val methodSig: String, val code: String)
 @Serializable data class RunOnceParams(val className: String, val methodSig: String, val code: String)
 @Serializable data class GetInstanceAddressesParams(val className: String)
+
+@Serializable data class InjectGadgetParams(val with_logs: Boolean = true, val limit: Int = 100)
+@Serializable data class InjectJdwpParams(val target: String, val port: Int, val package_name: String)
+
+@Serializable data class CheckResponse(val status: String, val message: String)
+@Serializable data class HealthCheckResponse(val overall: String, val checks: Map<String, CheckResponse>, val recommendation: String? = null)
+
+@Serializable data class PrepareEnvResult(val pid: Int, val package_name: String, val port: Int, val target: String)
+
+@Serializable data class InjectionStep(val id: String, val title: String, val status: String)
+@Serializable data class InjectionProgressResult(val status: String, val steps: List<InjectionStep>, val logs: List<String>? = null, val error_message: String? = null)

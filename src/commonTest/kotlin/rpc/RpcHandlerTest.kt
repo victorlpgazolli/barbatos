@@ -142,4 +142,54 @@ class RpcHandlerTest {
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("0x123"))
     }
+
+    @Test
+    fun testPrepareEnvironment() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "prepareEnvironment", "id": 13}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("package_name"), "Response should contain package_name")
+        assertTrue(body.contains("pid"), "Response should contain pid")
+    }
+
+    @Test
+    fun testInjectGadgetFromScratch() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "injectGadgetFromScratch", "params": {"with_logs": true, "limit": 100}, "id": 14}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("status"), "Response should contain status")
+        assertTrue(body.contains("steps"), "Response should contain steps")
+    }
+
+    @Test
+    fun testInjectJdwp() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "injectJdwp", "params": {"target": "device1", "port": 8080, "package_name": "com.example"}, "id": 15}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("Success"))
+    }
+
+    @Test
+    fun testHealthCheck() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "healthCheck", "id": 16}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("overall"), "Response should contain overall")
+        assertTrue(body.contains("checks"), "Response should contain checks")
+    }
 }

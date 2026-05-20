@@ -62,4 +62,20 @@ class MockFridaBridge : FridaBridge {
     override fun getInstanceAddresses(className: String): List<String> {
         return listOf("0x123", "0x456")
     }
+
+    override fun prepareEnvironment(): rpc.PrepareEnvResult {
+        return rpc.PrepareEnvResult(1234, "com.example", 8080, "device1")
+    }
+
+    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult {
+        return rpc.InjectionProgressResult("completed", listOf(rpc.InjectionStep("1", "Step 1", "done")))
+    }
+
+    override fun injectJdwp(target: String, port: Int, packageName: String): String {
+        return "Success"
+    }
+
+    override fun healthCheck(): rpc.HealthCheckResponse {
+        return rpc.HealthCheckResponse("ok", mapOf("bridge" to rpc.CheckResponse("ok", "Bridge is running")))
+    }
 }
