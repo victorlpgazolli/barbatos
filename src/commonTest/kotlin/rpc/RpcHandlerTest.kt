@@ -43,4 +43,37 @@ class RpcHandlerTest {
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("\"result\":5"))
     }
+
+    @Test
+    fun testInspectClass() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "inspectClass", "params": {"className": "com.example.MainActivity"}, "id": 4}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("methods"))
+    }
+
+    @Test
+    fun testListInstances() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "listInstances", "params": {"className": "com.example.MainActivity"}, "id": 5}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("totalCount"))
+    }
+
+    @Test
+    fun testInspectInstance() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "inspectInstance", "params": {"className": "com.example.MainActivity", "id": "123"}, "id": 6}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("attributes"))
+    }
 }

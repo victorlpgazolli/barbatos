@@ -33,6 +33,21 @@ class RpcHandler(private val bridge: FridaBridge) {
                 val res = bridge.countInstances(p.className)
                 jsonParser.encodeToJsonElement(res)
             }
+            "inspectClass" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<InspectClassParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.inspectClass(p.className)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "listInstances" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<ListInstancesParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.listInstances(p.className)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "inspectInstance" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<InspectInstanceParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.inspectInstance(p.className, p.id, p.offset, p.limit)
+                jsonParser.encodeToJsonElement(res)
+            }
             else -> throw Exception("Method $method not found")
         }
     }
