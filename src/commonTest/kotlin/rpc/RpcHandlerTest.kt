@@ -21,4 +21,26 @@ class RpcHandlerTest {
         val body = response.bodyAsText()
         assertTrue(body.contains("Method unknownMethod not found"))
     }
+
+    @Test
+    fun testListClasses() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "listClasses", "params": {"search_param": "MainActivity", "app_package": "com.example", "offset": 0, "limit": 10}, "id": 2}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("com.example.MainActivity"))
+    }
+
+    @Test
+    fun testCountInstances() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "countInstances", "params": {"className": "com.example.MainActivity"}, "id": 3}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"result\":5"))
+    }
 }
