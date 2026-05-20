@@ -48,6 +48,35 @@ class RpcHandler(private val bridge: FridaBridge) {
                 val res = bridge.inspectInstance(p.className, p.id, p.offset, p.limit)
                 jsonParser.encodeToJsonElement(res)
             }
+            "setFieldValue" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<SetFieldValueParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.setFieldValue(p.className, p.id, p.fieldName, p.type, p.newValue)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "hookMethod" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<HookParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.hookMethod(p.className, p.methodSig)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "getHookEvents" -> {
+                val res = bridge.getHookEvents()
+                jsonParser.encodeToJsonElement(res)
+            }
+            "setMethodImplementation" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<SetMethodImplementationParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.setMethodImplementation(p.className, p.methodSig, p.code)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "runOnce" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<RunOnceParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.runOnce(p.className, p.methodSig, p.code)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "getInstanceAddresses" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<GetInstanceAddressesParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.getInstanceAddresses(p.className)
+                jsonParser.encodeToJsonElement(res)
+            }
             else -> throw Exception("Method $method not found")
         }
     }

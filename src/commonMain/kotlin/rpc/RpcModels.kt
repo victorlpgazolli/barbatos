@@ -29,3 +29,10 @@ data class RpcErrorResponse(val jsonrpc: String = "2.0", val error: RpcError, va
 
 @Serializable data class InstanceAttribute(val name: String, val type: String, val value: String, val childId: String? = null, val childClassName: String? = null, val isPagination: Boolean = false, val nextOffset: Int = 0)
 @Serializable data class InspectInstanceResult(val attributes: List<InstanceAttribute>)
+
+@Serializable data class SetFieldValueParams(val className: String, val id: String, val fieldName: String, val type: String, val newValue: String)
+@Serializable data class HookParams(val className: String, val methodSig: String)
+@Serializable data class HookEvent(val className: String, val methodSig: String, val eventData: String = "")
+@Serializable data class SetMethodImplementationParams(val className: String, val methodSig: String, val code: String)
+@Serializable data class RunOnceParams(val className: String, val methodSig: String, val code: String)
+@Serializable data class GetInstanceAddressesParams(val className: String)

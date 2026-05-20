@@ -1,6 +1,7 @@
 package bridge
 
 import rpc.ClassInspectionResult
+import rpc.HookEvent
 import rpc.InspectInstanceResult
 import rpc.InstanceAttribute
 import rpc.InstanceInfo
@@ -36,5 +37,29 @@ class MockFridaBridge : FridaBridge {
         return InspectInstanceResult(
             attributes = listOf(InstanceAttribute("mCount", "int", "5"))
         )
+    }
+
+    override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String {
+        return "Success: $fieldName set to $newValue"
+    }
+
+    override fun hookMethod(className: String, methodSig: String): String {
+        return "Hooked $className.$methodSig"
+    }
+
+    override fun getHookEvents(): List<HookEvent> {
+        return listOf(HookEvent("com.example.MainActivity", "onCreate(android.os.Bundle)"))
+    }
+
+    override fun setMethodImplementation(className: String, methodSig: String, code: String): String {
+        return "Implementation replaced for $className.$methodSig"
+    }
+
+    override fun runOnce(className: String, methodSig: String, code: String): String {
+        return "Script executed"
+    }
+
+    override fun getInstanceAddresses(className: String): List<String> {
+        return listOf("0x123", "0x456")
     }
 }

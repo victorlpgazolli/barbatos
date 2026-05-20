@@ -76,4 +76,70 @@ class RpcHandlerTest {
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("attributes"))
     }
+
+    @Test
+    fun testSetFieldValue() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "setFieldValue", "params": {"className": "com.example.MainActivity", "id": "123", "fieldName": "mCount", "type": "int", "newValue": "10"}, "id": 7}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("Success"))
+    }
+
+    @Test
+    fun testHookMethod() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "hookMethod", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)"}, "id": 8}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("Hooked"))
+    }
+
+    @Test
+    fun testGetHookEvents() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "getHookEvents", "id": 9}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("com.example.MainActivity"))
+    }
+
+    @Test
+    fun testSetMethodImplementation() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "setMethodImplementation", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)", "code": "return null;"}, "id": 10}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("Implementation replaced"))
+    }
+
+    @Test
+    fun testRunOnce() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "runOnce", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)", "code": "console.log('hi');"}, "id": 11}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("Script executed"))
+    }
+
+    @Test
+    fun testGetInstanceAddresses() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "getInstanceAddresses", "params": {"className": "com.example.MainActivity"}, "id": 12}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("0x123"))
+    }
 }

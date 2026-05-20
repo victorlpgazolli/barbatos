@@ -1,6 +1,7 @@
 package bridge
 
 import rpc.ClassInspectionResult
+import rpc.HookEvent
 import rpc.InspectInstanceResult
 import rpc.ListInstancesResult
 
@@ -11,4 +12,11 @@ interface FridaBridge {
     fun inspectClass(className: String): ClassInspectionResult
     fun listInstances(className: String): ListInstancesResult
     fun inspectInstance(className: String, id: String, offset: Int, limit: Int): InspectInstanceResult
+    
+    fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String
+    fun hookMethod(className: String, methodSig: String): String
+    fun getHookEvents(): List<HookEvent>
+    fun setMethodImplementation(className: String, methodSig: String, code: String): String
+    fun runOnce(className: String, methodSig: String, code: String): String
+    fun getInstanceAddresses(className: String): List<String>
 }
