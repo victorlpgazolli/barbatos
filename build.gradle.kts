@@ -15,6 +15,9 @@ kotlin {
                 baseName = "barbatos"
             }
         }
+        compilations.getByName("main") {
+            val frida by cinterops.creating
+        }
     }
     linuxArm64 {
         binaries {
@@ -41,6 +44,9 @@ kotlin {
                 )
             }
         }
+        compilations.getByName("main") {
+            val frida by cinterops.creating
+        }
     }
     linuxX64 {
         binaries {
@@ -48,6 +54,9 @@ kotlin {
                 entryPoint = "main"
                 baseName = "barbatos"
             }
+        }
+        compilations.getByName("main") {
+            val frida by cinterops.creating
         }
     }
 
