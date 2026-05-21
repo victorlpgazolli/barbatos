@@ -17,18 +17,6 @@ runs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: bridge/package-lock.json
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
     - name: Set up QEMU for ARM64 cross-compilation
       if: inputs.architecture == 'aarch64'
       uses: docker/setup-qemu-action@v4

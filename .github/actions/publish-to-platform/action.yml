@@ -36,7 +36,6 @@ runs:
         gh release upload ${RELEASE_TAG} \
           ${{ inputs.artifacts-dir }}/barbatos-*.zip \
           ${{ inputs.artifacts-dir }}/barbatos-*-tui \
-          ${{ inputs.artifacts-dir }}/barbatos-*-bridge \
           --clobber
 
     # APT Repository Publishing

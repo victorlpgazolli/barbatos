@@ -13,7 +13,7 @@ runs:
       shell: bash
       run: make install_dependencies
 
-    - name: Release (builds all 3 binaries)
+    - name: Release (builds Kotlin binary)
       shell: bash
       run: make release
 
@@ -22,7 +22,6 @@ runs:
       run: |
         zip -r ./barbatos-macos-arm64.zip ./dist
         cp dist/barbatos barbatos-macos-arm64-tui
-        cp dist/barbatos-bridge barbatos-macos-arm64-bridge
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
@@ -31,5 +30,4 @@ runs:
         path: |
           barbatos-macos-arm64.zip
           barbatos-macos-arm64-tui
-          barbatos-macos-arm64-bridge
         retention-days: 1
