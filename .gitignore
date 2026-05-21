@@ -89,4 +89,3 @@ web/pool/.worktrees/
 src/nativeInterop/cinterop/libfrida-core.a
 src/nativeInterop/cinterop/*.gir
 src/nativeInterop/cinterop/*.h
-!src/nativeInterop/cinterop/frida-core.h
