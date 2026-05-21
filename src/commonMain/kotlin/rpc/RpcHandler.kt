@@ -13,8 +13,8 @@ class RpcHandler(private val bridge: FridaBridge) {
             jsonParser.decodeFromString<RpcRequest>(requestJson)
         } catch (e: Exception) {
             return HandlerResult(
-                jsonParser.encodeToString(RpcErrorResponse.serializer(), RpcErrorResponse(error = RpcError("parse_error", "Invalid JSON"))),
-                400
+                jsonParser.encodeToString(RpcErrorResponse.serializer(), RpcErrorResponse(error = RpcError(-32700, "Parse error: ${e.message}"), id = null)),
+                200
             )
         }
 
@@ -25,9 +25,10 @@ class RpcHandler(private val bridge: FridaBridge) {
                 200
             )
         } catch (e: Exception) {
+            val code = if (e.message?.contains("not found") == true) -32601 else -32603
             HandlerResult(
-                jsonParser.encodeToString(RpcErrorResponse.serializer(), RpcErrorResponse(error = RpcError("unknown_error", e.message ?: "Error"), id = req.id)),
-                500
+                jsonParser.encodeToString(RpcErrorResponse.serializer(), RpcErrorResponse(error = RpcError(code, e.message ?: "Internal error"), id = req.id)),
+                200
             )
         }
     }

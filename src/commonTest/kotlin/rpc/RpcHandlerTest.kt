@@ -17,8 +17,9 @@ class RpcHandlerTest {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "unknownMethod", "id": 1}""")
         }
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
+        assertTrue(body.contains("\"code\":-32601"))
         assertTrue(body.contains("Method unknownMethod not found"))
     }
 

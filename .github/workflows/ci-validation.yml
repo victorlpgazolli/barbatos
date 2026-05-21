@@ -83,7 +83,7 @@ jobs:
         run: |
           chmod +x scripts/download_frida_devkit.sh
           # CI runner for Linux X64/ARM64
-          ./scripts/download_frida_devkit.sh
+          ./scripts/download_frida_devkit.sh ${{ matrix.name == 'ARM64' && 'aarch64' || 'x86_64' }}
 
       - name: Run Kotlin Unit Tests
         if: matrix.name == 'x64'
@@ -111,7 +111,7 @@ jobs:
       - name: Download Frida Devkit
         run: |
           chmod +x scripts/download_frida_devkit.sh
-          ./scripts/download_frida_devkit.sh
+          ./scripts/download_frida_devkit.sh arm64
 
       - name: Compile macOS ARM64 Binary
         run: ./gradlew linkDebugExecutableMacosArm64 --no-daemon

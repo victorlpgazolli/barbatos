@@ -24,22 +24,22 @@ class NativeFridaBridge : FridaBridge {
     override fun inspectClass(className: String): ClassInspectionResult = ClassInspectionResult(emptyList(), emptyList(), listOf("Nativo"))
     override fun listInstances(className: String): ListInstancesResult = ListInstancesResult(emptyList(), 0)
     override fun inspectInstance(className: String, id: String, offset: Int, limit: Int): InspectInstanceResult = InspectInstanceResult(emptyList())
-    override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String = "Pending"
-    override fun hookMethod(className: String, methodSig: String): String = "Pending"
+    override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String = "Not implemented yet"
+    override fun hookMethod(className: String, methodSig: String): String = "Not implemented yet"
     override fun getHookEvents(): List<HookEvent> = emptyList()
-    override fun setMethodImplementation(className: String, methodSig: String, code: String): String = "Pending"
-    override fun runOnce(className: String, methodSig: String, code: String): String = "Pending"
+    override fun setMethodImplementation(className: String, methodSig: String, code: String): String = "Not implemented yet"
+    override fun runOnce(className: String, methodSig: String, code: String): String = "Not implemented yet"
     override fun getInstanceAddresses(className: String): List<String> = emptyList()
     override fun prepareEnvironment(): PrepareEnvResult = PrepareEnvResult(0, "", 0, "")
-    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult = InjectionProgressResult("pending", emptyList())
-    override fun injectJdwp(target: String, port: Int, packageName: String): String = "Pending"
+    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult = InjectionProgressResult("not_implemented", emptyList())
+    override fun injectJdwp(target: String, port: Int, packageName: String): String = "Not implemented yet"
     
     override fun healthCheck(): HealthCheckResponse {
-        return HealthCheckResponse("ok", mapOf("frida_native" to CheckResponse("ok", "Native Core initialized")))
+        return HealthCheckResponse("degraded", mapOf("frida_native" to CheckResponse("warning", "Native Core initialized but methods are not yet implemented")))
     }
 
-    override fun patchAndInstallIosApp(appPath: String): String = "Pending"
-    override fun checkIosJailbreakStatus(serial: String): String = "Pending"
-    override fun injectJailbrokenIos(serial: String): String = "Pending"
+    override fun patchAndInstallIosApp(appPath: String): String = "Not implemented yet"
+    override fun checkIosJailbreakStatus(serial: String): String = "Not implemented yet"
+    override fun injectJailbrokenIos(serial: String): String = "Not implemented yet"
     override fun checkIosDeployStatus(): GenericStatusResult = GenericStatusResult("idle")
 }

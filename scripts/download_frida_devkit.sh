@@ -3,16 +3,18 @@ set -e
 
 FRIDA_VERSION="16.6.6" # Use a specific version
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
+ARCH=${1:-$(uname -m)}
+
+echo "Setting up Frida Devkit for $PLATFORM/$ARCH..."
 
 if [ "$PLATFORM" == "darwin" ]; then
-    if [ "$ARCH" == "arm64" ]; then
+    if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
         DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-macos-arm64.tar.xz"
     else
         DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-macos-x86_64.tar.xz"
     fi
 elif [ "$PLATFORM" == "linux" ]; then
-    if [ "$ARCH" == "aarch64" ]; then
+    if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
         DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-linux-arm64.tar.xz"
     else
         DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-linux-x86_64.tar.xz"

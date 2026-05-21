@@ -9,7 +9,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.*
 import rpc.RpcHandler
-import bridge.MockFridaBridge
 import bridge.FridaBridge
 
 fun Application.module(bridge: FridaBridge) {
