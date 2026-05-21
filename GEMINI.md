@@ -2,69 +2,68 @@
 
 ## Project Overview
 
-`barbatos` is a **Kotlin Multiplatform (KMP) JSON-RPC Bridge** for Android and iOS debugging via Frida. It replaces the original Python bridge and TUI with a high-performance nativo binary that exposes a standardized JSON-RPC 2.0 API over HTTP.
+`barbatos` is a high-performance **Kotlin Multiplatform (KMP) JSON-RPC Bridge** designed for Android and iOS runtime debugging via Frida. It replaces the legacy Python bridge and TUI with a unified, native binary that exposes a standardized JSON-RPC 2.0 API over HTTP.
 
-The tool bridges:
-- **Kotlin Native binary** (`src/unixMain/kotlin/`) — the HTTP server and Frida Core orchestrator.
-- **Ktor Server** (`src/commonMain/kotlin/server/`) — handles the HTTP layer (`/ping` and `/rpc`).
-- **Frida Core** (CInterop) — linked statically via `libfrida-core.a`.
-- **Frida JS agent** (`src/commonMain/resources/agent*.js`) — embedded instrumentation injected into processes.
+The bridge enables both human developers (via TUI or Web) and AI agents (via MCP) to interact with live application memory, inspect objects, and hook methods with zero setup.
 
 ---
 
-## Architecture
+## Technical Architecture
 
+The project follows a modular, interface-driven design to ensure testability and multi-platform support.
+
+### Component Map
 ```
-Main.kt (Native) → NativeFridaBridge (Unix)
-Server.kt (Common) → RpcHandler (Common) → FridaBridge (Interface)
-                                       ↳ MockFridaBridge (Testing)
-                                       ↳ NativeFridaBridge (Production)
+Main.kt (Native) ──▶ NativeFridaBridge (Unix)
+Server.kt (Common) ──▶ RpcHandler (Common) ──▶ FridaBridge (Interface)
+                                             ┝━ MockFridaBridge (Test/Common)
+                                             ┕━ NativeFridaBridge (Prod/Native)
 ```
 
-### Components
-- **FridaBridge**: Common interface defining all debugger operations (list classes, inspect instances, hook methods).
-- **RpcHandler**: Logic for parsing JSON-RPC 2.0 requests and routing them to the appropriate bridge implementation.
-- **NativeFridaBridge**: The real implementation using `frida-core` via Kotlin Native CInterop.
-- **MockFridaBridge**: Used for unit tests and local validation without physical devices.
+### Key Modules
+- **Server (`src/commonMain/kotlin/server/`)**: Built on **Ktor (CIO engine)**. Exposes `/ping` for health checks and `/rpc` for all debugger operations.
+- **RPC Handler (`src/commonMain/kotlin/rpc/`)**: Orchestrates request parsing, validation against JSON-RPC 2.0 standards, and routing to the active `FridaBridge` implementation.
+- **Native Bridge (`src/unixMain/kotlin/bridge/`)**: The core engine. Interacts with **Frida Core (C API)** using Kotlin Native **CInterop**. It statically links `libfrida-core.a` and manages process attachment and script injection.
+- **Resources (`src/commonMain/resources/`)**: Contains the JavaScript agents (`agent.js`, `agent.objc.js`) that are injected into the target processes.
 
 ---
 
-## Build & Run
+## Build & Development
 
+### Requirements
+- **macOS ARM64** or **Linux (x64/ARM64)**.
+- **JDK 17+**.
+- **Frida Devkit**: Headers and static libraries managed by our automation.
+
+### Setup & Run
 ```bash
-# 1. Download Frida Devkit (Headers & Static Lib)
+# 1. Prepare environment (Download Frida Core SDK)
 ./scripts/download_frida_devkit.sh
 
-# 2. Build native binary
+# 2. Compile Release Binary
 ./gradlew linkReleaseExecutableMacosArm64
 
-# 3. Run
+# 3. Start Bridge
 ./build/bin/macosArm64/releaseExecutable/barbatos.kexe
 ```
 
-The server starts on `http://127.0.0.1:8080`.
+The bridge will listen on `http://127.0.0.1:8080`.
 
 ---
 
-## Development Conventions
+## Engineering Standards
 
-### TDD Workflow
-All new endpoints must be implemented following TDD:
-1. Add test case to `RpcHandlerTest.kt`.
-2. Verify failure with `./gradlew macosArm64Test`.
-3. Update `FridaBridge`, `MockFridaBridge`, `RpcModels` and `RpcHandler`.
-4. Verify pass.
+### TDD (Test Driven Development)
+All endpoints must be validated in `src/commonTest/kotlin/rpc/RpcHandlerTest.kt` using `MockFridaBridge`.
+- **Verify Failure**: `./gradlew macosArm64Test`
+- **Align Schema**: Check against `web/openapi.yaml`.
+- **Strict Logic**: Return HTTP 200 with standard JSON-RPC error codes (-32601, -32603, etc.) for application-level errors.
 
-### Language & Documentation
-**All code comments, commit messages, and documentation MUST be in English.**
+### CInterop & Native
+- **Definition**: `src/nativeInterop/cinterop/frida.def`.
+- **Linkage**: Static linking to avoid runtime shared library dependency.
+- **Memory**: Use `memScoped` and `pin` when interacting with C pointers to ensure safety.
 
-### Frida CInterop
-- Definition file: `src/nativeInterop/cinterop/frida.def`.
-- Static link: `-lfrida-core -lresolv -lpthread`.
-- SDK managed by: `scripts/download_frida_devkit.sh`.
-
----
-
-## API Contract
-
-Refer to `web/openapi.yaml` for the full JSON-RPC method list and schemas.
+### Documentation
+- **Language**: English only (code, comments, commits, and docs).
+- **Style**: No emojis, concise and technical tone.
