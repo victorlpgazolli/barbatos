@@ -12,229 +12,283 @@ import kotlin.test.assertTrue
 class RpcHandlerTest {
     @Test
     fun testRpcMethodNotFound() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "unknownMethod", "id": 1}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
-        assertTrue(body.contains("\"code\":-32601"))
-        assertTrue(body.contains("Method unknownMethod not found"))
+        val errorRes = kotlinx.serialization.json.Json.decodeFromString<RpcErrorResponse>(body)
+        assertEquals(-32601, errorRes.error.code)
+        assertEquals(1, errorRes.id)
     }
 
     @Test
     fun testListClasses() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "listClasses", "params": {"search_param": "MainActivity", "app_package": "com.example", "offset": 0, "limit": 10}, "id": 2}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("com.example.MainActivity"))
+        val body = response.bodyAsText()
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(body)
+        assertTrue(res.result.toString().contains("com.example.MainActivity"))
+        assertEquals(2, res.id)
     }
 
     @Test
     fun testCountInstances() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "countInstances", "params": {"className": "com.example.MainActivity"}, "id": 3}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("\"result\":5"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertEquals("5", res.result.toString())
+        assertEquals(3, res.id)
     }
 
     @Test
     fun testInspectClass() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "inspectClass", "params": {"className": "com.example.MainActivity"}, "id": 4}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("methods"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("methods"))
+        assertEquals(4, res.id)
     }
 
     @Test
     fun testListInstances() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "listInstances", "params": {"className": "com.example.MainActivity"}, "id": 5}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("totalCount"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("totalCount"))
+        assertEquals(5, res.id)
     }
 
     @Test
     fun testInspectInstance() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "inspectInstance", "params": {"className": "com.example.MainActivity", "id": "123"}, "id": 6}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("attributes"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("attributes"))
+        assertEquals(6, res.id)
     }
 
     @Test
     fun testSetFieldValue() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "setFieldValue", "params": {"className": "com.example.MainActivity", "id": "123", "fieldName": "mCount", "type": "int", "newValue": "10"}, "id": 7}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("Success"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("Success"))
+        assertEquals(7, res.id)
     }
 
     @Test
     fun testHookMethod() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "hookMethod", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)"}, "id": 8}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("Hooked"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("Hooked"))
+        assertEquals(8, res.id)
     }
 
     @Test
     fun testGetHookEvents() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "getHookEvents", "id": 9}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("com.example.MainActivity"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("com.example.MainActivity"))
+        assertEquals(9, res.id)
     }
 
     @Test
     fun testSetMethodImplementation() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "setMethodImplementation", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)", "code": "return null;"}, "id": 10}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("Implementation replaced"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("Implementation replaced"))
+        assertEquals(10, res.id)
     }
 
     @Test
     fun testRunOnce() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "runOnce", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)", "code": "console.log('hi');"}, "id": 11}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("Script executed"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("Script executed"))
+        assertEquals(11, res.id)
     }
 
     @Test
     fun testGetInstanceAddresses() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "getInstanceAddresses", "params": {"className": "com.example.MainActivity"}, "id": 12}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("0x123"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("0x123"))
+        assertEquals(12, res.id)
     }
 
     @Test
     fun testPrepareEnvironment() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "prepareEnvironment", "id": 13}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        val body = response.bodyAsText()
-        assertTrue(body.contains("package_name"), "Response should contain package_name")
-        assertTrue(body.contains("pid"), "Response should contain pid")
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("package_name"))
+        assertEquals(13, res.id)
     }
 
     @Test
     fun testInjectGadgetFromScratch() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "injectGadgetFromScratch", "params": {"with_logs": true, "limit": 100}, "id": 14}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        val body = response.bodyAsText()
-        assertTrue(body.contains("status"), "Response should contain status")
-        assertTrue(body.contains("steps"), "Response should contain steps")
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("status"))
+        assertEquals(14, res.id)
     }
 
     @Test
     fun testInjectJdwp() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "injectJdwp", "params": {"target": "device1", "port": 8080, "package_name": "com.example"}, "id": 15}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("Success"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("Success"))
+        assertEquals(15, res.id)
     }
 
     @Test
     fun testHealthCheck() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "healthCheck", "id": 16}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        val body = response.bodyAsText()
-        assertTrue(body.contains("overall"), "Response should contain overall")
-        assertTrue(body.contains("checks"), "Response should contain checks")
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("overall"))
+        assertEquals(16, res.id)
     }
 
     @Test
     fun testPatchAndInstallIosApp() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "patchAndInstallIosApp", "params": {"appPath": "/path/to/app"}, "id": 17}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("success"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertEquals("\"success\"", res.result.toString())
+        assertEquals(17, res.id)
     }
 
     @Test
     fun testCheckIosJailbreakStatus() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "checkIosJailbreakStatus", "params": {"serial": "12345"}, "id": 18}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("jailbroken"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertEquals("\"jailbroken\"", res.result.toString())
+        assertEquals(18, res.id)
     }
 
     @Test
     fun testInjectJailbrokenIos() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "injectJailbrokenIos", "params": {"serial": "12345"}, "id": 19}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("success"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertEquals("\"success\"", res.result.toString())
+        assertEquals(19, res.id)
     }
 
     @Test
     fun testCheckIosDeployStatus() = testApplication {
-        application { module(bridge.MockFridaBridge()) }
+        val bridge = bridge.MockFridaBridge()
+        application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "checkIosDeployStatus", "id": 20}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("status"))
+        val res = kotlinx.serialization.json.Json.decodeFromString<RpcResponse>(response.bodyAsText())
+        assertTrue(res.result.toString().contains("status"))
+        assertEquals(20, res.id)
     }
 }

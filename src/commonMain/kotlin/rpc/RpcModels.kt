@@ -10,7 +10,7 @@ data class RpcRequest(val jsonrpc: String = "2.0", val method: String, val param
 data class RpcResponse(val jsonrpc: String = "2.0", val result: JsonElement, val id: Int?)
 
 @Serializable
-data class RpcError(val code: Int, val message: String)
+data class RpcError(val code: Int, val message: String, val data: JsonElement? = null)
 
 @Serializable
 data class RpcErrorResponse(val jsonrpc: String = "2.0", val error: RpcError, val id: Int?)

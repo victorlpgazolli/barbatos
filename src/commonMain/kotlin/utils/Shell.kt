@@ -21,9 +21,13 @@ object Shell {
                 result.append(buffer.toKString())
             }
             val status = pclose(pipe)
-            // On Unix-like systems, pclose returns the exit status in the high byte (bits 8-15)
-            // when the process exited normally. This aligns with WEXITSTATUS(status).
-            val exitCode = if (status != -1) (status shr 8) and 0xFF else -1
+            val exitCode = if (status == -1) {
+                -1
+            } else {
+                // On most Unix systems, the exit status is in the high byte.
+                // We shift by 8 to get the 0-255 value.
+                (status shr 8) and 0xFF
+            }
             return ShellResult(result.toString(), exitCode)
         } catch (e: Exception) {
             pclose(pipe)

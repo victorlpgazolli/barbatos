@@ -87,14 +87,14 @@ jobs:
 
       - name: Run Kotlin Unit Tests
         if: matrix.name == 'x64'
-        run: ./gradlew allTests --no-daemon
+        run: ./gradlew linuxX64Test --no-daemon
 
       - name: Compile Linux ${{ matrix.name }} Binary
         run: ./gradlew ${{ matrix.target }} --no-daemon
 
   kotlin-macos-build:
     name: Kotlin (macOS ARM64)
-    needs: [detect-changes, kotlin-test-and-linux-build]
+    needs: detect-changes
     if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
     runs-on: macos-15
     steps:
@@ -114,4 +114,4 @@ jobs:
           ./scripts/download_frida_devkit.sh arm64
 
       - name: Compile macOS ARM64 Binary
-        run: ./gradlew linkDebugExecutableMacosArm64 --no-daemon
+        run: ./gradlew linkDebugExecutableMacosArm64 macosArm64Test --no-daemon
