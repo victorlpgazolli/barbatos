@@ -95,6 +95,25 @@ class RpcHandler(private val bridge: FridaBridge) {
                 val res = bridge.healthCheck()
                 jsonParser.encodeToJsonElement(res)
             }
+            "patchAndInstallIosApp" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<PatchAndInstallIosAppParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.patchAndInstallIosApp(p.appPath)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "checkIosJailbreakStatus" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<IosJailbreakParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.checkIosJailbreakStatus(p.serial)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "injectJailbrokenIos" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<IosJailbreakParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.injectJailbrokenIos(p.serial)
+                jsonParser.encodeToJsonElement(res)
+            }
+            "checkIosDeployStatus" -> {
+                val res = bridge.checkIosDeployStatus()
+                jsonParser.encodeToJsonElement(res)
+            }
             else -> throw Exception("Method $method not found")
         }
     }

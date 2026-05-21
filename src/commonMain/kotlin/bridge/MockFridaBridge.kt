@@ -78,4 +78,20 @@ class MockFridaBridge : FridaBridge {
     override fun healthCheck(): rpc.HealthCheckResponse {
         return rpc.HealthCheckResponse("ok", mapOf("bridge" to rpc.CheckResponse("ok", "Bridge is running")))
     }
+
+    override fun patchAndInstallIosApp(appPath: String): String {
+        return "success"
+    }
+
+    override fun checkIosJailbreakStatus(serial: String): String {
+        return "jailbroken"
+    }
+
+    override fun injectJailbrokenIos(serial: String): String {
+        return "success"
+    }
+
+    override fun checkIosDeployStatus(): rpc.GenericStatusResult {
+        return rpc.GenericStatusResult("completed")
+    }
 }

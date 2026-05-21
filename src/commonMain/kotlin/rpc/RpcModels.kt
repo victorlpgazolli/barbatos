@@ -47,3 +47,7 @@ data class RpcErrorResponse(val jsonrpc: String = "2.0", val error: RpcError, va
 
 @Serializable data class InjectionStep(val id: String, val title: String, val status: String)
 @Serializable data class InjectionProgressResult(val status: String, val steps: List<InjectionStep>, val logs: List<String>? = null, val error_message: String? = null)
+
+@Serializable data class PatchAndInstallIosAppParams(val appPath: String)
+@Serializable data class IosJailbreakParams(val serial: String)
+@Serializable data class GenericStatusResult(val status: String, val error_message: String? = null)

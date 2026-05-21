@@ -24,4 +24,9 @@ interface FridaBridge {
     fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult
     fun injectJdwp(target: String, port: Int, packageName: String): String
     fun healthCheck(): rpc.HealthCheckResponse
+    
+    fun patchAndInstallIosApp(appPath: String): String
+    fun checkIosJailbreakStatus(serial: String): String
+    fun injectJailbrokenIos(serial: String): String
+    fun checkIosDeployStatus(): rpc.GenericStatusResult
 }

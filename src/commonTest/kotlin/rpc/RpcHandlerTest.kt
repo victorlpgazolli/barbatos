@@ -192,4 +192,48 @@ class RpcHandlerTest {
         assertTrue(body.contains("overall"), "Response should contain overall")
         assertTrue(body.contains("checks"), "Response should contain checks")
     }
+
+    @Test
+    fun testPatchAndInstallIosApp() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "patchAndInstallIosApp", "params": {"appPath": "/path/to/app"}, "id": 17}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("success"))
+    }
+
+    @Test
+    fun testCheckIosJailbreakStatus() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "checkIosJailbreakStatus", "params": {"serial": "12345"}, "id": 18}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("jailbroken"))
+    }
+
+    @Test
+    fun testInjectJailbrokenIos() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "injectJailbrokenIos", "params": {"serial": "12345"}, "id": 19}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("success"))
+    }
+
+    @Test
+    fun testCheckIosDeployStatus() = testApplication {
+        application { module() }
+        val response = client.post("/rpc") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"jsonrpc": "2.0", "method": "checkIosDeployStatus", "id": 20}""")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("status"))
+    }
 }
