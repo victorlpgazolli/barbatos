@@ -20,12 +20,8 @@ fun Application.module(bridge: FridaBridge) {
         }
         post("/rpc") {
             val body = call.receiveText()
-            val responseText = rpcHandler.handle(body)
-            if (responseText.contains("\"error\":")) {
-                call.respondText(responseText, ContentType.Application.Json, HttpStatusCode.InternalServerError)
-            } else {
-                call.respondText(responseText, ContentType.Application.Json, HttpStatusCode.OK)
-            }
+            val result = rpcHandler.handle(body)
+            call.respondText(result.body, ContentType.Application.Json, HttpStatusCode.fromValue(result.statusCode))
         }
     }
 }

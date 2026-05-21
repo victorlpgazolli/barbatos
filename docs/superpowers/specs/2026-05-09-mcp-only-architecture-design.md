@@ -1,28 +1,20 @@
-# Transition to 100% MCP Architecture
+# Transition to Native KMP Architecture
 
 ## 1. Context & Goal
-The barbatos project is shifting from a dual architecture (Kotlin-based TUI and Python-based MCP server) to an exclusively MCP-based architecture. The TUI will be completely removed, and the Python-based MCP server (currently referred to as the bridge) will become the sole primary artifact, renamed to `barbatos`. All changes must be made in an isolated git worktree.
+The barbatos project is shifting from a dual technology stack (Kotlin TUI and Python Bridge) to a unified **Kotlin Multiplatform (KMP) Native** architecture. The original Python bridge and the TUI have been consolidated into a single, high-performance nativo binary that exposes a JSON-RPC 2.0 API.
 
-## 2. Codebase Cleanup (TUI Removal)
-The following files and directories related to the Kotlin TUI will be permanently removed from the repository:
-- `src/` (Entire Kotlin source code)
-- `gradle/`, `gradlew`, `gradlew.bat` (Gradle wrapper)
-- `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties` (Gradle configuration)
+## 2. Core Architecture
+- **KMP Bridge:** A nativo binary that implements the JSON-RPC contract and interacts directly with Frida Core via CInterop.
+- **Unified Codebase:** All logic resides in `src/`, managed by Gradle, eliminating the need for a separate Python environment.
+- **MCP Integration:** Future phases will embed the MCP server directly into the KMP binary.
 
-## 3. CI/CD Modifications (.github/**)
-The CI pipelines will be simplified to build only the Python MCP application.
-- **ci-validation.yml:** Remove the `kotlin-test-and-linux-build` and `kotlin-macos-build` jobs. The workflow will only execute `bridge-validation` (Python tests and syntax checks).
-- **Actions (build-linux, build-macos, setup-build-env):** Remove JDK installation, Gradle caching, QEMU/cross-compilation steps specific to Kotlin, and Kotlin compilation steps. The build process will only trigger `make compile_bridge`.
-- **Artifact Naming:** The CI scripts and `publish-to-platform` action will be updated to output a single artifact named `barbatos` (e.g., `barbatos-linux-x64.zip`, containing the `barbatos` executable), discarding the `-tui` and `-bridge` suffixes.
+## 3. CI/CD Pipeline
+The CI pipelines are optimized for Kotlin/Native:
+- **Builds:** Automated for macOS ARM64, Linux x64, and Linux ARM64.
+- **Validation:** Every PR runs the full suite of KMP unit tests (using mocks) and performs cross-compilation checks.
+- **Frida SDK:** Managed automatically by `scripts/download_frida_devkit.sh` during the build process.
 
-## 4. Makefile Adjustments
-The `Makefile` will be updated to:
-- Remove Kotlin compilation targets (`compile_binary`, `GRADLE_TARGET`).
-- Modify the `prepare_release` target to copy the PyInstaller output (`bridge/dist/barbatos-bridge`) directly to `dist/barbatos`.
-- Remove references to `TUI_BIN`.
-
-## 5. Constraints
-- The contents of `bridge/**` will not be modified during this phase.
-- All work will be performed inside a dedicated git worktree.
-- All documentation, commit messages, and code must be in English.
-- No emojis are allowed in commits or documentation.
+## 4. Maintenance
+- **English Only:** All code, comments, and documentation must be in English.
+- **TDD:** New features and endpoints MUST be validated via unit tests in `src/commonTest`.
+- **Cleanliness:** No obsolete Python or Node.js files should remain in the repository.

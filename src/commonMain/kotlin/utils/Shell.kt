@@ -7,19 +7,26 @@ import platform.posix.fgets
 import platform.posix.pclose
 import platform.posix.popen
 
+data class ShellResult(val output: String, val exitCode: Int)
+
 object Shell {
     @OptIn(ExperimentalForeignApi::class)
-    fun execute(command: String): String {
+    fun execute(command: String, redirectStderr: Boolean = true): ShellResult {
         val result = StringBuilder()
-        val pipe = popen("$command 2>/dev/null", "r") ?: return ""
+        val fullCommand = if (redirectStderr) "$command 2>&1" else command
+        val pipe = popen(fullCommand, "r") ?: return ShellResult("", -1)
         try {
             val buffer = ByteArray(1024)
             while (fgets(buffer.refTo(0), buffer.size, pipe) != null) {
                 result.append(buffer.toKString())
             }
-            return result.toString()
-        } finally {
+            val status = pclose(pipe)
+            // On Unix, pclose returns the exit status in the high byte
+            val exitCode = if (status != -1) (status shr 8) and 0xFF else -1
+            return ShellResult(result.toString(), exitCode)
+        } catch (e: Exception) {
             pclose(pipe)
+            return ShellResult(result.toString(), -1)
         }
     }
 }
