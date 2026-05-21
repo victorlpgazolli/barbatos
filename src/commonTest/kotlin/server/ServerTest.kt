@@ -11,7 +11,7 @@ class ServerTest {
     @Test
     fun testPingEndpoint() = testApplication {
         application {
-            module()
+            module(bridge.MockFridaBridge())
         }
         val response = client.get("/ping")
         assertEquals(HttpStatusCode.OK, response.status)

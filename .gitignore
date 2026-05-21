@@ -84,3 +84,9 @@ web/*.gpg
 !web/barbatos-repo.gpg
 *.deb
 web/pool/.worktrees/
+
+# Frida Devkit
+src/nativeInterop/cinterop/libfrida-core.a
+src/nativeInterop/cinterop/*.gir
+src/nativeInterop/cinterop/*.h
+!src/nativeInterop/cinterop/frida-core.h

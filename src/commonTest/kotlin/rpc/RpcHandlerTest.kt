@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class RpcHandlerTest {
     @Test
     fun testRpcMethodNotFound() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "unknownMethod", "id": 1}""")
@@ -24,7 +24,7 @@ class RpcHandlerTest {
 
     @Test
     fun testListClasses() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "listClasses", "params": {"search_param": "MainActivity", "app_package": "com.example", "offset": 0, "limit": 10}, "id": 2}""")
@@ -35,7 +35,7 @@ class RpcHandlerTest {
 
     @Test
     fun testCountInstances() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "countInstances", "params": {"className": "com.example.MainActivity"}, "id": 3}""")
@@ -46,7 +46,7 @@ class RpcHandlerTest {
 
     @Test
     fun testInspectClass() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "inspectClass", "params": {"className": "com.example.MainActivity"}, "id": 4}""")
@@ -57,7 +57,7 @@ class RpcHandlerTest {
 
     @Test
     fun testListInstances() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "listInstances", "params": {"className": "com.example.MainActivity"}, "id": 5}""")
@@ -68,7 +68,7 @@ class RpcHandlerTest {
 
     @Test
     fun testInspectInstance() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "inspectInstance", "params": {"className": "com.example.MainActivity", "id": "123"}, "id": 6}""")
@@ -79,7 +79,7 @@ class RpcHandlerTest {
 
     @Test
     fun testSetFieldValue() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "setFieldValue", "params": {"className": "com.example.MainActivity", "id": "123", "fieldName": "mCount", "type": "int", "newValue": "10"}, "id": 7}""")
@@ -90,7 +90,7 @@ class RpcHandlerTest {
 
     @Test
     fun testHookMethod() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "hookMethod", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)"}, "id": 8}""")
@@ -101,7 +101,7 @@ class RpcHandlerTest {
 
     @Test
     fun testGetHookEvents() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "getHookEvents", "id": 9}""")
@@ -112,7 +112,7 @@ class RpcHandlerTest {
 
     @Test
     fun testSetMethodImplementation() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "setMethodImplementation", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)", "code": "return null;"}, "id": 10}""")
@@ -123,7 +123,7 @@ class RpcHandlerTest {
 
     @Test
     fun testRunOnce() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "runOnce", "params": {"className": "com.example.MainActivity", "methodSig": "onCreate(android.os.Bundle)", "code": "console.log('hi');"}, "id": 11}""")
@@ -134,7 +134,7 @@ class RpcHandlerTest {
 
     @Test
     fun testGetInstanceAddresses() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "getInstanceAddresses", "params": {"className": "com.example.MainActivity"}, "id": 12}""")
@@ -145,7 +145,7 @@ class RpcHandlerTest {
 
     @Test
     fun testPrepareEnvironment() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "prepareEnvironment", "id": 13}""")
@@ -158,7 +158,7 @@ class RpcHandlerTest {
 
     @Test
     fun testInjectGadgetFromScratch() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "injectGadgetFromScratch", "params": {"with_logs": true, "limit": 100}, "id": 14}""")
@@ -171,7 +171,7 @@ class RpcHandlerTest {
 
     @Test
     fun testInjectJdwp() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "injectJdwp", "params": {"target": "device1", "port": 8080, "package_name": "com.example"}, "id": 15}""")
@@ -182,7 +182,7 @@ class RpcHandlerTest {
 
     @Test
     fun testHealthCheck() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "healthCheck", "id": 16}""")
@@ -195,7 +195,7 @@ class RpcHandlerTest {
 
     @Test
     fun testPatchAndInstallIosApp() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "patchAndInstallIosApp", "params": {"appPath": "/path/to/app"}, "id": 17}""")
@@ -206,7 +206,7 @@ class RpcHandlerTest {
 
     @Test
     fun testCheckIosJailbreakStatus() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "checkIosJailbreakStatus", "params": {"serial": "12345"}, "id": 18}""")
@@ -217,7 +217,7 @@ class RpcHandlerTest {
 
     @Test
     fun testInjectJailbrokenIos() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "injectJailbrokenIos", "params": {"serial": "12345"}, "id": 19}""")
@@ -228,7 +228,7 @@ class RpcHandlerTest {
 
     @Test
     fun testCheckIosDeployStatus() = testApplication {
-        application { module() }
+        application { module(bridge.MockFridaBridge()) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
             setBody("""{"jsonrpc": "2.0", "method": "checkIosDeployStatus", "id": 20}""")

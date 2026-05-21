@@ -10,11 +10,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.*
 import rpc.RpcHandler
 import bridge.MockFridaBridge
+import bridge.FridaBridge
 
-val globalBridge = MockFridaBridge()
-
-fun Application.module() {
-    val rpcHandler = RpcHandler(globalBridge)
+fun Application.module(bridge: FridaBridge) {
+    val rpcHandler = RpcHandler(bridge)
     routing {
         get("/ping") {
             call.respondText("""{"status": "pong"}""", ContentType.Application.Json)
@@ -31,6 +30,8 @@ fun Application.module() {
     }
 }
 
-fun startServer() {
-    embeddedServer(CIO, port = 8080, host = "127.0.0.1", module = Application::module).start(wait = true)
+fun startServer(bridge: FridaBridge) {
+    embeddedServer(CIO, port = 8080, host = "127.0.0.1") {
+        module(bridge)
+    }.start(wait = true)
 }
