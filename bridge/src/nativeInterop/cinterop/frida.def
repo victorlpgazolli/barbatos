@@ -1,2 +1,0 @@
-headers = frida-core.h
-compilerOpts = -Isrc/nativeInterop/cinterop

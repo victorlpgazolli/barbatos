@@ -65,6 +65,9 @@ kotlin {
                 implementation("io.ktor:ktor-client-core:3.0.0")
                 implementation("io.ktor:ktor-client-content-negotiation:3.0.0")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
+                implementation("io.ktor:ktor-server-core:3.0.0")
+                implementation("io.ktor:ktor-server-cio:3.0.0")
+                implementation("io.ktor:ktor-server-content-negotiation:3.0.0")
             }
         }
         val unixMain by creating {
@@ -98,6 +101,7 @@ kotlin {
                 implementation(kotlin("test"))
                 implementation("io.ktor:ktor-client-mock:3.0.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+                implementation("io.ktor:ktor-server-test-host:3.0.0")
             }
         }
     }
