@@ -21,7 +21,7 @@ class NativeFridaBridge : FridaBridge {
     }
 
     override fun countInstances(className: String): Int = 0
-    override fun inspectClass(className: String): ClassInspectionResult = ClassInspectionResult(emptyList(), emptyList(), listOf("Nativo"))
+    override fun inspectClass(className: String): ClassInspectionResult = ClassInspectionResult(emptyList(), emptyList(), listOf("Native"))
     override fun listInstances(className: String): ListInstancesResult = ListInstancesResult(emptyList(), 0)
     override fun inspectInstance(className: String, id: String, offset: Int, limit: Int): InspectInstanceResult = InspectInstanceResult(emptyList())
     override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String = "Not implemented yet"

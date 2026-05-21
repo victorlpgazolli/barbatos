@@ -36,3 +36,10 @@
 - `src/commonMain/resources/`: Frida JS agents.
 - `scripts/`: Automation for SDK management and CI.
 - `web/openapi.yaml`: Single source of truth for the API contract.
+
+## Release & Distribution
+- **Tag Release**: `git tag -a v1.x.x -m "version description"`
+- **Production Build**: `make release` (assembles `dist/barbatos`)
+- **CI Pipelines**:
+  - **Validation**: Parallel jobs for Linux (x64/ARM64) and macOS.
+  - **Publishing**: Automated distribution to APT, Snap, and GitHub.

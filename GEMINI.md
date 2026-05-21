@@ -67,3 +67,20 @@ All endpoints must be validated in `src/commonTest/kotlin/rpc/RpcHandlerTest.kt`
 ### Documentation
 - **Language**: English only (code, comments, commits, and docs).
 - **Style**: No emojis, concise and technical tone.
+
+---
+
+## CI/CD & Publishing
+
+### GitHub Actions
+The project uses automated workflows for validation and distribution:
+- **Validation (`ci-validation.yml`)**: Triggered on every PR. Runs unit tests on macOS and Linux (x64/ARM64) and verifies native compilation.
+- **Release (`release.yml`)**: Triggered on tag push (`v*`). Builds production binaries, assembles Debian packages, builds Snaps, and publishes to:
+  - GitHub Releases
+  - Self-hosted APT Repository
+  - Snapcraft Store
+
+### Release Process
+1.  **Tagging**: `git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0`.
+2.  **SDK Management**: CI automatically downloads the correct Frida Devkit using `./scripts/download_frida_devkit.sh`.
+3.  **Artifacts**: A single unified binary `barbatos` is packaged for all supported platforms.

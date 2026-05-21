@@ -42,12 +42,6 @@ apps:
   barbatos:
     command: bin/barbatos
     plugs: [network, network-bind, adb-support, home]
-  bridge:
-    command: bin/barbatos-bridge
-    plugs: [network, network-bind, adb-support]
-  mcp:
-    command: bin/barbatos-bridge mcp
-    plugs: [network, adb-support]
 
 parts:
   # We just "dump" the pre-built binaries from our 'dist/' directory
@@ -56,6 +50,5 @@ parts:
     source: dist/
     organize:
       barbatos: bin/barbatos
-      barbatos-bridge: bin/barbatos-bridge
     stage-packages:
       - libcurl4

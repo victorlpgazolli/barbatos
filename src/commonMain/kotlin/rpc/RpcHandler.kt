@@ -6,7 +6,10 @@ import kotlinx.serialization.json.*
 data class HandlerResult(val body: String, val statusCode: Int)
 
 class RpcHandler(private val bridge: FridaBridge) {
-    val jsonParser = Json { ignoreUnknownKeys = true }
+    val jsonParser = Json { 
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     fun handle(requestJson: String): HandlerResult {
         val req = try {

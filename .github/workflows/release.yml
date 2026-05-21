@@ -184,27 +184,21 @@ jobs:
           mkdir -p artifacts/deb
           for arch in x64 arm64; do
             PKG_ARCH=$([[ "$arch" == "x64" ]] && echo "amd64" || echo "arm64")
-            for package in barbatos barbatos-bridge; do
-              PKG_DIR="pkg_tmp_${package}_${arch}"
-              mkdir -p "$PKG_DIR"
-              cp -r packaging/debian/$package/* "$PKG_DIR/"
+            package="barbatos"
+            PKG_DIR="pkg_tmp_${package}_${arch}"
+            mkdir -p "$PKG_DIR"
+            cp -r packaging/debian/$package/* "$PKG_DIR/"
 
-              mkdir -p "$PKG_DIR/usr/bin"
-              case $package in
-                barbatos) suffix="tui" ;;
-                barbatos-bridge) suffix="bridge" ;;
-              esac
-              
-              cp "artifacts/barbatos-linux-$arch-$suffix" "$PKG_DIR/usr/bin/$package"
-              chmod +x "$PKG_DIR/usr/bin/$package"
+            mkdir -p "$PKG_DIR/usr/bin"
+            cp "artifacts/barbatos-linux-$arch-tui" "$PKG_DIR/usr/bin/$package"
+            chmod +x "$PKG_DIR/usr/bin/$package"
 
-              sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
-              sed -i "s/Architecture: .*/Architecture: $PKG_ARCH/" "$PKG_DIR/DEBIAN/control"
+            sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
+            sed -i "s/Architecture: .*/Architecture: $PKG_ARCH/" "$PKG_DIR/DEBIAN/control"
 
-              DEB_FILE="artifacts/deb/${package}_${VERSION}_${arch}.deb"
-              dpkg-deb --build "$PKG_DIR" "$DEB_FILE"
-              rm -rf "$PKG_DIR"
-            done
+            DEB_FILE="artifacts/deb/${package}_${VERSION}_${arch}.deb"
+            dpkg-deb --build "$PKG_DIR" "$DEB_FILE"
+            rm -rf "$PKG_DIR"
           done
 
       - name: Publish to APT Repository
@@ -239,7 +233,6 @@ jobs:
         run: |
           mkdir -p dist
           cp artifacts/barbatos-linux-x64-tui dist/barbatos
-          cp artifacts/barbatos-linux-x64-bridge dist/barbatos-bridge
           chmod +x dist/*
 
       - name: Build Snap (x64)
@@ -253,7 +246,6 @@ jobs:
         run: |
           mkdir -p dist
           cp artifacts/barbatos-linux-arm64-tui dist/barbatos
-          cp artifacts/barbatos-linux-arm64-bridge dist/barbatos-bridge
           chmod +x dist/*
 
       - name: Build Snap (ARM64)
