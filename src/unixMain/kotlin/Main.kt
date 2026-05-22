@@ -16,22 +16,48 @@ fun main(args: Array<String>) {
         // Register tools
         val tools = listOf(
             ListClassesTool(bridge),
-            InspectClassTool(bridge)
+            InspectClassTool(bridge),
+            CountInstancesTool(bridge),
+            ListInstancesTool(bridge),
+            InspectInstanceTool(bridge),
+            GetInstanceAddressesTool(bridge),
+            SetFieldValueTool(bridge),
+            HookMethodTool(bridge),
+            GetHookEventsTool(bridge),
+            SetMethodImplementationTool(bridge),
+            RunOnceTool(bridge),
+            PrepareEnvironmentTool(bridge),
+            InjectGadgetFromScratchTool(bridge),
+            InjectJdwpTool(bridge),
+            PatchAndInstallIosAppTool(bridge),
+            CheckIosJailbreakStatusTool(bridge),
+            InjectJailbrokenIosTool(bridge),
+            CheckIosDeployStatusTool(bridge),
+            HealthCheckTool(bridge)
         )
         val mcpHandler = McpHandler(tools)
         
         while (true) {
-            // Using readlnOrNull (modern Kotlin Native equivalent)
             val line = readlnOrNull() ?: break
             if (line.isBlank()) continue
             
+            fprintf(stderr, ">> %s\n", line)
+            platform.posix.fflush(platform.posix.stderr)
+            
             try {
                 val response = mcpHandler.handle(line)
-                // Guaranteed that only JSON goes to stdout
-                println(response)
+                if (response != null) {
+                    fprintf(stderr, "<< %s\n", response)
+                    platform.posix.fflush(platform.posix.stderr)
+                    println(response)
+                    platform.posix.fflush(platform.posix.stdout)
+                }
             } catch (e: Exception) {
-                // Last line of defense for fatal crashes
-                println("""{"jsonrpc": "2.0", "error": {"code": -32603, "message": "Fatal: ${e.message}"}, "id": null}""")
+                val error = """{"jsonrpc": "2.0", "error": {"code": -32603, "message": "Fatal: ${e.message}"}, "id": null}"""
+                println(error)
+                platform.posix.fflush(platform.posix.stdout)
+                fprintf(stderr, "MCP Loop Error: %s\n", e.message)
+                platform.posix.fflush(platform.posix.stderr)
             }
         }
     } else {

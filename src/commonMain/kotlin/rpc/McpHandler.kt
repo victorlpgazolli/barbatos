@@ -12,11 +12,17 @@ class McpMethodNotFoundException(message: String) : Exception(message)
 class McpHandler(private val tools: List<McpTool>) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun handle(requestJson: String): String {
+    fun handle(requestJson: String): String? {
         val req = try {
             json.decodeFromString<RpcRequest>(requestJson)
         } catch (e: Exception) {
             return json.encodeToString(RpcErrorResponse(error = RpcError(-32700, "Parse error"), id = null))
+        }
+
+        // If it's a notification (no id), we don't send a response
+        if (req.id == null) {
+            processMethod(req.method, req.params)
+            return null
         }
 
         return try {
@@ -33,10 +39,21 @@ class McpHandler(private val tools: List<McpTool>) {
         return when (method) {
             "initialize" -> json.encodeToJsonElement(McpInitializeResult(
                 protocolVersion = "2024-11-05",
-                capabilities = buildJsonObject { putJsonObject("tools") {} },
-                serverInfo = McpServerInfo("barbatos-bridge", "1.0.0")
+                capabilities = buildJsonObject { 
+                    putJsonObject("tools") {} 
+                    putJsonObject("resources") {}
+                    putJsonObject("prompts") {}
+                },
+                serverInfo = McpServerInfo("barbatos-bridge", "1.0.2")
             ))
             "notifications/initialized" -> JsonNull
+            "prompts/list" -> {
+                // Log to stderr so user can see it
+                platform.posix.fprintf(platform.posix.stderr, "MCP: Handling prompts/list\n")
+                platform.posix.fflush(platform.posix.stderr)
+                buildJsonObject { putJsonArray("prompts") {} }
+            }
+            "resources/list" -> buildJsonObject { putJsonArray("resources") {} }
             "tools/list" -> json.encodeToJsonElement(McpToolsListResult(
                 tools.map { McpToolDef(it.name, it.description, it.inputSchema) }
             ))
