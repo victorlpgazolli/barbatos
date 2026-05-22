@@ -1,6 +1,7 @@
 package rpc
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
@@ -53,3 +54,8 @@ data class McpCallToolResult(
     val content: List<McpContent>,
     val isError: Boolean = false
 )
+
+val mcpJson = Json {
+    encodeDefaults = true
+    ignoreUnknownKeys = true
+}
