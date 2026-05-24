@@ -78,8 +78,18 @@ class JdwpManagerImpl(private val adbManager: AdbManager) : JdwpManager {
                 
                 // Push Gadget and Config using ADB to /data/local/tmp/
                 adbManager.pushFile(serial, libraryPath, "/data/local/tmp/frida-gadget.so")
+                
                 val configJson = "{\"interaction\":{\"type\":\"listen\",\"address\":\"127.0.0.1\",\"port\":27042,\"on_port_conflict\":\"replace\",\"on_load\":\"resume\"}}"
-                adbManager.executeShellCommand(serial, "echo '$configJson' > /data/local/tmp/frida-gadget.config")
+                val localConfigPath = utils.BinaryManager.getLocalPath("frida-gadget", "config", "json")
+                
+                // Write local config file
+                val file = platform.posix.fopen(localConfigPath, "w")
+                if (file != null) {
+                    platform.posix.fputs(configJson, file)
+                    platform.posix.fclose(file)
+                }
+                
+                adbManager.pushFile(serial, localConfigPath, "/data/local/tmp/frida-gadget.config")
                 
                 // Copy files inside the process to bypass permission issues on non-rooted devices
                 val cpGadget = "cp /data/local/tmp/frida-gadget.so /data/data/$packageName/frida-gadget.so"
