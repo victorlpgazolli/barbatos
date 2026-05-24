@@ -16,10 +16,10 @@ object BinaryManager {
     private const val FRIDA_VERSION = "17.9.1"
 
     fun mapArch(uname: String): String = when {
-        uname.contains("aarch64") -> "arm64"
+        uname.contains("arm64") || uname.contains("aarch64") -> "arm64"
         uname.contains("arm") -> "arm"
         uname.contains("x86_64") -> "x86_64"
-        uname.contains("i686") || uname.contains("i386") -> "x86"
+        uname.contains("i686") || uname.contains("i386") || uname.contains("x86") -> "x86"
         else -> "unknown"
     }
 

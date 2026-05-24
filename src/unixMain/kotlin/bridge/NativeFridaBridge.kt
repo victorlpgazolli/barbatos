@@ -136,14 +136,26 @@ class NativeFridaBridge : FridaBridge {
             if (target == "Gadget" || target == "127.0.0.1") {
                 // Modo Remoto (Gadget injetado via JDWP/TCP)
                 val options = frida_remote_device_options_new()
+                platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] Connecting to remote device at 127.0.0.1:27042...\n")
                 device = frida_device_manager_add_remote_device_sync(manager, "127.0.0.1:27042", options, null, error.ptr)
                 if (device == null) {
-                    throw RuntimeException("Frida Gadget not found at 127.0.0.1:27042. Is the injection complete?")
+                    val msg = error.value?.pointed?.message?.toKString() ?: "Unknown error"
+                    throw RuntimeException("Frida Gadget not found at 127.0.0.1:27042. Error: $msg")
                 }
+                
+                platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] Remote device added. Searching for 'Gadget' process...\n")
                 // No modo Gadget remoto, o nome do processo é fixo como "Gadget"
-                val process = frida_device_get_process_by_name_sync(device, "Gadget", null, null, null)
-                if (process == null) throw RuntimeException("Could not find 'Gadget' process on remote device")
+                var process: CPointer<FridaProcess>? = null
+                for (i in 0..10) {
+                    process = frida_device_get_process_by_name_sync(device, "Gadget", null, null, null)
+                    if (process != null) break
+                    platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] 'Gadget' process not found, retrying ($i/10)...\n")
+                    platform.posix.sleep(1u)
+                }
+                
+                if (process == null) throw RuntimeException("Could not find 'Gadget' process on remote device after 10 retries")
                 targetPid = frida_process_get_pid(process)
+                platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] Found 'Gadget' process with PID $targetPid\n")
             } else {
                 // Modo Local/USB
                 val deviceTypes = listOf(FridaDeviceType.FRIDA_DEVICE_TYPE_USB, FridaDeviceType.FRIDA_DEVICE_TYPE_LOCAL)
@@ -270,8 +282,13 @@ class NativeFridaBridge : FridaBridge {
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
                 steps.add(InjectionStep("load_agent", "Load Frida instrumentation agent", "running"))
+                // Give some time for the gadget to start its TCP server after JDWP resume
+                platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] JDWP injection complete. Waiting 5s for Gadget to start TCP server...\n")
+                platform.posix.sleep(5u)
+                
                 // Connect to the gadget we just injected
                 prepareEnvironment("Gadget") // When gadget is listening on 27042, Frida sees it as "Gadget" process
+                platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] Agent loaded successfully via Gadget.\n")
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
                 InjectionProgressResult("completed", steps)
