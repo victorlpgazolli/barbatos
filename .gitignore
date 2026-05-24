@@ -50,6 +50,7 @@ build/
 .idea/uiDesigner.xml
 .idea/copilot.data.migration.*.xml
 .idea/junie.xml
+.idea/caches
 node_modules/
 .rpt2_cache/
 local.properties
@@ -89,3 +90,4 @@ web/pool/.worktrees/
 src/nativeInterop/cinterop/libfrida-core.a
 src/nativeInterop/cinterop/*.gir
 src/nativeInterop/cinterop/*.h
+frida*.tar.*

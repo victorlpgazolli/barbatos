@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-FRIDA_VERSION="16.6.6" # Use a specific version
+FRIDA_VERSION="17.9.1" # Use a specific version
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=${1:-$(uname -m)}
 
