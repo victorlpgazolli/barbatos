@@ -191,7 +191,90 @@ class NativeFridaBridge : FridaBridge {
 
         return PrepareEnvResult(0, "Ready", 0, "Attached to $target")
     }
-    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult = InjectionProgressResult("not_implemented", emptyList())
+    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult {
+        val adb = AdbManagerImpl()
+        val devices = try { adb.listDevices() } catch (e: Exception) { emptyList() }
+        if (devices.isEmpty()) {
+            return InjectionProgressResult("error", listOf(InjectionStep("get_target", "No devices found", "error")), error_message = "No ADB devices connected")
+        }
+        
+        val serial = devices.first()
+        val steps = mutableListOf<InjectionStep>()
+        
+        return try {
+            steps.add(InjectionStep("get_target", "Identify target application", "running"))
+            val (pkg, pid) = AndroidEnv.getFrontmostApp(serial)
+            steps[0] = steps[0].copy(status = "completed")
+
+            val isRooted = AndroidEnv.isRooted(serial)
+            val isDebuggable = AndroidEnv.isDebuggable(serial, pkg)
+
+            if (isRooted) {
+                // Root Path (frida-server)
+                steps.add(InjectionStep("prepare_server", "Prepare frida-server on device", "running"))
+                
+                val arch = utils.Shell.execute("adb -s $serial shell getprop ro.product.cpu.abi").output.trim()
+                val mappedArch = utils.BinaryManager.mapArch(arch)
+                
+                val serverLocal = kotlinx.coroutines.runBlocking { 
+                    utils.BinaryManager.ensureBinary("frida-server", mappedArch, "xz") 
+                }
+                adb.pushFile(serial, serverLocal, "/data/local/tmp/barbatos-server")
+                adb.executeShellCommand(serial, "chmod 755 /data/local/tmp/barbatos-server")
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                steps.add(InjectionStep("start_server", "Start frida-server as root", "running"))
+                adb.executeShellCommand(serial, "su -c 'pkill -f barbatos-server 2>/dev/null; true'")
+                // Run in background using a shell trick since our execute is blocking
+                utils.Shell.execute("adb -s $serial shell su -c /data/local/tmp/barbatos-server &", redirectStderr = false)
+                platform.posix.sleep(2u)
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                steps.add(InjectionStep("load_agent", "Attach to process and load agent", "running"))
+                prepareEnvironment(pkg)
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                InjectionProgressResult("completed", steps)
+            } else if (isDebuggable) {
+                // Gadget Path (JDWP)
+                steps.add(InjectionStep("setup_adb", "Configure ADB port forwards", "running"))
+                adb.executeShellCommand(serial, "forward --remove-all")
+                adb.executeShellCommand(serial, "forward tcp:5005 jdwp:$pid")
+                adb.executeShellCommand(serial, "forward tcp:27042 tcp:27042")
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                steps.add(InjectionStep("push_gadget", "Push Gadget library to device", "running"))
+                val arch = utils.Shell.execute("adb -s $serial shell getprop ro.product.cpu.abi").output.trim()
+                val mappedArch = utils.BinaryManager.mapArch(arch)
+                val gadgetLocal = kotlinx.coroutines.runBlocking { 
+                    utils.BinaryManager.ensureBinary("frida-gadget", mappedArch, "so") 
+                }
+                // JdwpManager.load already handles pushing to /data/local/tmp/ and then copying inside
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                steps.add(InjectionStep("inject_jdwp", "Trigger JDWP gadget injection", "running"))
+                val jdwp = JdwpManagerImpl(adb)
+                val jdwpRes = jdwp.load("127.0.0.1", 5005, gadgetLocal, null, pkg, serial)
+                if (jdwpRes.isFailure) throw jdwpRes.exceptionOrNull()!!
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                steps.add(InjectionStep("load_agent", "Load Frida instrumentation agent", "running"))
+                // Connect to the gadget we just injected
+                prepareEnvironment("Gadget") // When gadget is listening on 27042, Frida sees it as "Gadget" process
+                steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
+                
+                InjectionProgressResult("completed", steps)
+            } else {
+                throw Exception("App '$pkg' is not debuggable and device is not rooted. Use a rooted device or a debuggable app.")
+            }
+        } catch (e: Exception) {
+            val lastStep = steps.lastOrNull()
+            if (lastStep != null && lastStep.status == "running") {
+                steps[steps.size - 1] = lastStep.copy(status = "error")
+            }
+            InjectionProgressResult("error", steps, error_message = e.message)
+        }
+    }
     
     override fun injectJdwp(target: String, port: Int, packageName: String): String {
         val adbManager = AdbManagerImpl()
