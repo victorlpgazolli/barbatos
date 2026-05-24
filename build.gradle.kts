@@ -157,6 +157,7 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
                 implementation("io.ktor:ktor-client-core:3.0.0")
+                implementation("io.ktor:ktor-network:3.0.0")
                 implementation("io.ktor:ktor-client-content-negotiation:3.0.0")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
                 implementation("io.ktor:ktor-server-core:3.0.0")
@@ -243,11 +244,6 @@ fun registerRpcTask(taskName: String, methodName: String, params: Map<String, An
                 "-d", """{"jsonrpc":"2.0","method":"$methodName","params":$paramsJson,"id":1}"""
             )
         })
-
-        // Print a nice message before execution
-        doFirst {
-            println("> Executing RPC Method: $methodName")
-        }
     }
 }
 

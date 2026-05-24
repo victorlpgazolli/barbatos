@@ -189,7 +189,7 @@ class RpcHandlerTest {
         application { module(bridge) }
         val response = client.post("/rpc") {
             contentType(ContentType.Application.Json)
-            setBody("""{"jsonrpc": "2.0", "method": "prepareEnvironment", "id": 13}""")
+            setBody("""{"jsonrpc": "2.0", "method": "prepareEnvironment", "params": {"target": "com.example.app"}, "id": 13}""")
         }
         assertEquals(HttpStatusCode.OK, response.status)
         val res = kotlinx.serialization.json.Json.decodeFromString(RpcResponse.serializer(), response.bodyAsText())

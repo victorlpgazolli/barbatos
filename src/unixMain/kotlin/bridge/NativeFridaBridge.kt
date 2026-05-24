@@ -2,7 +2,9 @@ package bridge
 
 import bridge.NativeFridaBridge.Companion.FridaRpcManager
 import frida.*
+import io.ktor.client.utils.EmptyContent.status
 import kotlinx.cinterop.*
+import kotlinx.cinterop.ptr
 import kotlinx.serialization.json.Json
 import rpc.*
 import utils.EmbeddedScripts
@@ -154,7 +156,7 @@ class NativeFridaBridge : FridaBridge {
             }
 
             if (device == null) {
-                throw RuntimeException("Process '$target' not found on any USB or Local device. Try using the package name (e.g., co.stone.sample) instead of the display name.")
+                throw RuntimeException("Process '$target' not found on any USB or Local device. Try using the package name instead of the display name.")
             }
 
             // 3. Attach ao processo
@@ -190,10 +192,141 @@ class NativeFridaBridge : FridaBridge {
         return PrepareEnvResult(0, "Ready", 0, "Attached to $target")
     }
     override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult = InjectionProgressResult("not_implemented", emptyList())
-    override fun injectJdwp(target: String, port: Int, packageName: String): String = "Not implemented yet"
+    
+    override fun injectJdwp(target: String, port: Int, packageName: String): String {
+        val adbManager = AdbManagerImpl()
+        val jdwpManager = JdwpManagerImpl(adbManager)
+        
+        // Use default path for gadget
+        val home = platform.posix.getenv("HOME")?.toKString() ?: "/tmp"
+        val libraryPath = "$home/.cache/barbatos/frida-gadget.so"
+        
+        // Serial is target if it's localhost or an IP, otherwise we might need to list devices
+        // For now, let's assume serial is the target if it's an IP, or null to let ADB decide.
+        val serial = if (target == "127.0.0.1" || target == "localhost") "" else target
+        
+        val result = jdwpManager.load(
+            target = target,
+            port = port,
+            libraryPath = libraryPath,
+            packageName = packageName,
+            serial = serial
+        )
+        
+        return if (result.isSuccess) "Success" else "Error: ${result.exceptionOrNull()?.message}"
+    }
     
     override fun healthCheck(): HealthCheckResponse {
-        return HealthCheckResponse("degraded", mapOf("frida_native" to CheckResponse("warning", "Native Core initialized but methods are not yet implemented")))
+        val checks = mutableMapOf<String, CheckResponse>()
+        val adb = AdbManagerImpl()
+        var serial: String? = null
+        val devices = try { adb.listDevices() } catch (e: Exception) { emptyList() }
+        
+        if (devices.isNotEmpty()) {
+            serial = devices.first()
+            checks["adb"] = CheckResponse("ok", "Device state: device")
+        } else {
+            checks["adb"] = CheckResponse("error", "adb get-state failed: no devices/emulators found", fix = "Run: adb devices — ensure a device is listed as 'device'")
+        }
+
+        var isRooted: Boolean? = null
+        var isDebuggable: Boolean? = null
+        var device: CPointer<FridaDevice>? = null
+        var pid: Int? = null
+
+        if (serial != null) {
+            try {
+                val rootRes = utils.Shell.execute("adb -s $serial shell su -c id")
+                isRooted = rootRes.output.contains("uid=0")
+                checks["android_root"] = CheckResponse(if (isRooted == true) "ok" else "info", if (isRooted == true) "Device is rooted" else "Device probably not rooted")
+            } catch (e: Exception) {
+                checks["android_root"] = CheckResponse("unknown", "Could not check root: ${e.message}")
+            }
+
+            try {
+                val topRes = utils.Shell.execute("adb -s $serial shell dumpsys window | grep -E \"mCurrentFocus\" | xargs | cut -d' ' -f3 | cut -d'/' -f1 | tr -d ' \\r\\n'")
+                val pkgName = topRes.output.trim()
+                if (pkgName.isNotBlank()) {
+                    val pidOutput = utils.Shell.execute("adb -s $serial shell pidof $pkgName").output.trim().takeIf { it.isNotBlank() }
+                        ?: throw Exception("PID not found for package '$pkgName'")
+
+                    pid = pidOutput.toIntOrNull()
+                        ?: throw Exception("Could not fetch frontmost app PID: '$pidOutput'")
+
+                    val debuggableRes = try {
+                        utils.Shell.execute("adb -s $serial shell run-as $pkgName id")
+                    } catch (e: Exception) { utils.ShellResult("", -1) }
+                    isDebuggable = debuggableRes.output.contains("uid=")
+
+                    val status = if (isDebuggable || isRooted == true) "ok" else "warning"
+                    checks["android_frontmost_app"] = CheckResponse(
+                        status = status,
+                        message = "App on screen: $pkgName (Debuggable: $isDebuggable)",
+                        fix = null,
+                        `package` = pkgName,
+                        pid = pid,
+                        debuggable = isDebuggable
+                    )
+                } else {
+                    checks["android_frontmost_app"] = CheckResponse("unknown", "Could not fetch frontmost app: Parse failed")
+                }
+            } catch (e: Exception) {
+                checks["android_frontmost_app"] = CheckResponse("unknown", "Could not fetch frontmost app: ${e.message}")
+            }
+        }
+        if ((checks["android_root"]?.status != "ok") && isDebuggable == false) {
+            checks["android_frontmost_app"] = checks["android_frontmost_app"]!!.copy(
+                status = "error",
+                fix = "Frontmost app is not debuggable and device is not rooted, please open a debuggable app on the device and try again"
+            )
+        }
+
+        try {
+            memScoped {
+                val error = allocPointerTo<GError>()
+                frida_device_manager_enumerate_devices_sync(manager, null, error.ptr)
+                if (error.value != null) throw RuntimeException(error.value?.pointed?.message?.toKString())
+                device = frida_device_manager_get_device_by_type_sync(manager, FridaDeviceType.FRIDA_DEVICE_TYPE_USB, 0, null, null)
+
+            }
+            checks["frida_device"] = CheckResponse("ok", "Frida device enumeration succeeded")
+        } catch (e: Exception) {
+            checks["frida_device"] = CheckResponse("error", "Frida device enumeration failed: ${e.message}", fix = "Check USB debugging is enabled; re-run")
+        }
+
+        try {
+            if (session != null) {
+                val isDetached = frida_session_is_detached(session) != 0
+                checks["frida_connection"] = CheckResponse("ok", "Frida session already exists")
+                checks["session"] = CheckResponse(if (isDetached) "error" else "ok", if (isDetached) "Session is detached" else "Session is active")
+            } else {
+                try {
+                    memScoped {
+                        val error = allocPointerTo<GError>()
+                        frida_device_attach_sync(device, pid!!.toUInt(), null, null, error.ptr)
+                    }
+                    checks["frida_connection"] = CheckResponse("warning", "Successfully attached to the frontmost application but no session exists", fix = "Please call prepareEnvironment to start session")
+                    checks["session"] = CheckResponse("skipped", "No active session (injection not yet run)")
+                } catch (error: Exception) {
+                    checks["frida_connection"] = CheckResponse("error", "Failed to attach to the frontmost application, error: $error", fix = "Please call prepareEnvironment to attach to the frontmost application")
+                    checks["session"] = CheckResponse("skipped", "No active session (injection not yet run)")
+                }
+            }
+        } catch (e: Exception) {
+            checks["frida_connection"] = CheckResponse("error", "Frida device connection failed: ${e.message}", fix = "Check USB debugging is enabled; re-run")
+            checks["session"] = CheckResponse("skipped", "No active session (injection not yet run)")
+        }
+
+
+        checks["injection"] = CheckResponse("ok", "No injection running")
+
+        val overall = if (checks.values.any { it.status == "error" }) "degraded" else "ok"
+        val recommendations = checks.values
+            .sortedBy { it.status }
+            .filter { (it.status == "warning" || it.status == "error") && it.fix != null }.mapNotNull { it.fix }
+        val recommendation = recommendations.firstOrNull() ?: if (checks["frida_connection"]?.status == "ok") "Ready to receive debug commands." else null
+
+        return HealthCheckResponse(overall, checks, recommendation)
     }
 
     override fun patchAndInstallIosApp(appPath: String): String = "Not implemented yet"
