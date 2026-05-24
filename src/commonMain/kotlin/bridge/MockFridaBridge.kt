@@ -63,8 +63,8 @@ class MockFridaBridge : FridaBridge {
         return listOf("0x123", "0x456")
     }
 
-    override fun prepareEnvironment(): rpc.PrepareEnvResult {
-        return rpc.PrepareEnvResult(1234, "com.example", 8080, "device1")
+    override fun prepareEnvironment(target: String): rpc.PrepareEnvResult {
+        return rpc.PrepareEnvResult(1234, "com.example", 8080, "Attached to $target")
     }
 
     override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult {

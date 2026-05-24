@@ -93,7 +93,8 @@ class RpcHandler(private val bridge: FridaBridge) {
                 jsonParser.encodeToJsonElement(res)
             }
             "prepareEnvironment" -> {
-                val res = bridge.prepareEnvironment()
+                val p = params?.let { jsonParser.decodeFromJsonElement<PrepareEnvParams>(it) } ?: throw Exception("Missing params")
+                val res = bridge.prepareEnvironment(p.target)
                 jsonParser.encodeToJsonElement(res)
             }
             "injectGadgetFromScratch" -> {

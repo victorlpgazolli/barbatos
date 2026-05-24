@@ -1,0 +1,14 @@
+{
+  "name": "barbatos-agent",
+  "version": "1.0.0",
+  "description": "Frida agents for Barbatos",
+  "main": "agent.js",
+  "dependencies": {
+    "frida-java-bridge": "7.0.13",
+    "frida-objc-bridge": "8.0.6",
+    "frida-swift-bridge": "3.0.2"
+  },
+  "devDependencies": {
+    "frida-compile": "19.0.5"
+  }
+}

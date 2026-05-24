@@ -1,12 +1,19 @@
 import server.startServer
 import bridge.NativeFridaBridge
+import bridge.MockFridaBridge
 import rpc.*
 import rpc.tools.*
 import platform.posix.fprintf
 import platform.posix.stderr
 
 fun main(args: Array<String>) {
-    val bridge = NativeFridaBridge()
+    val isMock = args.contains("--mock")
+    val bridge = if (isMock) {
+        fprintf(stderr, "Using MockFridaBridge (Simulation Mode)\n")
+        MockFridaBridge()
+    } else {
+        NativeFridaBridge()
+    }
     
     if (args.contains("mcp") || args.contains("--mcp")) {
         // IMPORTANT: Redirect all system logs to stderr to keep stdout clean for JSON-RPC

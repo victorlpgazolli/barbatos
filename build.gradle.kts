@@ -22,11 +22,31 @@ val downloadFridaDevkitTask = tasks.register<Exec>("downloadFridaDevkit") {
     outputs.file("src/nativeInterop/cinterop/libfrida-core.a")
 }
 
+val compileAgentsTask = tasks.register("compileAgents") {
+    val inputDir = file("src/commonMain/resources")
+    val outputDir = layout.buildDirectory.dir("generated/agents").get().asFile
+    
+    inputs.dir(inputDir)
+    outputs.dir(outputDir)
+    
+    doLast {
+        outputDir.mkdirs()
+        inputDir.walkTopDown().filter { it.isFile && it.extension == "js" }.forEach { file ->
+            println("Compiling ${file.name}...")
+            val outputFile = File(outputDir, file.name)
+            exec {
+                commandLine("npx", "frida-compile", file.absolutePath, "-o", outputFile.absolutePath)
+            }
+        }
+    }
+}
+
 val generateResourcesTask = tasks.register("generateResources") {
-    val resourcesDir = file("src/commonMain/resources")
+    val compiledDir = layout.buildDirectory.dir("generated/agents").get().asFile
     val outputDir = layout.buildDirectory.dir("generated/resources/src/utils").get().asFile
 
-    inputs.dir(resourcesDir)
+    dependsOn(compileAgentsTask)
+    inputs.dir(compiledDir)
     outputs.dir(outputDir)
 
     doLast {
@@ -38,8 +58,8 @@ val generateResourcesTask = tasks.register("generateResources") {
         scriptBuilder.appendLine()
         scriptBuilder.appendLine("object EmbeddedScripts {")
 
-        if (resourcesDir.exists()) {
-            resourcesDir.walkTopDown().filter { it.isFile && it.extension == "js" }.forEach { file ->
+        if (compiledDir.exists()) {
+            compiledDir.walkTopDown().filter { it.isFile && it.extension == "js" }.forEach { file ->
                 val variableName = file.nameWithoutExtension.replace(".", "_")
                 val content = file.readText().replace("$", "${"$"}{'$'}")
 
@@ -76,7 +96,7 @@ kotlin {
             executable {
                 entryPoint = "main"
                 baseName = "barbatos"
-                linkerOpts("-framework", "IOKit", "-framework", "AppKit")
+                linkerOpts("-framework", "IOKit", "-framework", "AppKit", "-framework", "Security")
             }
         }
         compilations.getByName("main") {

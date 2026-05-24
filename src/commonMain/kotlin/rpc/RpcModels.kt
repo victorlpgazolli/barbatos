@@ -37,6 +37,7 @@ data class RpcErrorResponse(val jsonrpc: String = "2.0", val error: RpcError, va
 @Serializable data class RunOnceParams(val className: String, val methodSig: String, val code: String)
 @Serializable data class GetInstanceAddressesParams(val className: String)
 
+@Serializable data class PrepareEnvParams(val target: String)
 @Serializable data class InjectGadgetParams(val with_logs: Boolean = true, val limit: Int = 100)
 @Serializable data class InjectJdwpParams(val target: String, val port: Int, val package_name: String)
 

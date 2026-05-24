@@ -8,10 +8,17 @@ import rpc.*
 class PrepareEnvironmentTool(private val bridge: FridaBridge) : McpTool {
     override val name = "prepare_environment"
     override val description = "Prepare the target environment."
-    override val inputSchema = buildJsonObject { put("type", "object") }
+    override val inputSchema = buildJsonObject {
+        put("type", "object")
+        putJsonObject("properties") {
+            putJsonObject("target") { put("type", "string") }
+        }
+        putJsonArray("required") { add("target") }
+    }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val res = bridge.prepareEnvironment()
+            val target = args?.get("target")?.jsonPrimitive?.content ?: "Gadget"
+            val res = bridge.prepareEnvironment(target)
             McpCallToolResult(listOf(McpContent("text", mcpJson.encodeToString(res))))
         } catch (e: Exception) {
             McpCallToolResult(listOf(McpContent("text", "Error: ${e.message}")), true)
