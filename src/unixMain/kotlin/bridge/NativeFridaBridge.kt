@@ -126,37 +126,48 @@ class NativeFridaBridge : FridaBridge {
         memScoped {
             val error = allocPointerTo<GError>()
             
-            // 1. Enumarar devices para garantir que o manager está pronto
+            // 1. Enumarar devices
             frida_device_manager_enumerate_devices_sync(manager, null, error.ptr)
             if (error.value != null) throw RuntimeException("Failed to enumerate devices: ${error.value?.pointed?.message?.toKString()}")
             
-            // 2. Tentar encontrar o processo em dispositivos USB ou Local
-            val deviceTypes = listOf(FridaDeviceType.FRIDA_DEVICE_TYPE_USB, FridaDeviceType.FRIDA_DEVICE_TYPE_LOCAL)
             var device: CPointer<FridaDevice>? = null
             var targetPid: UInt = 0u
 
-            for (type in deviceTypes) {
-                val d = frida_device_manager_get_device_by_type_sync(manager, type, 0, null, null) ?: continue
-                
-                val pid = target.toIntOrNull()
-                if (pid != null) {
-                    // Se for PID, assumimos este device (o primeiro que responder)
-                    device = d
-                    targetPid = pid.toUInt()
-                    break
-                } else {
-                    // Tenta achar o processo pelo nome/identificador neste device
-                    val process = frida_device_get_process_by_name_sync(d, target, null, null, null)
-                    if (process != null) {
+            if (target == "Gadget" || target == "127.0.0.1") {
+                // Modo Remoto (Gadget injetado via JDWP/TCP)
+                val options = frida_remote_device_options_new()
+                device = frida_device_manager_add_remote_device_sync(manager, "127.0.0.1:27042", options, null, error.ptr)
+                if (device == null) {
+                    throw RuntimeException("Frida Gadget not found at 127.0.0.1:27042. Is the injection complete?")
+                }
+                // No modo Gadget remoto, o nome do processo é fixo como "Gadget"
+                val process = frida_device_get_process_by_name_sync(device, "Gadget", null, null, null)
+                if (process == null) throw RuntimeException("Could not find 'Gadget' process on remote device")
+                targetPid = frida_process_get_pid(process)
+            } else {
+                // Modo Local/USB
+                val deviceTypes = listOf(FridaDeviceType.FRIDA_DEVICE_TYPE_USB, FridaDeviceType.FRIDA_DEVICE_TYPE_LOCAL)
+                for (type in deviceTypes) {
+                    val d = frida_device_manager_get_device_by_type_sync(manager, type, 0, null, null) ?: continue
+                    
+                    val pid = target.toIntOrNull()
+                    if (pid != null) {
                         device = d
-                        targetPid = frida_process_get_pid(process)
+                        targetPid = pid.toUInt()
                         break
+                    } else {
+                        val process = frida_device_get_process_by_name_sync(d, target, null, null, null)
+                        if (process != null) {
+                            device = d
+                            targetPid = frida_process_get_pid(process)
+                            break
+                        }
                     }
                 }
             }
 
             if (device == null) {
-                throw RuntimeException("Process '$target' not found on any USB or Local device. Try using the package name instead of the display name.")
+                throw RuntimeException("Process '$target' not found on any USB or Local device.")
             }
 
             // 3. Attach ao processo
@@ -238,9 +249,9 @@ class NativeFridaBridge : FridaBridge {
             } else if (isDebuggable) {
                 // Gadget Path (JDWP)
                 steps.add(InjectionStep("setup_adb", "Configure ADB port forwards", "running"))
-                adb.executeShellCommand(serial, "forward --remove-all")
-                adb.executeShellCommand(serial, "forward tcp:5005 jdwp:$pid")
-                adb.executeShellCommand(serial, "forward tcp:27042 tcp:27042")
+                adb.removeForwardAll(serial)
+                adb.forwardJdwp(serial, 5005, pid)
+                adb.forwardPort(serial, 27042, 27042)
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
                 steps.add(InjectionStep("push_gadget", "Push Gadget library to device", "running"))
