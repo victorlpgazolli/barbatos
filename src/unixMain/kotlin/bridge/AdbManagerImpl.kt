@@ -30,6 +30,12 @@ class AdbManagerImpl : AdbManager {
     override fun forwardPort(serial: String, localPort: Int, remotePort: Int): String =
         adb(serial, "forward", "tcp:$localPort", "tcp:$remotePort")
 
+    override fun forwardJdwp(serial: String, localPort: Int, pid: Int): String =
+        adb(serial, "forward", "tcp:$localPort", "jdwp:$pid")
+
+    override fun removeForwardAll(serial: String): String =
+        adb(serial, "forward", "--remove-all")
+
     override fun reversePort(serial: String, remotePort: Int, localPort: Int): String =
         adb(serial, "reverse", "tcp:$remotePort", "tcp:$localPort")
 
