@@ -8,6 +8,9 @@ import rpc.ListInstancesResult
 interface FridaBridge {
     // Methods will be added here as we migrate endpoints
     fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String>
+    fun listClassesStream(searchParam: String, onChunk: (List<String>) -> Unit, onComplete: () -> Unit)
+    fun pingJava(): String
+    fun testRpc(): String
     fun countInstances(className: String): Int
     fun inspectClass(className: String): ClassInspectionResult
     fun listInstances(className: String): ListInstancesResult
@@ -20,7 +23,7 @@ interface FridaBridge {
     fun runOnce(className: String, methodSig: String, code: String): String
     fun getInstanceAddresses(className: String): List<String>
     
-    fun prepareEnvironment(target: String): rpc.PrepareEnvResult
+    fun prepareEnvironment(target: String, pid: Int? = null): rpc.PrepareEnvResult
     fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult
     fun injectJdwp(target: String, port: Int, packageName: String): String
     fun healthCheck(): rpc.HealthCheckResponse

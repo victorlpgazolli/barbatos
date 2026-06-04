@@ -18,7 +18,7 @@ class PrepareEnvironmentTool(private val bridge: FridaBridge) : McpTool {
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
             val target = args?.get("target")?.jsonPrimitive?.content ?: "Gadget"
-            val res = bridge.prepareEnvironment(target)
+            val res = bridge.prepareEnvironment(target,)
             McpCallToolResult(listOf(McpContent("text", mcpJson.encodeToString(res))))
         } catch (e: Exception) {
             McpCallToolResult(listOf(McpContent("text", "Error: ${e.message}")), true)

@@ -43,6 +43,14 @@ class RpcHandler(private val bridge: FridaBridge) {
                 val res = bridge.listClasses(p.search_param, p.app_package, p.offset, p.limit)
                 jsonParser.encodeToJsonElement(res)
             }
+            "debugPing" -> {
+                val res = bridge.pingJava()
+                jsonParser.encodeToJsonElement(res)
+            }
+            "testRpc" -> {
+                val res = bridge.testRpc()
+                jsonParser.encodeToJsonElement(res)
+            }
             "countInstances" -> {
                 val p = params?.let { jsonParser.decodeFromJsonElement<CountInstancesParams>(it) } ?: throw Exception("Missing params")
                 val res = bridge.countInstances(p.className)

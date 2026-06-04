@@ -2,9 +2,14 @@ package bridge
 
 import bridge.NativeFridaBridge.Companion.FridaRpcManager
 import frida.*
-import io.ktor.client.utils.EmptyContent.status
 import kotlinx.cinterop.*
 import kotlinx.cinterop.ptr
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import rpc.*
 import utils.EmbeddedScripts
@@ -16,41 +21,61 @@ fun onFridaMessage(
     data: CPointer<GBytes>?,
     userData: gpointer?
 ) {
+    println("[DEBUG] Received Frida message: ${message?.toKString()}")
     val jsonStr = message?.toKString() ?: return
+
+    // Log para debug
+    if (!jsonStr.contains("class_chunk")) {
+        platform.posix.fprintf(platform.posix.stderr, "[NativeBridge] Frida Message: %s\n", jsonStr)
+        platform.posix.fflush(platform.posix.stderr)
+    }
 
     // O Frida envelopa o retorno RPC assim:
     // {"type": "send", "payload": ["ok", "req-id", <resultado_json>]}
-    // ou
-    // {"type": "send", "payload": ["error", "req-id", <stacktrace>]}
-
-    // NOTA: Em produção, use kotlinx.serialization para parsear isso de forma segura.
-    // Aqui faremos uma extração simples para ilustrar o conceito.
-
+    
     if (jsonStr.contains("\"payload\":[\"ok\"")) {
-        // Extrair o ID e o resultado (idealmente usando um parser JSON real)
-        val idRegex = "\"payload\":\\[\"ok\",\"([^\"]+)\"".toRegex()
-        val match = idRegex.find(jsonStr)
-        if (match != null) {
-            val reqId = match.groupValues[1]
-            // Acha onde o array do payload termina para extrair o objeto do resultado
-            val payloadStart = jsonStr.indexOf(",\"", match.range.last) + 1
+        // Encontra o início do payload (após o ID do request)
+        // Buscamos o segundo elemento do array (ID) e pegamos o que vem depois
+        val parts = jsonStr.split(",")
+        if (parts.size >= 3) {
+            val reqIdPart = parts[1].trim().trim('"')
+            // O resultado começa após a segunda vírgula do array payload
+            // Vamos usar uma abordagem mais robusta: achar a segunda vírgula após '"ok"'
+            val okIndex = jsonStr.indexOf("\"ok\"")
+            val firstComma = jsonStr.indexOf(",", okIndex)
+            val secondComma = jsonStr.indexOf(",", firstComma + 1)
+            
+            val payloadStart = secondComma + 1
             val payloadEnd = jsonStr.lastIndexOf("]}")
+            
             if (payloadStart in 1..<payloadEnd) {
-                FridaRpcManager.pendingResponses[reqId] = jsonStr.substring(payloadStart, payloadEnd)
-            } else {
-                FridaRpcManager.pendingResponses[reqId] = "null"
+                val result = jsonStr.substring(payloadStart, payloadEnd).trim()
+                val reqId = reqIdPart.removePrefix("req-") // Se o split pegou o ID sujo
+                // Melhor: usar regex apenas para o ID
+                val idMatch = "\"req-(\\d+)\"".toRegex().find(jsonStr)
+                val finalId = if (idMatch != null) "req-${idMatch.groupValues[1]}" else reqIdPart
+                
+                FridaRpcManager.pendingResponses[finalId] = result
             }
         }
     } else if (jsonStr.contains("\"payload\":[\"error\"")) {
-        val idRegex = "\"payload\":\\[\"error\",\"([^\"]+)\"".toRegex()
-        val match = idRegex.find(jsonStr)
-        if (match != null) {
-            val reqId = match.groupValues[1]
+        val idMatch = "\"req-(\\d+)\"".toRegex().find(jsonStr)
+        if (idMatch != null) {
+            val reqId = "req-${idMatch.groupValues[1]}"
             FridaRpcManager.pendingErrors[reqId] = "RPC Error from Frida JS"
         }
+    } else if (jsonStr.contains("\"class_chunk\"")) {
+        val chunkRegex = "\"chunk\":\\[(.*)\\]".toRegex()
+        val match = chunkRegex.find(jsonStr)
+        if (match != null) {
+            val classes = match.groupValues[1].split(",").map { it.trim('"') }.filter { it.isNotEmpty() }
+            FridaRpcManager.onChunkReceived?.invoke(classes)
+        }
+    } else if (jsonStr.contains("\"class_stream_end\"")) {
+        FridaRpcManager.isStreamCompleted = true
     }
 }
-class NativeFridaBridge : FridaBridge {
+class NativeFridaBridge : FridaBridge, AutoCloseable {
     private var manager: CPointer<FridaDeviceManager>? = null
     private var session: CPointer<FridaSession>? = null
     private var script: CPointer<FridaScript>? = null
@@ -59,6 +84,8 @@ class NativeFridaBridge : FridaBridge {
         encodeDefaults = true
     }
 
+    private val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     init {
         frida_init()
         manager = frida_device_manager_new()
@@ -66,8 +93,59 @@ class NativeFridaBridge : FridaBridge {
     }
 
     override fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String> {
-        val jsonResult = invokeRpc("listclasses", listOf("\"$searchParam\""))
+        val jsonResult = invokeRpc("listclasses", listOf("\"$searchParam\"", "$offset", "$limit"))
         return jsonParser.decodeFromString(jsonResult)
+    }
+    
+    override fun pingJava(): String {
+        return try {
+            invokeRpc("pingjava")
+        } catch (e: Exception) {
+            "error: ${e.message}"
+        }
+    }
+
+    override fun testRpc(): String {
+        return try {
+            invokeRpc("testrpc")
+        } catch (e: Exception) {
+            "error: ${e.message}"
+        }
+    }
+
+    override fun listClassesStream(searchParam: String, onChunk: (List<String>) -> Unit, onComplete: () -> Unit) {
+        val scriptPtr = script ?: throw IllegalStateException("Frida script not loaded or attached.")
+        
+        FridaRpcManager.onChunkReceived = onChunk
+        FridaRpcManager.isStreamCompleted = false
+
+        val rpcPayload = """["call", "stream-0", "listclassesstream", ["\"$searchParam\"", "stream-0"]]"""
+        val fridaMsg = """{"type":"send","payload":$rpcPayload}"""
+        
+        platform.posix.fprintf(platform.posix.stdout, "[NativeBridge] INFO: Posting stream request. searchParam=%s\n", searchParam)
+        platform.posix.fflush(platform.posix.stdout)
+
+        println("[DEBUG] Posting stream request. searchParam=$searchParam")
+        frida_script_post(scriptPtr, fridaMsg, null)
+
+
+        val context = g_main_context_default()
+        val start = platform.posix.time(null)
+        while (!FridaRpcManager.isStreamCompleted) {
+            // Processa eventos pendentes do Frida
+            g_main_context_iteration(context, 0)
+            
+            val elapsed = platform.posix.time(null) - start
+            if (elapsed > 30) {
+                platform.posix.fprintf(platform.posix.stderr, "[NativeBridge] ERROR: Stream timed out after 30s. isStreamCompleted=%s\n", FridaRpcManager.isStreamCompleted.toString())
+                platform.posix.fflush(platform.posix.stderr)
+                break
+            }
+            platform.posix.usleep(10000u) // 10ms para não travar a CPU e permitir mensagens
+        }
+        
+        FridaRpcManager.onChunkReceived = null
+        onComplete()
     }
     override fun countInstances(className: String): Int {
         val jsonResult = invokeRpc("countinstances", listOf("\"$className\""))
@@ -122,16 +200,16 @@ class NativeFridaBridge : FridaBridge {
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun prepareEnvironment(target: String): PrepareEnvResult {
+    override fun prepareEnvironment(target: String, pid: Int?): PrepareEnvResult {
         memScoped {
+            println("[DEBUG] Preparing environment for $target...")
             val error = allocPointerTo<GError>()
             
-            // 1. Enumarar devices
+            println("[DEBUG] Enumerating devices...")
             frida_device_manager_enumerate_devices_sync(manager, null, error.ptr)
             if (error.value != null) throw RuntimeException("Failed to enumerate devices: ${error.value?.pointed?.message?.toKString()}")
-            
             var device: CPointer<FridaDevice>? = null
-            var targetPid: UInt = 0u
+            var targetPid: UInt? = pid?.toUInt()
 
             if (target == "Gadget" || target == "127.0.0.1") {
                 // Modo Remoto (Gadget injetado via JDWP/TCP)
@@ -157,20 +235,23 @@ class NativeFridaBridge : FridaBridge {
                 targetPid = frida_process_get_pid(process)
                 platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] Found 'Gadget' process with PID $targetPid\n")
             } else {
-                // Modo Local/USB
                 val deviceTypes = listOf(FridaDeviceType.FRIDA_DEVICE_TYPE_USB, FridaDeviceType.FRIDA_DEVICE_TYPE_LOCAL)
+                println("[DEBUG] Enumerating devices of types: $deviceTypes")
                 for (type in deviceTypes) {
+
                     val d = frida_device_manager_get_device_by_type_sync(manager, type, 0, null, null) ?: continue
-                    
+
+                    if (targetPid != null) {
+                        device = d
+                        break
+                    }
                     val pid = target.toIntOrNull()
                     if (pid != null) {
-                        device = d
                         targetPid = pid.toUInt()
                         break
                     } else {
                         val process = frida_device_get_process_by_name_sync(d, target, null, null, null)
                         if (process != null) {
-                            device = d
                             targetPid = frida_process_get_pid(process)
                             break
                         }
@@ -183,7 +264,7 @@ class NativeFridaBridge : FridaBridge {
             }
 
             // 3. Attach ao processo
-            session = frida_device_attach_sync(device, targetPid, null, null, error.ptr)
+            session = frida_device_attach_sync(device, targetPid!!, null, null, error.ptr)
             if (session == null) throw RuntimeException("Failed to attach to target '$target' (PID $targetPid): ${error.value?.pointed?.message?.toKString()}")
 
             // 4. Criar e carregar o script
@@ -231,30 +312,42 @@ class NativeFridaBridge : FridaBridge {
 
             val isRooted = AndroidEnv.isRooted(serial)
             val isDebuggable = AndroidEnv.isDebuggable(serial, pkg)
-
+            println("[DEBUG] isRooted: $isRooted, isDebuggable: $isDebuggable")
             if (isRooted) {
                 // Root Path (frida-server)
                 steps.add(InjectionStep("prepare_server", "Prepare frida-server on device", "running"))
-                
+
                 val arch = utils.Shell.execute("adb -s $serial shell getprop ro.product.cpu.abi").output.trim()
+                println("[DEBUG] Device architecture: $arch")
                 val mappedArch = utils.BinaryManager.mapArch(arch)
                 
                 val serverLocal = kotlinx.coroutines.runBlocking { 
                     utils.BinaryManager.ensureBinary("frida-server", mappedArch, "xz") 
                 }
-                adb.pushFile(serial, serverLocal, "/data/local/tmp/barbatos-server")
-                adb.executeShellCommand(serial, "chmod 755 /data/local/tmp/barbatos-server")
+                println("[DEBUG] Server local path: $serverLocal")
+                adb.pushFile(serial, serverLocal, "/data/local/tmp/frida-server")
+                println("[DEBUG] Server pushed to device")
+                adb.executeShellCommand(serial, "chmod 755 /data/local/tmp/frida-server")
+                println("[DEBUG] Server made executable")
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
-                
                 steps.add(InjectionStep("start_server", "Start frida-server as root", "running"))
-                adb.executeShellCommand(serial, "su -c 'pkill -f barbatos-server 2>/dev/null; true'")
-                // Run in background using a shell trick since our execute is blocking
-                utils.Shell.execute("adb -s $serial shell su -c /data/local/tmp/barbatos-server &", redirectStderr = false)
+                try {
+                    adb.executeShellCommand(serial, "su -c 'pkill -f frida-server 2>/dev/null || true'")
+                } catch (e: Exception){}
+                println("[DEBUG] Killed existing frida-server processes (if any)")
+                try {
+                    fridaCoroutineScope.launch(Dispatchers.IO) {
+                        adb.executeShellCommand(serial, "su -c 'nohup /data/local/tmp/frida-server &'")
+                    }
+                } catch (e: Exception) {}
+                println("[DEBUG] Started frida-server as root")
                 platform.posix.sleep(2u)
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
                 steps.add(InjectionStep("load_agent", "Attach to process and load agent", "running"))
-                prepareEnvironment(pkg)
+                println("[DEBUG] Loading agent")
+                prepareEnvironment(pkg, pid)
+                println("[DEBUG] Agent loaded successfully")
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
                 InjectionProgressResult("completed", steps)
@@ -287,7 +380,7 @@ class NativeFridaBridge : FridaBridge {
                 platform.posix.sleep(5u)
                 
                 // Connect to the gadget we just injected
-                prepareEnvironment("Gadget") // When gadget is listening on 27042, Frida sees it as "Gadget" process
+                prepareEnvironment("Gadget",) // When gadget is listening on 27042, Frida sees it as "Gadget" process
                 platform.posix.fprintf(platform.posix.stderr, "[NativeFridaBridge] Agent loaded successfully via Gadget.\n")
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
@@ -296,6 +389,7 @@ class NativeFridaBridge : FridaBridge {
                 throw Exception("App '$pkg' is not debuggable and device is not rooted. Use a rooted device or a debuggable app.")
             }
         } catch (e: Exception) {
+            println("[NativeFridaBridge] Error: ${e.message}")
             val lastStep = steps.lastOrNull()
             if (lastStep != null && lastStep.status == "running") {
                 steps[steps.size - 1] = lastStep.copy(status = "error")
@@ -448,35 +542,56 @@ class NativeFridaBridge : FridaBridge {
     private fun invokeRpc(methodName: String, args: List<String> = emptyList()): String {
         val scriptPtr = script ?: throw IllegalStateException("Frida script not loaded or attached.")
         val reqId = FridaRpcManager.generateReqId()
-
+        println("[DEBUG] Invoking RPC: $methodName ($reqId)")
+ 
         val argsJson = args.joinToString(",")
         val rpcPayload = """["call", "$reqId", "$methodName", [$argsJson]]"""
         val fridaMsg = """{"type":"send","payload":$rpcPayload}"""
+ 
+        platform.posix.fprintf(platform.posix.stdout, "[NativeBridge] Calling RPC: %s\n", fridaMsg)
+        platform.posix.fflush(platform.posix.stdout)
 
         FridaRpcManager.pendingResponses[reqId] = null
+
         frida_script_post(scriptPtr, fridaMsg, null)
 
         val context = g_main_context_default()
+        val start = platform.posix.time(null)
         while (FridaRpcManager.pendingResponses[reqId] == null) {
+            println("[DEBUG] Waiting for RPC response for $reqId...")
             if (FridaRpcManager.pendingErrors.containsKey(reqId)) {
                 throw RuntimeException("JS Error: ${FridaRpcManager.pendingErrors.remove(reqId)}")
             }
-            g_main_context_iteration(context, 1)
+            g_main_context_iteration(context, 0)
+            if (platform.posix.time(null) - start > 15) {
+                throw RuntimeException("RPC Timeout for $methodName ($reqId)")
+            }
+            platform.posix.usleep(1000u)
         }
-
+ 
         return FridaRpcManager.pendingResponses.remove(reqId)!!
     }
+
+    override fun close() {
+        fridaCoroutineScope.cancel()
+    }
+
     companion object {
         object FridaRpcManager {
             private var reqCounter = 0
             val pendingResponses = mutableMapOf<String, String?>()
             val pendingErrors = mutableMapOf<String, String>()
+            
+            var onChunkReceived: ((List<String>) -> Unit)? = null
+            var isStreamCompleted = false
 
             fun generateReqId(): String = "req-${reqCounter++}"
 
             fun clear() {
                 pendingResponses.clear()
                 pendingErrors.clear()
+                onChunkReceived = null
+                isStreamCompleted = false
             }
         }
     }

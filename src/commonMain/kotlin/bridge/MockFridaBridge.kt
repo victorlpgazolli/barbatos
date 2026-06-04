@@ -14,6 +14,16 @@ class MockFridaBridge : FridaBridge {
         return all.filter { it.contains(searchParam, ignoreCase = true) }
     }
 
+    override fun listClassesStream(searchParam: String, onChunk: (List<String>) -> Unit, onComplete: () -> Unit) {
+        val all = listOf("com.example.MainActivity", "java.lang.String")
+        val filtered = all.filter { it.contains(searchParam, ignoreCase = true) }
+        onChunk(filtered)
+        onComplete()
+    }
+
+    override fun pingJava(): String = "Mock: Java OK"
+    override fun testRpc(): String = "Mock: RPC OK"
+
     override fun countInstances(className: String): Int {
         return if (className == "com.example.MainActivity") 5 else 0
     }
@@ -63,7 +73,7 @@ class MockFridaBridge : FridaBridge {
         return listOf("0x123", "0x456")
     }
 
-    override fun prepareEnvironment(target: String): rpc.PrepareEnvResult {
+    override fun prepareEnvironment(target: String, pid: Int?): rpc.PrepareEnvResult {
         return rpc.PrepareEnvResult(1234, "com.example", 8080, "Attached to $target")
     }
 

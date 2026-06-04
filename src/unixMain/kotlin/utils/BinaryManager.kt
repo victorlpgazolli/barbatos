@@ -44,7 +44,7 @@ object BinaryManager {
         val dir = "$home/.cache/barbatos"
         Shell.execute("mkdir -p $dir")
 
-        val url = "https://github.com/frida/frida/releases/download/$FRIDA_VERSION/$name-$FRIDA_VERSION-android-$arch.$extension.xz"
+        val url = "https://github.com/frida/frida/releases/download/$FRIDA_VERSION/$name-$FRIDA_VERSION-android-$arch.$extension"
         val xzPath = "$localPath.xz"
         
         println("[BinaryManager] Downloading $url...")
