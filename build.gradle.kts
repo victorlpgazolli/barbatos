@@ -22,7 +22,15 @@ val downloadFridaDevkitTask = tasks.register<Exec>("downloadFridaDevkit") {
     outputs.file("src/nativeInterop/cinterop/libfrida-core.a")
 }
 
+val installAgentsDependenciesTask = tasks.register("installAgentsDependencies") {
+    doLast {
+        exec {
+            commandLine("npm", "ci")
+        }
+    }
+}
 val compileAgentsTask = tasks.register("compileAgents") {
+    dependsOn(installAgentsDependenciesTask)
     val inputDir = file("src/commonMain/resources")
     val outputDir = layout.buildDirectory.dir("generated/agents").get().asFile
     
