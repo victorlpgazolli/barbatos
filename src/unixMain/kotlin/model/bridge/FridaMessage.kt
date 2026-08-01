@@ -1,8 +1,5 @@
-package bridge
+package model.bridge
 
-import frida.FridaScript
-import frida.frida_script_post
-import kotlinx.cinterop.CPointer
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

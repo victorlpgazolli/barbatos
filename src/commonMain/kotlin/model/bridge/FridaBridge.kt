@@ -1,9 +1,15 @@
-package bridge
+package model.bridge
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.Json
-import rpc.model.HookEvent
-import rpc.model.*
+import model.rpc.ClassInspectionResult
+import model.rpc.GenericStatusResult
+import model.rpc.HealthCheckResult
+import model.rpc.HookEvent
+import model.rpc.InjectionProgressResult
+import model.rpc.InspectInstanceResult
+import model.rpc.ListInstancesResult
+import model.rpc.PrepareEnvResult
 
 interface FridaBridge {
     val jsonParser: Json
@@ -16,19 +22,19 @@ interface FridaBridge {
     fun inspectClass(className: String): ClassInspectionResult
     fun listInstances(className: String): ListInstancesResult
     fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult
-    
+
     fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String
     fun hookMethod(className: String, methodSig: String): String
     fun getHookEvents(): List<HookEvent>
     fun setMethodImplementation(className: String, methodSig: String, code: String): String
     fun runOnce(className: String, methodSig: String, code: String): String
     fun getInstanceAddresses(className: String): List<String>
-    
+
     fun prepareEnvironment(target: String, pid: Int? = null): PrepareEnvResult
     fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult
     fun injectJdwp(target: String, port: Int, packageName: String): String
     fun healthCheck(): HealthCheckResult
-    
+
     fun patchAndInstallIosApp(appPath: String): String
     fun checkIosJailbreakStatus(serial: String): String
     fun injectJailbrokenIos(serial: String): String

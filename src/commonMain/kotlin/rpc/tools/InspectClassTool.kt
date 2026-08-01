@@ -1,9 +1,11 @@
 // src/commonMain/kotlin/rpc/tools/InspectClassTool.kt
 package rpc.tools
 
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import kotlinx.serialization.json.*
-import rpc.*
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpTool
 
 class InspectClassTool(private val bridge: FridaBridge) : McpTool {
     override val name = "inspect_class"
@@ -17,7 +19,10 @@ class InspectClassTool(private val bridge: FridaBridge) : McpTool {
     }
 
     override fun execute(args: JsonObject?): McpCallToolResult {
-        val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
+        val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+            listOf(McpContent("text", "Missing className")),
+            true
+        )
         val res = bridge.inspectClass(className)
         val output = """
             Methods:

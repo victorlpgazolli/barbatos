@@ -1,10 +1,12 @@
 // src/commonMain/kotlin/rpc/tools/ListClassesTool.kt
 package rpc.tools
 
-import bridge.FridaBridge
-import ext.collectListClasses
+import model.bridge.FridaBridge
+import utils.collectListClasses
 import kotlinx.serialization.json.*
-import rpc.*
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpTool
 
 class ListClassesTool(private val bridge: FridaBridge) : McpTool {
     override val name = "list_classes"

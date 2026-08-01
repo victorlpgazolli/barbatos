@@ -1,4 +1,4 @@
-package bridge
+package model.device
 
 interface AdbManager {
     fun listDevices(): List<String>

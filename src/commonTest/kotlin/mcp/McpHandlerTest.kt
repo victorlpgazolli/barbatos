@@ -1,11 +1,11 @@
-package rpc
+package mcp
 
 import bridge.MockFridaBridge
-import rpc.tools.*
+import rpc.tools.HealthCheckTool
+import rpc.tools.InspectClassTool
+import rpc.tools.ListClassesTool
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import kotlin.test.assertEquals
-import kotlinx.serialization.json.*
 
 class McpHandlerTest {
     @Test
@@ -32,7 +32,10 @@ class McpHandlerTest {
         val handler = McpHandler(tools)
         val request = """{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "list_classes", "arguments": {"search_param": "MainActivity"}}, "id": 1}"""
         val response = handler.handle(request)
-        assertTrue(response!!.contains("com.example.MainActivity"), "Should return MainActivity in classes list")
+        assertTrue(
+            response!!.contains("com.example.MainActivity"),
+            "Should return MainActivity in classes list"
+        )
     }
 
     @Test
@@ -42,7 +45,10 @@ class McpHandlerTest {
         val handler = McpHandler(tools)
         val request = """{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "inspect_class", "arguments": {"className": "com.example.MainActivity"}}, "id": 1}"""
         val response = handler.handle(request)
-        assertTrue(response!!.contains("onCreate"), "Should return onCreate method in class inspection")
+        assertTrue(
+            response!!.contains("onCreate"),
+            "Should return onCreate method in class inspection"
+        )
         assertTrue(response!!.contains("TAG"), "Should return TAG static attribute")
         assertTrue(response!!.contains("mCount"), "Should return mCount instance attribute")
     }

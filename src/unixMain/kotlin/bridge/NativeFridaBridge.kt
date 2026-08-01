@@ -1,6 +1,9 @@
 package bridge
 
 import bridge.NativeFridaBridge.Companion.FridaRpcManager
+import device.AdbManagerImpl
+import device.AndroidEnv
+import device.JdwpManagerImpl
 import frida.*
 import kotlinx.cinterop.*
 import kotlinx.coroutines.CoroutineScope
@@ -13,7 +16,19 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
-import rpc.model.*
+import model.bridge.FridaBridge
+import model.bridge.FridaMessage
+import model.bridge.FridaPayload
+import model.rpc.CheckResponse
+import model.rpc.ClassInspectionResult
+import model.rpc.GenericStatusResult
+import model.rpc.HealthCheckResult
+import model.rpc.HookEvent
+import model.rpc.InjectionProgressResult
+import model.rpc.InjectionStep
+import model.rpc.InspectInstanceResult
+import model.rpc.ListInstancesResult
+import model.rpc.PrepareEnvResult
 import utils.EmbeddedScripts
 
 private val jsonParser = Json {
@@ -297,7 +312,13 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             val isDebuggable = AndroidEnv.isDebuggable(serial, pkg)
             
             if (isRooted) {
-                steps.add(InjectionStep("prepare_server", "Prepare frida-server on device", "running"))
+                steps.add(
+                    InjectionStep(
+                        "prepare_server",
+                        "Prepare frida-server on device",
+                        "running"
+                    )
+                )
                 val arch = utils.Shell.execute("adb -s $serial shell getprop ro.product.cpu.abi").output.trim()
                 val mappedArch = utils.BinaryManager.mapArch(arch)
                 
@@ -316,7 +337,13 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                 platform.posix.sleep(2u)
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
-                steps.add(InjectionStep("load_agent", "Attach to process and load agent", "running"))
+                steps.add(
+                    InjectionStep(
+                        "load_agent",
+                        "Attach to process and load agent",
+                        "running"
+                    )
+                )
                 prepareEnvironment(pkg, pid)
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
 
@@ -342,7 +369,13 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                 if (jdwpRes.isFailure) throw jdwpRes.exceptionOrNull()!!
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
                 
-                steps.add(InjectionStep("load_agent", "Load Frida instrumentation agent", "running"))
+                steps.add(
+                    InjectionStep(
+                        "load_agent",
+                        "Load Frida instrumentation agent",
+                        "running"
+                    )
+                )
                 platform.posix.sleep(5u)
                 prepareEnvironment("Gadget")
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
@@ -399,7 +432,10 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             try {
                 val rootRes = utils.Shell.execute("adb -s $serial shell su -c id")
                 isRooted = rootRes.output.contains("uid=0")
-                checks["android_root"] = CheckResponse(if (isRooted) "ok" else "info", if (isRooted) "Device is rooted" else "Device not rooted")
+                checks["android_root"] = CheckResponse(
+                    if (isRooted) "ok" else "info",
+                    if (isRooted) "Device is rooted" else "Device not rooted"
+                )
             } catch (e: Exception) {
                 checks["android_root"] = CheckResponse("unknown", "Root check failed")
             }
@@ -420,7 +456,8 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                     debuggable = isDebuggable
                 )
             } catch (e: Exception) {
-                checks["android_frontmost_app"] = CheckResponse("unknown", "Frontmost app check failed")
+                checks["android_frontmost_app"] =
+                    CheckResponse("unknown", "Frontmost app check failed")
             }
         }
 
@@ -432,13 +469,17 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             }
             checks["frida_device"] = CheckResponse("ok", "Frida enumeration OK")
         } catch (e: Exception) {
-            checks["frida_device"] = CheckResponse("error", "Frida enumeration failed", fix = "Check USB debugging")
+            checks["frida_device"] =
+                CheckResponse("error", "Frida enumeration failed", fix = "Check USB debugging")
         }
 
         if (session != null) {
             val isDetached = frida_session_is_detached(session) != 0
             checks["frida_connection"] = CheckResponse("ok", "Frida session active")
-            checks["session"] = CheckResponse(if (isDetached) "error" else "ok", if (isDetached) "Detached" else "Active")
+            checks["session"] = CheckResponse(
+                if (isDetached) "error" else "ok",
+                if (isDetached) "Detached" else "Active"
+            )
         } else {
             checks["frida_connection"] = CheckResponse("warning", "No session")
             checks["session"] = CheckResponse("skipped", "No session")

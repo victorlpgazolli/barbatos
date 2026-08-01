@@ -4,13 +4,14 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import server.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
-import rpc.model.*
+import model.rpc.RpcErrorResponse
+import model.rpc.RpcResponse
+import module
 
 class RpcHandlerTest {
     @Test

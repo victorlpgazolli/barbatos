@@ -1,11 +1,22 @@
-package rpc
+package mcp
 
 import kotlinx.serialization.json.*
 import kotlinx.serialization.encodeToString
-import rpc.model.RpcError
-import rpc.model.RpcErrorResponse
-import rpc.model.RpcRequest
-import rpc.model.RpcResponse
+import model.mcp.McpCallToolParams
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpInitializeResult
+import model.mcp.McpServerInfo
+import model.mcp.McpTool
+import model.mcp.McpToolDef
+import model.mcp.McpToolsListResult
+import platform.posix.fflush
+import platform.posix.fprintf
+import platform.posix.stderr
+import model.rpc.RpcError
+import model.rpc.RpcErrorResponse
+import model.rpc.RpcRequest
+import model.rpc.RpcResponse
 
 /**
  * Custom exception to trigger the -32601 (Method not found) JSON-RPC error.
@@ -59,37 +70,67 @@ class McpHandler(private val tools: List<McpTool>) {
 
     private fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
-            "initialize" -> json.encodeToJsonElement(McpInitializeResult(
-                protocolVersion = "2024-11-05",
-                capabilities = buildJsonObject { 
-                    putJsonObject("tools") {} 
-                    putJsonObject("resources") {}
-                    putJsonObject("prompts") {}
-                },
-                serverInfo = McpServerInfo("barbatos-bridge", "1.0.2")
-            ))
+            "initialize" -> json.encodeToJsonElement(
+                McpInitializeResult(
+                    protocolVersion = "2024-11-05",
+                    capabilities = buildJsonObject {
+                        putJsonObject("tools") {}
+                        putJsonObject("resources") {}
+                        putJsonObject("prompts") {}
+                    },
+                    serverInfo = McpServerInfo("barbatos-bridge", "1.0.2")
+                )
+            )
             "notifications/initialized" -> JsonNull
             "prompts/list" -> {
                 // Log to stderr so user can see it
-                platform.posix.fprintf(platform.posix.stderr, "MCP: Handling prompts/list\n")
-                platform.posix.fflush(platform.posix.stderr)
+                fprintf(stderr, "MCP: Handling prompts/list\n")
+                fflush(stderr)
                 buildJsonObject { putJsonArray("prompts") {} }
             }
             "resources/list" -> buildJsonObject { putJsonArray("resources") {} }
-            "tools/list" -> json.encodeToJsonElement(McpToolsListResult(
+            "tools/list" -> json.encodeToJsonElement(
+                McpToolsListResult(
                 tools.map { McpToolDef(it.name, it.description, it.inputSchema) }
             ))
             "tools/call" -> {
                 val decodedParams = params?.let { json.decodeFromJsonElement<McpCallToolParams>(it) }
-                    ?: return json.encodeToJsonElement(McpCallToolResult(listOf(McpContent("text", "Missing params")), true))
+                    ?: return json.encodeToJsonElement(
+                        McpCallToolResult(
+                            listOf(
+                                McpContent(
+                                    "text",
+                                    "Missing params"
+                                )
+                            ), true
+                        )
+                    )
                 
                 val tool = tools.find { it.name == decodedParams.name }
-                    ?: return json.encodeToJsonElement(McpCallToolResult(listOf(McpContent("text", "Tool not found")), true))
+                    ?: return json.encodeToJsonElement(
+                        McpCallToolResult(
+                            listOf(
+                                McpContent(
+                                    "text",
+                                    "Tool not found"
+                                )
+                            ), true
+                        )
+                    )
                 
                 try {
                     json.encodeToJsonElement(tool.execute(decodedParams.arguments))
                 } catch (e: Exception) {
-                    json.encodeToJsonElement(McpCallToolResult(listOf(McpContent("text", "Execution error: ${e.message}")), true))
+                    json.encodeToJsonElement(
+                        McpCallToolResult(
+                            listOf(
+                                McpContent(
+                                    "text",
+                                    "Execution error: ${e.message}"
+                                )
+                            ), true
+                        )
+                    )
                 }
             }
             else -> throw McpMethodNotFoundException("Method $method not found")

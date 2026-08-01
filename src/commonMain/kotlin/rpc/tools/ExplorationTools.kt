@@ -1,9 +1,12 @@
 package rpc.tools
 
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import rpc.*
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpTool
+import model.mcp.mcpJson
 
 class CountInstancesTool(private val bridge: FridaBridge) : McpTool {
     override val name = "count_instances"
@@ -17,7 +20,10 @@ class CountInstancesTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
             val res = bridge.countInstances(className)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
         } catch (e: Exception) {
@@ -38,7 +44,10 @@ class ListInstancesTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
             val res = bridge.listInstances(className)
             McpCallToolResult(listOf(McpContent("text", mcpJson.encodeToString(res))))
         } catch (e: Exception) {
@@ -62,8 +71,15 @@ class InspectInstanceTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
-            val id = args?.get("id")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing id")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
+            val id = args?.get("id")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(
+                    McpContent("text", "Missing id")
+                ), true
+            )
             val offset = args?.get("offset")?.jsonPrimitive?.intOrNull ?: 0
             val limit = args?.get("limit")?.jsonPrimitive?.intOrNull ?: 50
             val res = bridge.inspectInstance(id, offset, limit)
@@ -86,7 +102,10 @@ class GetInstanceAddressesTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
             val res = bridge.getInstanceAddresses(className)
             McpCallToolResult(listOf(McpContent("text", mcpJson.encodeToString(res))))
         } catch (e: Exception) {

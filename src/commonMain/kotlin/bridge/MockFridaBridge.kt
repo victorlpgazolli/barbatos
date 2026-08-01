@@ -5,7 +5,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import rpc.model.*
+import model.bridge.FridaBridge
+import model.rpc.CheckResponse
+import model.rpc.ClassInspectionResult
+import model.rpc.GenericStatusResult
+import model.rpc.HealthCheckResult
+import model.rpc.HookEvent
+import model.rpc.InjectionProgressResult
+import model.rpc.InjectionStep
+import model.rpc.InspectInstanceResult
+import model.rpc.InstanceAttribute
+import model.rpc.InstanceInfo
+import model.rpc.ListInstancesResult
+import model.rpc.PrepareEnvResult
+
 class MockFridaBridge() : FridaBridge {
     override val jsonParser: Json = Json {
         ignoreUnknownKeys = true

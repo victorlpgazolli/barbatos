@@ -1,4 +1,4 @@
-package bridge
+package device
 
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
@@ -7,6 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import model.device.AdbManager
+import model.device.JdwpManager
+import platform.posix.fclose
+import platform.posix.fopen
+import platform.posix.fputs
+import utils.BinaryManager
 
 class JdwpManagerImpl(private val adbManager: AdbManager) : JdwpManager {
     override fun load(
@@ -80,13 +86,13 @@ class JdwpManagerImpl(private val adbManager: AdbManager) : JdwpManager {
                 adbManager.pushFile(serial, libraryPath, "/data/local/tmp/frida-gadget.so")
                 
                 val configJson = "{\"interaction\":{\"type\":\"listen\",\"address\":\"127.0.0.1\",\"port\":27042,\"on_port_conflict\":\"replace\",\"on_load\":\"resume\"}}"
-                val localConfigPath = utils.BinaryManager.getLocalPath("frida-gadget", "config", "json")
+                val localConfigPath = BinaryManager.getLocalPath("frida-gadget", "config", "json")
                 
                 // Write local config file
-                val file = platform.posix.fopen(localConfigPath, "w")
+                val file = fopen(localConfigPath, "w")
                 if (file != null) {
-                    platform.posix.fputs(configJson, file)
-                    platform.posix.fclose(file)
+                    fputs(configJson, file)
+                    fclose(file)
                 }
                 
                 adbManager.pushFile(serial, localConfigPath, "/data/local/tmp/frida-gadget.config")

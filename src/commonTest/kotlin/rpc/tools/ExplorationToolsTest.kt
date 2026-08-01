@@ -1,7 +1,7 @@
 package rpc.tools
 
 import bridge.MockFridaBridge
-import rpc.McpHandler
+import mcp.McpHandler
 import kotlin.test.Test
 import kotlin.test.assertTrue
 

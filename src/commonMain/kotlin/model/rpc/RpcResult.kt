@@ -1,4 +1,4 @@
-package rpc.model
+package model.rpc
 
 import kotlinx.serialization.Serializable
 

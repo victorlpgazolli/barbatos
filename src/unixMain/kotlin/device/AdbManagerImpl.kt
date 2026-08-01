@@ -1,5 +1,6 @@
-package bridge
+package device
 
+import model.device.AdbManager
 import utils.Shell
 
 class AdbManagerImpl : AdbManager {

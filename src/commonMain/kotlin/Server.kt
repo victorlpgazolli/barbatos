@@ -1,5 +1,3 @@
-package server
-
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -10,7 +8,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.*
 import io.ktor.utils.io.*
 import rpc.RpcHandler
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import utils.EmbeddedScripts
 
 fun Application.module(bridge: FridaBridge) {

@@ -1,7 +1,6 @@
-import server.startServer
 import bridge.NativeFridaBridge
 import bridge.MockFridaBridge
-import rpc.*
+import mcp.McpHandler
 import rpc.tools.*
 import platform.posix.fprintf
 import platform.posix.stderr

@@ -1,9 +1,12 @@
 package rpc.tools
 
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import rpc.*
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpTool
+import model.mcp.mcpJson
 
 class HealthCheckTool(private val bridge: FridaBridge) : McpTool {
     override val name = "health_check"

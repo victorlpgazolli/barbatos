@@ -1,15 +1,10 @@
 package utils
 
 import io.ktor.client.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.utils.io.*
-import kotlinx.coroutines.runBlocking
 import platform.posix.*
 import kotlinx.cinterop.*
-import bridge.AdbManager
-import bridge.AdbManagerImpl
 
 object BinaryManager {
     private val client = HttpClient()

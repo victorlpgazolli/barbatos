@@ -1,4 +1,4 @@
-package bridge
+package model.device
 
 interface JdwpManager {
     fun load(

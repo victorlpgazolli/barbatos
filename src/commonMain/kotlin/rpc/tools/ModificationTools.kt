@@ -1,9 +1,12 @@
 package rpc.tools
 
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import rpc.*
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpTool
+import model.mcp.mcpJson
 
 class SetFieldValueTool(private val bridge: FridaBridge) : McpTool {
     override val name = "set_field_value"
@@ -21,11 +24,28 @@ class SetFieldValueTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
-            val id = args?.get("id")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing id")), true)
-            val fieldName = args?.get("fieldName")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing fieldName")), true)
-            val type = args?.get("type")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing type")), true)
-            val newValue = args?.get("newValue")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing newValue")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
+            val id = args?.get("id")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(
+                    McpContent("text", "Missing id")
+                ), true
+            )
+            val fieldName = args?.get("fieldName")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing fieldName")),
+                true
+            )
+            val type = args?.get("type")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(
+                    McpContent("text", "Missing type")
+                ), true
+            )
+            val newValue = args?.get("newValue")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing newValue")),
+                true
+            )
             
             val res = bridge.setFieldValue(className, id, fieldName, type, newValue)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
@@ -48,8 +68,14 @@ class HookMethodTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
-            val methodSig = args?.get("methodSig")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing methodSig")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
+            val methodSig = args?.get("methodSig")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing methodSig")),
+                true
+            )
             
             val res = bridge.hookMethod(className, methodSig)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
@@ -87,9 +113,19 @@ class SetMethodImplementationTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
-            val methodSig = args?.get("methodSig")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing methodSig")), true)
-            val code = args?.get("code")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing code")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
+            val methodSig = args?.get("methodSig")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing methodSig")),
+                true
+            )
+            val code = args?.get("code")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(
+                    McpContent("text", "Missing code")
+                ), true
+            )
             
             val res = bridge.setMethodImplementation(className, methodSig, code)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
@@ -113,9 +149,19 @@ class RunOnceTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing className")), true)
-            val methodSig = args?.get("methodSig")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing methodSig")), true)
-            val code = args?.get("code")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing code")), true)
+            val className = args?.get("className")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing className")),
+                true
+            )
+            val methodSig = args?.get("methodSig")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing methodSig")),
+                true
+            )
+            val code = args?.get("code")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(
+                    McpContent("text", "Missing code")
+                ), true
+            )
             
             val res = bridge.runOnce(className, methodSig, code)
             McpCallToolResult(listOf(McpContent("text", res.toString())))

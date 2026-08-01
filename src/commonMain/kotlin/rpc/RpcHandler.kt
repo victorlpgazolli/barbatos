@@ -1,27 +1,13 @@
 package rpc
 
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import kotlinx.serialization.json.*
-import rpc.model.CountInstancesParams
-import rpc.model.GetInstanceAddressesParams
-import rpc.model.HookParams
-import rpc.model.InjectGadgetParams
-import rpc.model.InjectJdwpParams
-import rpc.model.InspectClassParams
-import rpc.model.InspectInstanceParams
-import rpc.model.IosJailbreakParams
-import rpc.model.ListClassesParams
-import rpc.model.ListInstancesParams
-import rpc.model.PatchAndInstallIosAppParams
-import rpc.model.PrepareEnvParams
-import rpc.model.RpcError
-import rpc.model.RpcErrorResponse
-import rpc.model.RpcParams
-import rpc.model.RpcRequest
-import rpc.model.RpcResponse
-import rpc.model.RunOnceParams
-import rpc.model.SetFieldValueParams
-import rpc.model.SetMethodImplementationParams
+import model.rpc.ListClassesParams
+import model.rpc.RpcError
+import model.rpc.RpcErrorResponse
+import model.rpc.RpcParams
+import model.rpc.RpcRequest
+import model.rpc.RpcResponse
 
 data class HandlerResult(val body: String, val statusCode: Int)
 
@@ -133,32 +119,32 @@ class RpcHandler(private val bridge: FridaBridge) {
                 jsonParser.encodeToJsonElement(result)
             }
             "countInstances" -> {
-                val decodedParams = decodeToOrThrow<CountInstancesParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.CountInstancesParams>(params)
                 val result = bridge.countInstances(decodedParams.className)
                 jsonParser.encodeToJsonElement(result)
             }
             "inspectClass" -> {
-                val decodedParams = decodeToOrThrow<InspectClassParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.InspectClassParams>(params)
                 val result = bridge.inspectClass(decodedParams.className)
                 jsonParser.encodeToJsonElement(result)
             }
             "listInstances" -> {
-                val decodedParams = decodeToOrThrow<ListInstancesParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.ListInstancesParams>(params)
                 val result = bridge.listInstances(decodedParams.className)
                 jsonParser.encodeToJsonElement(result)
             }
             "inspectInstance" -> {
-                val decodedParams = decodeToOrThrow<InspectInstanceParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.InspectInstanceParams>(params)
                 val result = bridge.inspectInstance(decodedParams.id, decodedParams.offset, decodedParams.limit)
                 jsonParser.encodeToJsonElement(result)
             }
             "setFieldValue" -> {
-                val decodedParams = decodeToOrThrow<SetFieldValueParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.SetFieldValueParams>(params)
                 val result = bridge.setFieldValue(decodedParams.className, decodedParams.id, decodedParams.fieldName, decodedParams.type, decodedParams.newValue)
                 jsonParser.encodeToJsonElement(result)
             }
             "hookMethod" -> {
-                val decodedParams = decodeToOrThrow<HookParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.HookParams>(params)
                 val result = bridge.hookMethod(decodedParams.className, decodedParams.methodSig)
                 jsonParser.encodeToJsonElement(result)
             }
@@ -167,32 +153,32 @@ class RpcHandler(private val bridge: FridaBridge) {
                 jsonParser.encodeToJsonElement(result)
             }
             "setMethodImplementation" -> {
-                val decodedParams = decodeToOrThrow<SetMethodImplementationParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.SetMethodImplementationParams>(params)
                 val result = bridge.setMethodImplementation(decodedParams.className, decodedParams.methodSig, decodedParams.code)
                 jsonParser.encodeToJsonElement(result)
             }
             "runOnce" -> {
-                val decodedParams = decodeToOrThrow<RunOnceParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.RunOnceParams>(params)
                 val result = bridge.runOnce(decodedParams.className, decodedParams.methodSig, decodedParams.code)
                 jsonParser.encodeToJsonElement(result)
             }
             "getInstanceAddresses" -> {
-                val decodedParams = decodeToOrThrow<GetInstanceAddressesParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.GetInstanceAddressesParams>(params)
                 val res = bridge.getInstanceAddresses(decodedParams.className)
                 jsonParser.encodeToJsonElement(res)
             }
             "prepareEnvironment" -> {
-                val decodedParams = decodeToOrThrow<PrepareEnvParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.PrepareEnvParams>(params)
                 val result = bridge.prepareEnvironment(decodedParams.target)
                 jsonParser.encodeToJsonElement(result)
             }
             "injectGadgetFromScratch" -> {
-                val decodedParams = decodeToOrThrow<InjectGadgetParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.InjectGadgetParams>(params)
                 val result = bridge.injectGadgetFromScratch(decodedParams.with_logs, decodedParams.limit)
                 jsonParser.encodeToJsonElement(result)
             }
             "injectJdwp" -> {
-                val decodedParams = decodeToOrThrow<InjectJdwpParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.InjectJdwpParams>(params)
                 val result = bridge.injectJdwp(decodedParams.target, decodedParams.port, decodedParams.package_name)
                 jsonParser.encodeToJsonElement(result)
             }
@@ -201,17 +187,17 @@ class RpcHandler(private val bridge: FridaBridge) {
                 jsonParser.encodeToJsonElement(result)
             }
             "patchAndInstallIosApp" -> {
-                val decodedParams = decodeToOrThrow<PatchAndInstallIosAppParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.PatchAndInstallIosAppParams>(params)
                 val result = bridge.patchAndInstallIosApp(decodedParams.appPath)
                 jsonParser.encodeToJsonElement(result)
             }
             "checkIosJailbreakStatus" -> {
-                val decodedParams = decodeToOrThrow<IosJailbreakParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.IosJailbreakParams>(params)
                 val result = bridge.checkIosJailbreakStatus(decodedParams.serial)
                 jsonParser.encodeToJsonElement(result)
             }
             "injectJailbrokenIos" -> {
-                val decodedParams = decodeToOrThrow<IosJailbreakParams>(params)
+                val decodedParams = decodeToOrThrow<model.rpc.IosJailbreakParams>(params)
                 val result = bridge.injectJailbrokenIos(decodedParams.serial)
                 jsonParser.encodeToJsonElement(result)
             }

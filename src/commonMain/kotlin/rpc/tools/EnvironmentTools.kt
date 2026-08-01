@@ -1,9 +1,12 @@
 package rpc.tools
 
-import bridge.FridaBridge
+import model.bridge.FridaBridge
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import rpc.*
+import model.mcp.McpCallToolResult
+import model.mcp.McpContent
+import model.mcp.McpTool
+import model.mcp.mcpJson
 
 class PrepareEnvironmentTool(private val bridge: FridaBridge) : McpTool {
     override val name = "prepare_environment"
@@ -62,9 +65,18 @@ class InjectJdwpTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val target = args?.get("target")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing target")), true)
-            val port = args?.get("port")?.jsonPrimitive?.intOrNull ?: return McpCallToolResult(listOf(McpContent("text", "Missing port")), true)
-            val packageName = args?.get("package_name")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing package_name")), true)
+            val target = args?.get("target")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing target")),
+                true
+            )
+            val port = args?.get("port")?.jsonPrimitive?.intOrNull ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing port")),
+                true
+            )
+            val packageName = args?.get("package_name")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing package_name")),
+                true
+            )
             
             val res = bridge.injectJdwp(target, port, packageName)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
@@ -86,7 +98,10 @@ class PatchAndInstallIosAppTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val appPath = args?.get("appPath")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing appPath")), true)
+            val appPath = args?.get("appPath")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing appPath")),
+                true
+            )
             val res = bridge.patchAndInstallIosApp(appPath)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
         } catch (e: Exception) {
@@ -107,7 +122,10 @@ class CheckIosJailbreakStatusTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val serial = args?.get("serial")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing serial")), true)
+            val serial = args?.get("serial")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing serial")),
+                true
+            )
             val res = bridge.checkIosJailbreakStatus(serial)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
         } catch (e: Exception) {
@@ -128,7 +146,10 @@ class InjectJailbrokenIosTool(private val bridge: FridaBridge) : McpTool {
     }
     override fun execute(args: JsonObject?): McpCallToolResult {
         return try {
-            val serial = args?.get("serial")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing serial")), true)
+            val serial = args?.get("serial")?.jsonPrimitive?.content ?: return McpCallToolResult(
+                listOf(McpContent("text", "Missing serial")),
+                true
+            )
             val res = bridge.injectJailbrokenIos(serial)
             McpCallToolResult(listOf(McpContent("text", res.toString())))
         } catch (e: Exception) {
