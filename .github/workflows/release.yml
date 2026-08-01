@@ -190,7 +190,7 @@ jobs:
             cp -r packaging/debian/$package/* "$PKG_DIR/"
 
             mkdir -p "$PKG_DIR/usr/bin"
-            cp "artifacts/barbatos-linux-$arch-tui" "$PKG_DIR/usr/bin/$package"
+            cp "artifacts/barbatos-linux-$arch-cli" "$PKG_DIR/usr/bin/$package"
             chmod +x "$PKG_DIR/usr/bin/$package"
 
             sed -i "s/Version: .*/Version: $VERSION/" "$PKG_DIR/DEBIAN/control"
@@ -232,7 +232,7 @@ jobs:
       - name: Prepare dist (x64)
         run: |
           mkdir -p dist
-          cp artifacts/barbatos-linux-x64-tui dist/barbatos
+          cp artifacts/barbatos-linux-x64-cli dist/barbatos
           chmod +x dist/*
 
       - name: Build Snap (x64)
@@ -245,7 +245,7 @@ jobs:
       - name: Prepare dist (ARM64)
         run: |
           mkdir -p dist
-          cp artifacts/barbatos-linux-arm64-tui dist/barbatos
+          cp artifacts/barbatos-linux-arm64-cli dist/barbatos
           chmod +x dist/*
 
       - name: Build Snap (ARM64)

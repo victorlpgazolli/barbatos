@@ -69,16 +69,11 @@
         <section id="architecture">
             <h2>Architecture Pipeline</h2>
             <div class="pipeline">
-                <div class="pipeline-group">
-                    <div class="step">Native TUI</div>
-                    <div class="step">MCP Client</div>
-                </div>
+                <div class="step">MCP Client</div>
                 <div class="arrow">↓</div>
-                <div class="step">Python Bridge</div>
+                <div class="step">Kotlin Multiplatform Bridge</div>
                 <div class="arrow">↓</div>
                 <div class="step">Frida JS Agent</div>
-                <div class="arrow">↓</div>
-                <div class="step">Multiplatform Runtime</div>
                 <div class="arrow">↓</div>
                 <div class="step">Target App</div>
             </div>
@@ -92,7 +87,7 @@ data-payload='{"mcpServers": {"barbatos-debugger": {"command": "barbatos-bridge"
 <pre style="margin: 0; line-height: 125%;"><span></span><span style="color: #F8F8F2">{</span>
 <span style="color: #F8F8F2">    </span><span style="color: #FF79C6">&quot;mcpServers&quot;</span><span style="color: #F8F8F2">: {</span>
 <span style="color: #F8F8F2">        </span><span style="color: #FF79C6">&quot;barbatos-debugger&quot;</span><span style="color: #F8F8F2">: {</span>
-<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;command&quot;</span><span style="color: #F8F8F2">: </span><span style="color: #BD93F9">&quot;barbatos-bridge&quot;</span><span style="color: #F8F8F2">,</span>
+<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;command&quot;</span><span style="color: #F8F8F2">: </span><span style="color: #BD93F9">&quot;barbatos&quot;</span><span style="color: #F8F8F2">,</span>
 <span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;args&quot;</span><span style="color: #F8F8F2">: [</span><span style="color: #BD93F9">&quot;mcp&quot;</span><span style="color: #F8F8F2">]</span>
 <span style="color: #F8F8F2">        }</span>
 <span style="color: #F8F8F2">    }</span>

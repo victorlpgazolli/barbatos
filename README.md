@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <b>High-Performance Native Frida Bridge for AI Agents & Debuggers.</b><br>
+  <b>High-Performance Frida MCP Server for AI Agents & Debuggers.</b><br>
   <i>"Consolidating runtime introspection into a single, native, cross-platform binary."</i>
 </p>
 
@@ -21,7 +21,7 @@ Using Barbatos to explore an app's structure and inspect objects:
 
 ## Technical Transformation
 
-Barbatos has evolved from a dual-stack prototype (Kotlin TUI + Python Bridge) into a unified **Kotlin Multiplatform (KMP) Native Bridge**. This transition eliminates the need for Python runtimes, reduces the binary footprint, and significantly improves communication latency.
+Barbatos has evolved from a dual-stack v1 prototype (Kotlin TUI + Python Bridge) into a unified v2 **Kotlin Multiplatform (KMP) Native Bridge**. This transition eliminates the need for Python runtimes, reduces the binary footprint, and significantly improves communication latency.
 
 ## Key Features
 
@@ -40,8 +40,7 @@ Barbatos uses a streamlined pipeline for zero-latency runtime interaction:
 
 ```mermaid
 graph TD
-    A[AI Agent / MCP Client] -->|JSON-RPC| B[KMP Native Bridge]
-    C[Web/TUI Client] -->|HTTP POST| B
+    A[MCP Client / Any http request] -->|JSON-RPC| B[KMP Native Bridge]
     B -->|CInterop| D[Frida Core]
     D -->|Injection| E[Frida JS Agent]
     E -->|ART/ObjC| F[Target App]
@@ -58,13 +57,13 @@ graph TD
 ### Build from Source
 ```bash
 # 1. Setup SDKs
-./scripts/download_frida_devkit.sh
+make install_dependencies
 
 # 2. Build for your platform
-./gradlew linkReleaseExecutableMacosArm64
+make release
 
 # 3. Run
-./build/bin/macosArm64/releaseExecutable/barbatos.kexe
+make run
 ```
 
 ### API Usage

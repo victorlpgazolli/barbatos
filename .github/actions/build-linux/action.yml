@@ -31,7 +31,7 @@ runs:
       shell: bash
       run: |
         zip -r ./barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}.zip ./dist
-        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-tui
+        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-cli
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
@@ -39,5 +39,5 @@ runs:
         name: linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}
         path: |
           barbatos-linux-*.zip
-          barbatos-linux-*-tui
+          barbatos-linux-*-cli
         retention-days: 1

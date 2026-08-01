@@ -3,7 +3,7 @@ info:
   title: Barbatos JSON-RPC Bridge API
   version: 1.1.0
   description: |
-    API for communication between the barbatos TUI and the Frida agent injected into Android/iOS devices.
+    API for communication between the barbatos MCP Server and the Frida agent injected into Android/iOS devices.
     Uses JSON-RPC 2.0 over HTTP POST.
 
     ### JSON-RPC Methods Contract

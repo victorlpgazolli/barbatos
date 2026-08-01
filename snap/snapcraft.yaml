@@ -20,8 +20,7 @@ description: |
     LLMs (Claude/Cursor) debug your app autonomously.
 
   This snap includes:
-  - 'barbatos': The interactive TUI shell.
-  - 'barbatos.bridge': The unified Frida RPC bridge and MCP server.
+  - 'barbatos': The CLI and MCP server.
 
   Note: After installation, run 'sudo snap connect barbatos:adb-support' 
   to allow the debugger to communicate with your Android devices.
