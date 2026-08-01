@@ -4,10 +4,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import rpc.model.*
-class MockFridaBridge : FridaBridge {
+class MockFridaBridge() : FridaBridge {
+    override val jsonParser: Json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
-    private val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    override val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     // Mock implementations will go here
     override fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String> {

@@ -86,7 +86,7 @@ class RpcHandler(private val bridge: FridaBridge) {
         }
     }
 
-    suspend fun handle(requestJson: String): HandlerResult {
+    fun handle(requestJson: String): HandlerResult {
         val req = try {
             jsonParser.decodeFromString<RpcRequest>(requestJson)
         } catch (e: Exception) {
@@ -123,34 +123,8 @@ class RpcHandler(private val bridge: FridaBridge) {
         }
     }
 
-    private suspend fun processMethod(method: String, params: JsonElement?): JsonElement {
+    private fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
-            "listClasses" -> {
-                val decodedParams = decodeToOrThrow<ListClassesParams>(params)
-                val result = bridge.listClasses(decodedParams.search_param, decodedParams.app_package, decodedParams.offset, decodedParams.limit)
-                jsonParser.encodeToJsonElement(result)
-            }
-            "listClassesStream" -> {
-                val decodedParams = decodeToOrNull<ListClassesParams>(params) ?: ListClassesParams()
-                val result = suspendCancellableCoroutine { continuation ->
-                    val result = mutableListOf<String>()
-                    bridge.listClassesStream(
-                        searchParam = decodedParams.search_param,
-                        appPackage = decodedParams.app_package,
-                        offset = decodedParams.offset,
-                        limit = decodedParams.limit,
-                        onChunk = {
-                            result.addAll(it)
-                        },
-                        onComplete = {
-                            continuation.resumeWith(
-                                Result.success(result.toList())
-                            )
-                        }
-                    )
-                }
-                jsonParser.encodeToJsonElement(result)
-            }
             "debugPing" -> {
                 val result = bridge.pingJava()
                 jsonParser.encodeToJsonElement(result)

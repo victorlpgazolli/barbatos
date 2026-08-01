@@ -2,6 +2,7 @@
 package rpc.tools
 
 import bridge.FridaBridge
+import ext.collectListClasses
 import kotlinx.serialization.json.*
 import rpc.*
 
@@ -17,7 +18,14 @@ class ListClassesTool(private val bridge: FridaBridge) : McpTool {
 
     override fun execute(args: JsonObject?): McpCallToolResult {
         val search = args?.get("search_param")?.jsonPrimitive?.content ?: ""
-        val classes = bridge.listClasses(search, "", 0, 200)
-        return McpCallToolResult(listOf(McpContent("text", classes.joinToString("\n"))))
+
+        val collected = mutableListOf<String>()
+
+        bridge.collectListClasses(search, "", 0, 200) { classInfo ->
+            val line = classInfo.toString()
+            collected += line
+        }
+
+        return McpCallToolResult(listOf(McpContent("text", collected.joinToString("\n"))))
     }
 }

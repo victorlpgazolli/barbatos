@@ -1,9 +1,13 @@
 package bridge
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.serialization.json.Json
 import rpc.model.HookEvent
 import rpc.model.*
 
 interface FridaBridge {
+    val jsonParser: Json
+    val fridaCoroutineScope: CoroutineScope
     // Methods will be added here as we migrate endpoints
     fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String>
     fun listClassesStream(searchParam: String, appPackage: String, offset: Int, limit: Int, onChunk: suspend (List<String>) -> Unit, onComplete: () -> Unit)

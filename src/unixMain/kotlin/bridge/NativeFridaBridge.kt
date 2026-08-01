@@ -82,12 +82,12 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
     private var session: CPointer<FridaSession>? = null
     private var script: CPointer<FridaScript>? = null
     
-    private val jsonParser = Json {
+    override val jsonParser = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
-    private val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    override val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
         frida_init()
