@@ -13,7 +13,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
-import rpc.*
+import rpc.model.*
 import utils.EmbeddedScripts
 
 private val jsonParser = Json {
@@ -277,7 +277,11 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         val adb = AdbManagerImpl()
         val devices = try { adb.listDevices() } catch (e: Exception) { emptyList() }
         if (devices.isEmpty()) {
-            return InjectionProgressResult("error", listOf(InjectionStep("get_target", "No devices found", "error")), error_message = "No ADB devices connected")
+            return InjectionProgressResult(
+                "error",
+                listOf(InjectionStep("get_target", "No devices found", "error")),
+                error_message = "No ADB devices connected"
+            )
         }
         
         val serial = devices.first()
@@ -314,7 +318,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                 steps.add(InjectionStep("load_agent", "Attach to process and load agent", "running"))
                 prepareEnvironment(pkg, pid)
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
-                
+
                 InjectionProgressResult("completed", steps)
             } else if (isDebuggable) {
                 steps.add(InjectionStep("setup_adb", "Configure ADB port forwards", "running"))
@@ -341,7 +345,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                 platform.posix.sleep(5u)
                 prepareEnvironment("Gadget")
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
-                
+
                 InjectionProgressResult("completed", steps)
             } else {
                 throw Exception("App '$pkg' is not debuggable and device is not rooted.")
@@ -373,7 +377,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         return if (result.isSuccess) "Success" else "Error: ${result.exceptionOrNull()?.message}"
     }
     
-    override fun healthCheck(): HealthCheckResponse {
+    override fun healthCheck(): HealthCheckResult {
         val checks = mutableMapOf<String, CheckResponse>()
         val adb = AdbManagerImpl()
         var serial: String? = null
@@ -440,7 +444,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
 
         val overall = if (checks.values.any { it.status == "error" }) "degraded" else "ok"
-        return HealthCheckResponse(overall, checks, null)
+        return HealthCheckResult(overall, checks, null)
     }
 
     override fun patchAndInstallIosApp(appPath: String): String = "Not implemented"

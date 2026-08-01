@@ -1,9 +1,7 @@
 package bridge
 
-import rpc.ClassInspectionResult
-import rpc.HookEvent
-import rpc.InspectInstanceResult
-import rpc.ListInstancesResult
+import rpc.model.HookEvent
+import rpc.model.*
 
 interface FridaBridge {
     // Methods will be added here as we migrate endpoints
@@ -23,13 +21,13 @@ interface FridaBridge {
     fun runOnce(className: String, methodSig: String, code: String): String
     fun getInstanceAddresses(className: String): List<String>
     
-    fun prepareEnvironment(target: String, pid: Int? = null): rpc.PrepareEnvResult
-    fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult
+    fun prepareEnvironment(target: String, pid: Int? = null): PrepareEnvResult
+    fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult
     fun injectJdwp(target: String, port: Int, packageName: String): String
-    fun healthCheck(): rpc.HealthCheckResponse
+    fun healthCheck(): HealthCheckResult
     
     fun patchAndInstallIosApp(appPath: String): String
     fun checkIosJailbreakStatus(serial: String): String
     fun injectJailbrokenIos(serial: String): String
-    fun checkIosDeployStatus(): rpc.GenericStatusResult
+    fun checkIosDeployStatus(): GenericStatusResult
 }

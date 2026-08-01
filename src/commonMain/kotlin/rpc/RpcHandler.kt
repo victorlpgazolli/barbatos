@@ -3,6 +3,26 @@ package rpc
 import bridge.FridaBridge
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.*
+import rpc.model.CountInstancesParams
+import rpc.model.GetInstanceAddressesParams
+import rpc.model.HookParams
+import rpc.model.InjectGadgetParams
+import rpc.model.InjectJdwpParams
+import rpc.model.InspectClassParams
+import rpc.model.InspectInstanceParams
+import rpc.model.IosJailbreakParams
+import rpc.model.ListClassesParams
+import rpc.model.ListInstancesParams
+import rpc.model.PatchAndInstallIosAppParams
+import rpc.model.PrepareEnvParams
+import rpc.model.RpcError
+import rpc.model.RpcErrorResponse
+import rpc.model.RpcParams
+import rpc.model.RpcRequest
+import rpc.model.RpcResponse
+import rpc.model.RunOnceParams
+import rpc.model.SetFieldValueParams
+import rpc.model.SetMethodImplementationParams
 
 data class HandlerResult(val body: String, val statusCode: Int)
 
@@ -56,7 +76,10 @@ class RpcHandler(private val bridge: FridaBridge) {
             } catch (e: Exception) {
                 val errorStr = jsonParser.encodeToString(
                     RpcErrorResponse.serializer(),
-                    RpcErrorResponse(error = RpcError(-32603, e.message ?: "Internal stream error"), id = req.id)
+                    RpcErrorResponse(
+                        error = RpcError(-32603, e.message ?: "Internal stream error"),
+                        id = req.id
+                    )
                 )
                 emit(errorStr)
             }
@@ -68,7 +91,13 @@ class RpcHandler(private val bridge: FridaBridge) {
             jsonParser.decodeFromString<RpcRequest>(requestJson)
         } catch (e: Exception) {
             return HandlerResult(
-                jsonParser.encodeToString(RpcErrorResponse.serializer(), RpcErrorResponse(error = RpcError(-32700, "Parse error: ${e.message}"), id = null)),
+                jsonParser.encodeToString(
+                    RpcErrorResponse.serializer(),
+                    RpcErrorResponse(
+                        error = RpcError(-32700, "Parse error: ${e.message}"),
+                        id = null
+                    )
+                ),
                 200
             )
         }
@@ -82,7 +111,13 @@ class RpcHandler(private val bridge: FridaBridge) {
         } catch (e: Exception) {
             val code = if (e.message?.contains("not found") == true) -32601 else -32603
             HandlerResult(
-                jsonParser.encodeToString(RpcErrorResponse.serializer(), RpcErrorResponse(error = RpcError(code, e.message ?: "Internal error"), id = req.id)),
+                jsonParser.encodeToString(
+                    RpcErrorResponse.serializer(),
+                    RpcErrorResponse(
+                        error = RpcError(code, e.message ?: "Internal error"),
+                        id = req.id
+                    )
+                ),
                 200
             )
         }
@@ -91,19 +126,19 @@ class RpcHandler(private val bridge: FridaBridge) {
     private suspend fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
             "listClasses" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
-                val res = bridge.listClasses(p.search_param, p.app_package, p.offset, p.limit)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<ListClassesParams>(params)
+                val result = bridge.listClasses(decodedParams.search_param, decodedParams.app_package, decodedParams.offset, decodedParams.limit)
+                jsonParser.encodeToJsonElement(result)
             }
             "listClassesStream" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
+                val decodedParams = decodeToOrNull<ListClassesParams>(params) ?: ListClassesParams()
                 val result = suspendCancellableCoroutine { continuation ->
                     val result = mutableListOf<String>()
                     bridge.listClassesStream(
-                        searchParam = p.search_param,
-                        appPackage = p.app_package,
-                        offset = p.offset,
-                        limit = p.limit,
+                        searchParam = decodedParams.search_param,
+                        appPackage = decodedParams.app_package,
+                        offset = decodedParams.offset,
+                        limit = decodedParams.limit,
                         onChunk = {
                             result.addAll(it)
                         },
@@ -117,101 +152,107 @@ class RpcHandler(private val bridge: FridaBridge) {
                 jsonParser.encodeToJsonElement(result)
             }
             "debugPing" -> {
-                val res = bridge.pingJava()
-                jsonParser.encodeToJsonElement(res)
+                val result = bridge.pingJava()
+                jsonParser.encodeToJsonElement(result)
             }
             "testRpc" -> {
-                val res = bridge.testRpc()
-                jsonParser.encodeToJsonElement(res)
+                val result = bridge.testRpc()
+                jsonParser.encodeToJsonElement(result)
             }
             "countInstances" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<CountInstancesParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.countInstances(p.className)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<CountInstancesParams>(params)
+                val result = bridge.countInstances(decodedParams.className)
+                jsonParser.encodeToJsonElement(result)
             }
             "inspectClass" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<InspectClassParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.inspectClass(p.className)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<InspectClassParams>(params)
+                val result = bridge.inspectClass(decodedParams.className)
+                jsonParser.encodeToJsonElement(result)
             }
             "listInstances" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<ListInstancesParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.listInstances(p.className)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<ListInstancesParams>(params)
+                val result = bridge.listInstances(decodedParams.className)
+                jsonParser.encodeToJsonElement(result)
             }
             "inspectInstance" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<InspectInstanceParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.inspectInstance(p.className, p.id, p.offset, p.limit)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<InspectInstanceParams>(params)
+                val result = bridge.inspectInstance(decodedParams.className, decodedParams.id, decodedParams.offset, decodedParams.limit)
+                jsonParser.encodeToJsonElement(result)
             }
             "setFieldValue" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<SetFieldValueParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.setFieldValue(p.className, p.id, p.fieldName, p.type, p.newValue)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<SetFieldValueParams>(params)
+                val result = bridge.setFieldValue(decodedParams.className, decodedParams.id, decodedParams.fieldName, decodedParams.type, decodedParams.newValue)
+                jsonParser.encodeToJsonElement(result)
             }
             "hookMethod" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<HookParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.hookMethod(p.className, p.methodSig)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<HookParams>(params)
+                val result = bridge.hookMethod(decodedParams.className, decodedParams.methodSig)
+                jsonParser.encodeToJsonElement(result)
             }
             "getHookEvents" -> {
-                val res = bridge.getHookEvents()
-                jsonParser.encodeToJsonElement(res)
+                val result = bridge.getHookEvents()
+                jsonParser.encodeToJsonElement(result)
             }
             "setMethodImplementation" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<SetMethodImplementationParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.setMethodImplementation(p.className, p.methodSig, p.code)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<SetMethodImplementationParams>(params)
+                val result = bridge.setMethodImplementation(decodedParams.className, decodedParams.methodSig, decodedParams.code)
+                jsonParser.encodeToJsonElement(result)
             }
             "runOnce" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<RunOnceParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.runOnce(p.className, p.methodSig, p.code)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<RunOnceParams>(params)
+                val result = bridge.runOnce(decodedParams.className, decodedParams.methodSig, decodedParams.code)
+                jsonParser.encodeToJsonElement(result)
             }
             "getInstanceAddresses" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<GetInstanceAddressesParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.getInstanceAddresses(p.className)
+                val decodedParams = decodeToOrThrow<GetInstanceAddressesParams>(params)
+                val res = bridge.getInstanceAddresses(decodedParams.className)
                 jsonParser.encodeToJsonElement(res)
             }
             "prepareEnvironment" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<PrepareEnvParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.prepareEnvironment(p.target)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<PrepareEnvParams>(params)
+                val result = bridge.prepareEnvironment(decodedParams.target)
+                jsonParser.encodeToJsonElement(result)
             }
             "injectGadgetFromScratch" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<InjectGadgetParams>(it) } ?: InjectGadgetParams()
-                val res = bridge.injectGadgetFromScratch(p.with_logs, p.limit)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<InjectGadgetParams>(params)
+                val result = bridge.injectGadgetFromScratch(decodedParams.with_logs, decodedParams.limit)
+                jsonParser.encodeToJsonElement(result)
             }
             "injectJdwp" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<InjectJdwpParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.injectJdwp(p.target, p.port, p.package_name)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<InjectJdwpParams>(params)
+                val result = bridge.injectJdwp(decodedParams.target, decodedParams.port, decodedParams.package_name)
+                jsonParser.encodeToJsonElement(result)
             }
             "healthCheck" -> {
-                val res = bridge.healthCheck()
-                jsonParser.encodeToJsonElement(res)
+                val result = bridge.healthCheck()
+                jsonParser.encodeToJsonElement(result)
             }
             "patchAndInstallIosApp" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<PatchAndInstallIosAppParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.patchAndInstallIosApp(p.appPath)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<PatchAndInstallIosAppParams>(params)
+                val result = bridge.patchAndInstallIosApp(decodedParams.appPath)
+                jsonParser.encodeToJsonElement(result)
             }
             "checkIosJailbreakStatus" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<IosJailbreakParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.checkIosJailbreakStatus(p.serial)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<IosJailbreakParams>(params)
+                val result = bridge.checkIosJailbreakStatus(decodedParams.serial)
+                jsonParser.encodeToJsonElement(result)
             }
             "injectJailbrokenIos" -> {
-                val p = params?.let { jsonParser.decodeFromJsonElement<IosJailbreakParams>(it) } ?: throw Exception("Missing params")
-                val res = bridge.injectJailbrokenIos(p.serial)
-                jsonParser.encodeToJsonElement(res)
+                val decodedParams = decodeToOrThrow<IosJailbreakParams>(params)
+                val result = bridge.injectJailbrokenIos(decodedParams.serial)
+                jsonParser.encodeToJsonElement(result)
             }
             "checkIosDeployStatus" -> {
-                val res = bridge.checkIosDeployStatus()
-                jsonParser.encodeToJsonElement(res)
+                val result = bridge.checkIosDeployStatus()
+                jsonParser.encodeToJsonElement(result)
             }
             else -> throw Exception("Method $method not found")
         }
     }
+    private inline fun <reified T: RpcParams>decodeToOrThrow(params: JsonElement?): T =
+        decodeToOrNull(params) ?: throw Exception("Missing params")
+
+    private inline fun <reified T: RpcParams>decodeToOrNull(params: JsonElement?): T? =
+        params?.let { jsonParser.decodeFromJsonElement<T>(it) }
+
 }

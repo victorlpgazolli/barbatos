@@ -8,9 +8,9 @@ import server.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
+import rpc.model.RpcErrorResponse
 
 class RpcHandlerTest {
     @Test

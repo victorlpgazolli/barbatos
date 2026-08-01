@@ -4,13 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import rpc.ClassInspectionResult
-import rpc.HookEvent
-import rpc.InspectInstanceResult
-import rpc.InstanceAttribute
-import rpc.InstanceInfo
-import rpc.ListInstancesResult
-
+import rpc.model.*
 class MockFridaBridge : FridaBridge {
 
     private val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -89,20 +83,20 @@ class MockFridaBridge : FridaBridge {
         return listOf("0x123", "0x456")
     }
 
-    override fun prepareEnvironment(target: String, pid: Int?): rpc.PrepareEnvResult {
-        return rpc.PrepareEnvResult(1234, "com.example", 8080, "Attached to $target")
+    override fun prepareEnvironment(target: String, pid: Int?): PrepareEnvResult {
+        return PrepareEnvResult(1234, "com.example", 8080, "Attached to $target")
     }
 
-    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): rpc.InjectionProgressResult {
-        return rpc.InjectionProgressResult("completed", listOf(rpc.InjectionStep("1", "Step 1", "done")))
+    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult {
+        return InjectionProgressResult("completed", listOf(InjectionStep("1", "Step 1", "done")))
     }
 
     override fun injectJdwp(target: String, port: Int, packageName: String): String {
         return "Success"
     }
 
-    override fun healthCheck(): rpc.HealthCheckResponse {
-        return rpc.HealthCheckResponse("ok", mapOf("bridge" to rpc.CheckResponse("ok", "Bridge is running")))
+    override fun healthCheck(): HealthCheckResult {
+        return HealthCheckResult("ok", mapOf("bridge" to CheckResponse("ok", "Bridge is running")))
     }
 
     override fun patchAndInstallIosApp(appPath: String): String {
@@ -117,7 +111,7 @@ class MockFridaBridge : FridaBridge {
         return "success"
     }
 
-    override fun checkIosDeployStatus(): rpc.GenericStatusResult {
-        return rpc.GenericStatusResult("completed")
+    override fun checkIosDeployStatus(): GenericStatusResult {
+        return GenericStatusResult("completed")
     }
 }

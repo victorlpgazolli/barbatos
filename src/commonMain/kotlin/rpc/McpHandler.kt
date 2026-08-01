@@ -1,8 +1,11 @@
 package rpc
 
 import kotlinx.serialization.json.*
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import rpc.model.RpcError
+import rpc.model.RpcErrorResponse
+import rpc.model.RpcRequest
+import rpc.model.RpcResponse
 
 /**
  * Custom exception to trigger the -32601 (Method not found) JSON-RPC error.
@@ -16,7 +19,12 @@ class McpHandler(private val tools: List<McpTool>) {
         val req = try {
             json.decodeFromString<RpcRequest>(requestJson)
         } catch (e: Exception) {
-            return json.encodeToString(RpcErrorResponse(error = RpcError(-32700, "Parse error"), id = null))
+            return json.encodeToString(
+                RpcErrorResponse(
+                    error = RpcError(-32700, "Parse error"),
+                    id = null
+                )
+            )
         }
 
         // If it's a notification (no id), we don't send a response
@@ -29,9 +37,23 @@ class McpHandler(private val tools: List<McpTool>) {
             val result = processMethod(req.method, req.params)
             json.encodeToString(RpcResponse(result = result, id = req.id))
         } catch (e: McpMethodNotFoundException) {
-            json.encodeToString(RpcErrorResponse(error = RpcError(-32601, e.message ?: "Method not found"), id = req.id))
+            json.encodeToString(
+                RpcErrorResponse(
+                    error = RpcError(
+                        -32601,
+                        e.message ?: "Method not found"
+                    ), id = req.id
+                )
+            )
         } catch (e: Exception) {
-            json.encodeToString(RpcErrorResponse(error = RpcError(-32603, e.message ?: "Internal error"), id = req.id))
+            json.encodeToString(
+                RpcErrorResponse(
+                    error = RpcError(
+                        -32603,
+                        e.message ?: "Internal error"
+                    ), id = req.id
+                )
+            )
         }
     }
 
