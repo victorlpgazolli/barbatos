@@ -170,7 +170,7 @@ rpc.exports = {
         }
     },
 
-    inspectinstance: function(className, id, offset, limit) {
+    inspectinstance: function(id, offset, limit) {
         var attributes = [];
         try {
             var ins = instanceCache[id];

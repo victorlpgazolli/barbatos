@@ -66,7 +66,7 @@ class InspectInstanceTool(private val bridge: FridaBridge) : McpTool {
             val id = args?.get("id")?.jsonPrimitive?.content ?: return McpCallToolResult(listOf(McpContent("text", "Missing id")), true)
             val offset = args?.get("offset")?.jsonPrimitive?.intOrNull ?: 0
             val limit = args?.get("limit")?.jsonPrimitive?.intOrNull ?: 50
-            val res = bridge.inspectInstance(className, id, offset, limit)
+            val res = bridge.inspectInstance(id, offset, limit)
             McpCallToolResult(listOf(McpContent("text", mcpJson.encodeToString(res))))
         } catch (e: Exception) {
             McpCallToolResult(listOf(McpContent("text", "Error: ${e.message}")), true)

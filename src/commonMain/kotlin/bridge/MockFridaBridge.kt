@@ -52,7 +52,7 @@ class MockFridaBridge() : FridaBridge {
         )
     }
 
-    override fun inspectInstance(className: String, id: String, offset: Int, limit: Int): InspectInstanceResult {
+    override fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult {
         return InspectInstanceResult(
             attributes = listOf(InstanceAttribute("mCount", "int", "5"))
         )

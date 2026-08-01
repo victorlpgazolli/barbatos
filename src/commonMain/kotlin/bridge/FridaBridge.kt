@@ -15,7 +15,7 @@ interface FridaBridge {
     fun countInstances(className: String): Int
     fun inspectClass(className: String): ClassInspectionResult
     fun listInstances(className: String): ListInstancesResult
-    fun inspectInstance(className: String, id: String, offset: Int, limit: Int): InspectInstanceResult
+    fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult
     
     fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String
     fun hookMethod(className: String, methodSig: String): String

@@ -1,7 +1,6 @@
 package rpc
 
 import bridge.FridaBridge
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.*
 import rpc.model.CountInstancesParams
 import rpc.model.GetInstanceAddressesParams
@@ -150,7 +149,7 @@ class RpcHandler(private val bridge: FridaBridge) {
             }
             "inspectInstance" -> {
                 val decodedParams = decodeToOrThrow<InspectInstanceParams>(params)
-                val result = bridge.inspectInstance(decodedParams.className, decodedParams.id, decodedParams.offset, decodedParams.limit)
+                val result = bridge.inspectInstance(decodedParams.id, decodedParams.offset, decodedParams.limit)
                 jsonParser.encodeToJsonElement(result)
             }
             "setFieldValue" -> {

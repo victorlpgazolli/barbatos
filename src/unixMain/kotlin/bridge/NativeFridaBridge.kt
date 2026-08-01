@@ -157,32 +157,32 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
     }
 
     override fun countInstances(className: String): Int {
-        val jsonResult = invokeRpc("countinstances", listOf("\"$className\""))
+        val jsonResult = invokeRpc("countinstances", listOf(className))
         return jsonResult.toIntOrNull() ?: -1
     }
 
     override fun inspectClass(className: String): ClassInspectionResult {
-        val jsonResult = invokeRpc("inspectclass", listOf("\"$className\""))
+        val jsonResult = invokeRpc("inspectclass", listOf(className))
         return jsonParser.decodeFromString(jsonResult)
     }
 
     override fun listInstances(className: String): ListInstancesResult {
-        val jsonResult = invokeRpc("listinstances", listOf("\"$className\""))
+        val jsonResult = invokeRpc("listinstances", listOf(className))
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun inspectInstance(className: String, id: String, offset: Int, limit: Int): InspectInstanceResult {
-        val jsonResult = invokeRpc("inspectinstance", listOf("\"$className\"", "\"$id\"", "$offset", "$limit"))
+    override fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult {
+        val jsonResult = invokeRpc("inspectinstance", listOf(id, offset.toString(), limit.toString()))
         return jsonParser.decodeFromString(jsonResult)
     }
 
     override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String {
         val safeValue = newValue.replace("\"", "\\\"")
-        return invokeRpc("setfieldvalue", listOf("\"$className\"", "\"$id\"", "\"$fieldName\"", "\"$type\"", "\"$safeValue\""))
+        return invokeRpc("setfieldvalue", listOf(className, id, fieldName, type, safeValue))
     }
 
     override fun hookMethod(className: String, methodSig: String): String = 
-        invokeRpc("hookmethod", listOf("\"$className\"", "\"$methodSig\""))
+        invokeRpc("hookmethod", listOf(className, methodSig))
 
     override fun getHookEvents(): List<HookEvent> {
         val jsonResult = invokeRpc("gethookevents")
@@ -191,16 +191,16 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
 
     override fun setMethodImplementation(className: String, methodSig: String, code: String): String {
         val escapedCode = code.replace("\"", "\\\"").replace("\n", "\\n")
-        return invokeRpc("setmethodimplementation", listOf("\"$className\"", "\"$methodSig\"", "\"$escapedCode\""))
+        return invokeRpc("setmethodimplementation", listOf(className, methodSig, escapedCode))
     }
 
     override fun runOnce(className: String, methodSig: String, code: String): String {
         val escapedCode = code.replace("\"", "\\\"").replace("\n", "\\n")
-        return invokeRpc("runonce", listOf("\"$className\"", "\"$methodSig\"", "\"$escapedCode\""))
+        return invokeRpc("runonce", listOf(className, methodSig, escapedCode))
     }
 
     override fun getInstanceAddresses(className: String): List<String> {
-        val jsonResult = invokeRpc("getinstanceaddresses", listOf("\"$className\""))
+        val jsonResult = invokeRpc("getinstanceaddresses", listOf(className))
         return jsonParser.decodeFromString(jsonResult)
     }
 

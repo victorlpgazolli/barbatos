@@ -331,7 +331,7 @@ rpc.exports = {
             });
             return { staticAttributes: staticAttributes, instanceAttributes: instanceAttributes, methods: methods };
         } catch (e) {
-            // Using error field to communicate exceptions back to RPC
+            console.log(`[SCRIPT] Error: ${e}`)
             return { error: e.toString(), staticAttributes: [], instanceAttributes: [], methods: [] };
         }
     },
@@ -373,7 +373,7 @@ rpc.exports = {
         }
     },
 
-    inspectinstance: function(className, id, offset, limit) {
+    inspectinstance: function(id, offset, limit) {
         var attributes = [];
         offset = offset || 0;
         limit = limit || 50;
