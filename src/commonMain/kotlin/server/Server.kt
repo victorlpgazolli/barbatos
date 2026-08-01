@@ -9,16 +9,14 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.*
 import io.ktor.utils.io.*
-import kotlinx.serialization.json.*
 import rpc.RpcHandler
 import bridge.FridaBridge
-import kotlinx.coroutines.*
 import utils.EmbeddedScripts
 
 fun Application.module(bridge: FridaBridge) {
     val rpcHandler = RpcHandler(bridge)
-    println("Server module initialized.")
-    println("Has embedded agent? ${EmbeddedScripts.agent.isNotEmpty()}")
+    println("[SERVER] Server module initialized.")
+    println("[SERVER] Has embedded agent? ${EmbeddedScripts.agent.isNotEmpty()}")
 
     routing {
         get("/ping") {
@@ -29,14 +27,17 @@ fun Application.module(bridge: FridaBridge) {
 
             if (rpcHandler.isStreamMethod(body)) {
                 val ndjsonType = ContentType.parse("application/x-ndjson")
-
                 call.respondBytesWriter(contentType = ndjsonType) {
-                    runBlocking {
+                    try {
                         rpcHandler.handleStream(body) { line ->
-                            writeFully((line + "\n").encodeToByteArray())
-                            flush()
+                            try {
+                                writeFully((line + "\n").encodeToByteArray())
+                                flush()
+                            } catch (e: Exception) {
+                                println("[SERVER] Client disconnected ${e.message}")
+                            }
                         }
-                    }
+                    } catch (e: Exception) {}
                 }
             } else {
                 val result = rpcHandler.handle(body)

@@ -140,19 +140,25 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             "stream-0"
         )
 
-        while (!FridaRpcManager.isStreamCompleted) {
-            g_main_context_iteration(context, 0)
-            val elapsed = platform.posix.time(null) - start
-            if (elapsed > 30) {
-                platform.posix.fprintf(platform.posix.stderr, "[NativeBridge] ERROR: Stream timed out after 30s.\n")
-                platform.posix.fflush(platform.posix.stderr)
-                break
+        try {
+            while (!FridaRpcManager.isStreamCompleted) {
+                g_main_context_iteration(context, 0)
+                val elapsed = platform.posix.time(null) - start
+                if (elapsed > 30) {
+                    platform.posix.fprintf(
+                        platform.posix.stderr,
+                        "[NativeBridge] ERROR: Stream timed out after 30s.\n"
+                    )
+                    platform.posix.fflush(platform.posix.stderr)
+                    break
+                }
+                platform.posix.usleep(10000u)
             }
-            platform.posix.usleep(10000u)
+        } finally {
+            FridaRpcManager.onChunkReceived = null
+            FridaRpcManager.isStreamCompleted = true
+            onComplete()
         }
-
-        FridaRpcManager.onChunkReceived = null
-        onComplete()
     }
 
     override fun countInstances(className: String): Int {

@@ -114,4 +114,7 @@ class MockFridaBridge : FridaBridge {
     override fun checkIosDeployStatus(): GenericStatusResult {
         return GenericStatusResult("completed")
     }
+
+    override fun close() {
+    }
 }

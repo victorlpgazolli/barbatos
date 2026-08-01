@@ -69,6 +69,11 @@ fun main(args: Array<String>) {
         }
     } else {
         println("Starting KMP Bridge (HTTP Mode) on port 8080...")
-        startServer(bridge)
+        try {
+            startServer(bridge)
+        } catch (e: Exception) {
+            println("[SERVER] fatal error: ${e.message}")
+            bridge.close()
+        }
     }
 }

@@ -30,4 +30,5 @@ interface FridaBridge {
     fun checkIosJailbreakStatus(serial: String): String
     fun injectJailbrokenIos(serial: String): String
     fun checkIosDeployStatus(): GenericStatusResult
+    fun close(): Unit
 }
