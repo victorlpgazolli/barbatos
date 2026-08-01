@@ -231,7 +231,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                     platform.posix.sleep(1u)
                 }
                 
-                if (process == null) throw RuntimeException("Could not find 'Gadget' process on remote device")
+                if (process == null) throw RuntimeException("Could not find 'Gadget' process on remote device, try running rpcInjectGadgetFromScratch first")
                 targetPid = frida_process_get_pid(process)
                 g_object_unref(process)
             } else {
@@ -276,7 +276,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             checkError(error.ptr)
         }
 
-        return PrepareEnvResult(0, "Ready", 0, "Attached to $target")
+        return PrepareEnvResult(0, "Ready", 0, "Attached to $target, ready to receive commands")
     }
 
     override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult {
