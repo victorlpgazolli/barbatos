@@ -104,11 +104,6 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
     }
 
-    override fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String> {
-        val jsonResult = invokeRpc("listclasses", listOf("\"$searchParam\"", "$offset", "$limit"))
-        return jsonParser.decodeFromString(jsonResult)
-    }
-    
     override fun pingJava(): String = try { invokeRpc("pingjava") } catch (e: Exception) { "error: ${e.message}" }
 
     override fun testRpc(): String = try { invokeRpc("testrpc") } catch (e: Exception) { "error: ${e.message}" }

@@ -80,14 +80,14 @@ class McpHandler(private val tools: List<McpTool>) {
                 tools.map { McpToolDef(it.name, it.description, it.inputSchema) }
             ))
             "tools/call" -> {
-                val p = params?.let { json.decodeFromJsonElement<McpCallToolParams>(it) }
+                val decodedParams = params?.let { json.decodeFromJsonElement<McpCallToolParams>(it) }
                     ?: return json.encodeToJsonElement(McpCallToolResult(listOf(McpContent("text", "Missing params")), true))
                 
-                val tool = tools.find { it.name == p.name }
+                val tool = tools.find { it.name == decodedParams.name }
                     ?: return json.encodeToJsonElement(McpCallToolResult(listOf(McpContent("text", "Tool not found")), true))
                 
                 try {
-                    json.encodeToJsonElement(tool.execute(p.arguments))
+                    json.encodeToJsonElement(tool.execute(decodedParams.arguments))
                 } catch (e: Exception) {
                     json.encodeToJsonElement(McpCallToolResult(listOf(McpContent("text", "Execution error: ${e.message}")), true))
                 }
