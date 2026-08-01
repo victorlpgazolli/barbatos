@@ -38,7 +38,6 @@ tar -xf "${DEVKIT_NAME}" -C "$TARGET_DIR"
 mv "$TARGET_DIR/frida-core.h" "$TARGET_DIR/frida-core.h.tmp" 2>/dev/null || true
 mv "$TARGET_DIR/frida-core.h.tmp" "$TARGET_DIR/frida-core.h" 2>/dev/null || true
 
-clang -E -P -v "$TARGET_DIR/frida-core.h"
 
 rm "${DEVKIT_NAME}"
 echo "Frida Devkit setup complete."
