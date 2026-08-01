@@ -8,7 +8,7 @@ import rpc.ListInstancesResult
 interface FridaBridge {
     // Methods will be added here as we migrate endpoints
     fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String>
-    fun listClassesStream(searchParam: String, onChunk: (List<String>) -> Unit, onComplete: () -> Unit)
+    fun listClassesStream(searchParam: String, appPackage: String, offset: Int, limit: Int, onChunk: suspend (List<String>) -> Unit, onComplete: () -> Unit)
     fun pingJava(): String
     fun testRpc(): String
     fun countInstances(className: String): Int

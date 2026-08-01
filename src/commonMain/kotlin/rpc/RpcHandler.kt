@@ -1,6 +1,7 @@
 package rpc
 
 import bridge.FridaBridge
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.*
 
 data class HandlerResult(val body: String, val statusCode: Int)
@@ -11,7 +12,58 @@ class RpcHandler(private val bridge: FridaBridge) {
         encodeDefaults = true
     }
 
-    fun handle(requestJson: String): HandlerResult {
+    fun isStreamMethod(requestJson: String): Boolean {
+        return try {
+            val req = jsonParser.decodeFromString<RpcRequest>(requestJson)
+            req.method == "listClassesStream"
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun handleStream(requestJson: String, emit: suspend (String) -> Unit) {
+        val req = try {
+            jsonParser.decodeFromString<RpcRequest>(requestJson)
+        } catch (e: Exception) {
+            val errorStr = jsonParser.encodeToString(
+                RpcErrorResponse.serializer(),
+                RpcErrorResponse(error = RpcError(-32700, "Parse error: ${e.message}"), id = null)
+            )
+            emit(errorStr)
+            return
+        }
+
+        if (req.method == "listClassesStream") {
+            val p = req.params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
+
+            try {
+                bridge.listClassesStream(
+                    searchParam = p.search_param,
+                    appPackage = p.app_package,
+                    offset = p.offset,
+                    limit = p.limit,
+                    onChunk = { chunk ->
+                        val res = RpcResponse(
+                            result = jsonParser.encodeToJsonElement(chunk),
+                            id = req.id
+                        )
+                        val jsonStr = jsonParser.encodeToString(RpcResponse.serializer(), res)
+
+                        emit(jsonStr)
+                    },
+                    onComplete = {}
+                )
+            } catch (e: Exception) {
+                val errorStr = jsonParser.encodeToString(
+                    RpcErrorResponse.serializer(),
+                    RpcErrorResponse(error = RpcError(-32603, e.message ?: "Internal stream error"), id = req.id)
+                )
+                emit(errorStr)
+            }
+        }
+    }
+
+    suspend fun handle(requestJson: String): HandlerResult {
         val req = try {
             jsonParser.decodeFromString<RpcRequest>(requestJson)
         } catch (e: Exception) {
@@ -36,12 +88,33 @@ class RpcHandler(private val bridge: FridaBridge) {
         }
     }
 
-    private fun processMethod(method: String, params: JsonElement?): JsonElement {
+    private suspend fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
             "listClasses" -> {
                 val p = params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
                 val res = bridge.listClasses(p.search_param, p.app_package, p.offset, p.limit)
                 jsonParser.encodeToJsonElement(res)
+            }
+            "listClassesStream" -> {
+                val p = params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
+                val result = suspendCancellableCoroutine { continuation ->
+                    val result = mutableListOf<String>()
+                    bridge.listClassesStream(
+                        searchParam = p.search_param,
+                        appPackage = p.app_package,
+                        offset = p.offset,
+                        limit = p.limit,
+                        onChunk = {
+                            result.addAll(it)
+                        },
+                        onComplete = {
+                            continuation.resumeWith(
+                                Result.success(result.toList())
+                            )
+                        }
+                    )
+                }
+                jsonParser.encodeToJsonElement(result)
             }
             "debugPing" -> {
                 val res = bridge.pingJava()

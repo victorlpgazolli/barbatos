@@ -932,3 +932,44 @@ rpc.exports = {
         }
     }
 };
+
+// --- Custom RPC Dispatcher for NativeFridaBridge ---
+
+function setupCustomRpcListener() {
+    recv(function onMessage(message) {
+        console.log("Received RPC message: " + JSON.stringify(message));
+        if (message.type === 'rpc_request') {
+            var reqId = message.reqId;
+            var methodName = message.method;
+            var args = message.args || [];
+            console.log("Dispatching RPC method: " + methodName + " with args: " + JSON.stringify(args));
+            if (rpc.exports.hasOwnProperty(methodName) && typeof rpc.exports[methodName] === 'function') {
+                try {
+                    var result = rpc.exports[methodName].apply(null, args);
+                    console.log("RPC method " + methodName + " executed successfully, result: " + JSON.stringify(result));
+                    
+                    send({ 
+                        type: "rpc_response", 
+                        reqId: reqId, 
+                        status: "ok", 
+                        data: result 
+                    });
+                } catch (e) {
+                    send({ 
+                        type: "rpc_response", 
+                        reqId: reqId, 
+                        status: "error", 
+                        error: e.toString() 
+                    });
+                }
+            } else {
+                send({ type: "rpc_response", reqId: reqId, status: "error", error: "Method not found" });
+                console.log("Error processing RPC message: Method not found: " + methodName);
+            }
+        }
+        setupCustomRpcListener()
+    });
+}
+
+// Start listening for Kotlin messages
+setupCustomRpcListener();

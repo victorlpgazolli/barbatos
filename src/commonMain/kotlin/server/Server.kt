@@ -17,40 +17,30 @@ import utils.EmbeddedScripts
 
 fun Application.module(bridge: FridaBridge) {
     val rpcHandler = RpcHandler(bridge)
-    val buildId = "VERIFY_CODE_CHANGE_2"
-    println("Server module initialized. BuildId: $buildId")
-    println(EmbeddedScripts.agent)
+    println("Server module initialized.")
+    println("Has embedded agent? ${EmbeddedScripts.agent.isNotEmpty()}")
 
     routing {
         get("/ping") {
-            call.respondText("""{"status": "pong", "build": "$buildId"}""", ContentType.Application.Json)
+            call.respondText("""{"status": "pong"}""", ContentType.Application.Json)
         }
         post("/rpc") {
             val body = call.receiveText()
-            val result = rpcHandler.handle(body)
-            call.respondText(result.body, ContentType.Application.Json, HttpStatusCode.fromValue(result.statusCode))
-        }
-        post("/stream/classes") {
-            val body = call.receiveText()
-            val json = Json.parseToJsonElement(body).jsonObject
-            val searchParam = json["search_param"]?.jsonPrimitive?.content ?: ""
-            
-            call.respondBytesWriter(ContentType.parse("application/x-ndjson")) {
-                val channel = this
-                bridge.listClassesStream(searchParam, { chunk ->
-                    val chunkJson = Json.encodeToString(JsonObject.serializer(), buildJsonObject {
-                        put("chunk", buildJsonArray {
-                            chunk.forEach { add(it) }
-                        })
-                    })
-                    // No Kotlin Native, respondBytesWriter fornece um CoroutineScope
-                    launch {
-                        channel.writeStringUtf8(chunkJson + "\n")
-                        channel.flush()
+
+            if (rpcHandler.isStreamMethod(body)) {
+                val ndjsonType = ContentType.parse("application/x-ndjson")
+
+                call.respondBytesWriter(contentType = ndjsonType) {
+                    runBlocking {
+                        rpcHandler.handleStream(body) { line ->
+                            writeFully((line + "\n").encodeToByteArray())
+                            flush()
+                        }
                     }
-                }, {
-                    // Complete
-                })
+                }
+            } else {
+                val result = rpcHandler.handle(body)
+                call.respondText(result.body, ContentType.Application.Json, HttpStatusCode.fromValue(result.statusCode))
             }
         }
     }

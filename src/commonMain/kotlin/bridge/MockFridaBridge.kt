@@ -1,5 +1,9 @@
 package bridge
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import rpc.ClassInspectionResult
 import rpc.HookEvent
 import rpc.InspectInstanceResult
@@ -8,16 +12,28 @@ import rpc.InstanceInfo
 import rpc.ListInstancesResult
 
 class MockFridaBridge : FridaBridge {
+
+    private val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     // Mock implementations will go here
     override fun listClasses(searchParam: String, appPackage: String, offset: Int, limit: Int): List<String> {
         val all = listOf("com.example.MainActivity", "java.lang.String")
         return all.filter { it.contains(searchParam, ignoreCase = true) }
     }
 
-    override fun listClassesStream(searchParam: String, onChunk: (List<String>) -> Unit, onComplete: () -> Unit) {
+    override fun listClassesStream(
+        searchParam: String,
+        appPackage: String,
+        offset: Int,
+        limit: Int,
+        onChunk: suspend (List<String>) -> Unit,
+        onComplete: () -> Unit
+    ) {
         val all = listOf("com.example.MainActivity", "java.lang.String")
         val filtered = all.filter { it.contains(searchParam, ignoreCase = true) }
-        onChunk(filtered)
+        fridaCoroutineScope.launch {
+            onChunk(filtered)
+        }
         onComplete()
     }
 

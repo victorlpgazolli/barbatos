@@ -257,6 +257,7 @@ fun registerRpcTask(taskName: String, methodName: String, params: Map<String, An
 
 // Exploration Tools
 registerRpcTask("rpcListClasses", "listClasses", mapOf("search_param" to "", "app_package" to "", "offset" to 0, "limit" to 200))
+registerRpcTask("rpcListClassesStream", "listClassesStream", mapOf("search_param" to "", "app_package" to "", "offset" to 0, "limit" to 200))
 registerRpcTask("rpcCountInstances", "countInstances", mapOf("className" to ""))
 registerRpcTask("rpcInspectClass", "inspectClass", mapOf("className" to ""))
 registerRpcTask("rpcListInstances", "listInstances", mapOf("className" to ""))
