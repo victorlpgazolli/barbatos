@@ -36,11 +36,12 @@ fun main(args: Array<String>) {
             PrepareEnvironmentTool(bridge),
             InjectGadgetFromScratchTool(bridge),
             InjectJdwpTool(bridge),
-            PatchAndInstallIosAppTool(bridge),
-            CheckIosJailbreakStatusTool(bridge),
-            InjectJailbrokenIosTool(bridge),
-            CheckIosDeployStatusTool(bridge),
-            HealthCheckTool(bridge)
+            // todo: work on ios support
+            // PatchAndInstallIosAppTool(bridge),
+            // CheckIosJailbreakStatusTool(bridge),
+            // InjectJailbrokenIosTool(bridge),
+            // CheckIosDeployStatusTool(bridge),
+            HealthCheckTool(bridge),
         )
         val mcpHandler = McpHandler(tools)
         
