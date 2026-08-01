@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
-import rpc.model.RpcErrorResponse
+import rpc.model.*
 
 class RpcHandlerTest {
     @Test
