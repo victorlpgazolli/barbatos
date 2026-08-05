@@ -2,42 +2,31 @@ package model.bridge
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.Json
-import model.rpc.ClassInspectionResult
-import model.rpc.GenericStatusResult
-import model.rpc.HealthCheckResult
-import model.rpc.HookEvent
-import model.rpc.InjectionProgressResult
-import model.rpc.InspectInstanceResult
-import model.rpc.ListInstancesResult
-import model.rpc.PrepareEnvResult
+import model.actions.params.*
+import model.actions.result.*
 
 interface FridaBridge {
     val jsonParser: Json
     val fridaCoroutineScope: CoroutineScope
     // Methods will be added here as we migrate endpoints
-    fun listClassesStream(searchParam: String, appPackage: String, offset: Int, limit: Int, onChunk: suspend (List<String>) -> Unit, onComplete: () -> Unit)
+    fun listClassesStream(params: ListClassesParams, onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit, onComplete: () -> Unit)
     fun pingJava(): String
     fun testRpc(): String
-    fun countInstances(className: String): Int
-    fun inspectClass(className: String): ClassInspectionResult
-    fun listInstances(className: String): ListInstancesResult
-    fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult
+    fun countInstances(params: CountInstancesParams): CountInstancesResult
+    fun inspectClass(params: InspectClassParams): InspectClassResult
+    fun listInstances(params: ListInstancesParams): ListInstancesResult
+    fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult
 
-    fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String
-    fun hookMethod(className: String, methodSig: String): String
-    fun getHookEvents(): List<HookEvent>
-    fun setMethodImplementation(className: String, methodSig: String, code: String): String
-    fun runOnce(className: String, methodSig: String, code: String): String
-    fun getInstanceAddresses(className: String): List<String>
+    fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult
+    fun hookMethod(params: HookParams): HookMethodResult
+    fun getHookEvents(): HookEventsResult
+    fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult
+    fun runOnce(params: RunOnceParams): RunOnceResult
+    fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult
 
-    fun prepareEnvironment(target: String, pid: Int? = null): PrepareEnvResult
-    fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult
-    fun injectJdwp(target: String, port: Int, packageName: String): String
+    fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult
+    fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult
+    fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult
     fun healthCheck(): HealthCheckResult
-
-    fun patchAndInstallIosApp(appPath: String): String
-    fun checkIosJailbreakStatus(serial: String): String
-    fun injectJailbrokenIos(serial: String): String
-    fun checkIosDeployStatus(): GenericStatusResult
     fun close(): Unit
 }

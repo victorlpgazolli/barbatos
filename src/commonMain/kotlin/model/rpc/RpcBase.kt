@@ -19,5 +19,3 @@ data class RpcResponse(
     val id: JsonElement?
 )
 
-@Serializable
-sealed class RpcParams {}

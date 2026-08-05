@@ -2,17 +2,18 @@ package rpc
 
 import model.bridge.FridaBridge
 import kotlinx.serialization.json.*
-import model.rpc.ListClassesParams
+import model.actions.ActionDescriptor
+import model.actions.params.*
 import model.rpc.RpcError
 import model.rpc.RpcErrorResponse
-import model.rpc.RpcParams
 import model.rpc.RpcRequest
 import model.rpc.RpcResponse
+import utils.decodeToOrThrow
 
 data class HandlerResult(val body: String, val statusCode: Int)
 
 class RpcHandler(private val bridge: FridaBridge) {
-    val jsonParser = Json { 
+    val jsonParser = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
@@ -43,10 +44,12 @@ class RpcHandler(private val bridge: FridaBridge) {
 
             try {
                 bridge.listClassesStream(
-                    searchParam = p.search_param,
-                    appPackage = p.app_package,
-                    offset = p.offset,
-                    limit = p.limit,
+                    ListClassesParams(
+                        searchParam = p.searchParam,
+                        appPackage = p.appPackage,
+                        offset = p.offset,
+                        limit = p.limit,
+                    ),
                     onChunk = { chunk ->
                         val res = RpcResponse(
                             result = jsonParser.encodeToJsonElement(chunk),
@@ -108,110 +111,172 @@ class RpcHandler(private val bridge: FridaBridge) {
         }
     }
 
-    private fun processMethod(method: String, params: JsonElement?): JsonElement {
+    public fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
-            "debugPing" -> {
+            DEBUG_PING.name -> {
                 val result = bridge.pingJava()
                 jsonParser.encodeToJsonElement(result)
             }
-            "testRpc" -> {
+            TEST_RPC.name -> {
                 val result = bridge.testRpc()
                 jsonParser.encodeToJsonElement(result)
             }
-            "countInstances" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.CountInstancesParams>(params)
-                val result = bridge.countInstances(decodedParams.className)
+            COUNT_INSTANCES.name -> {
+                val decodedParams = decodeToOrThrow<CountInstancesParams>(params)
+                val result = bridge.countInstances(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "inspectClass" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.InspectClassParams>(params)
-                val result = bridge.inspectClass(decodedParams.className)
+            INSPECT_CLASS.name -> {
+                val decodedParams = decodeToOrThrow<InspectClassParams>(params)
+                val result = bridge.inspectClass(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "listInstances" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.ListInstancesParams>(params)
-                val result = bridge.listInstances(decodedParams.className)
+            LIST_INSTANCES.name -> {
+                val decodedParams = decodeToOrThrow<ListInstancesParams>(params)
+                val result = bridge.listInstances(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "inspectInstance" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.InspectInstanceParams>(params)
-                val result = bridge.inspectInstance(decodedParams.id, decodedParams.offset, decodedParams.limit)
+            INSPECT_INSTANCE.name -> {
+                val decodedParams = decodeToOrThrow<InspectInstanceParams>(params)
+                val result = bridge.inspectInstance(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "setFieldValue" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.SetFieldValueParams>(params)
-                val result = bridge.setFieldValue(decodedParams.className, decodedParams.id, decodedParams.fieldName, decodedParams.type, decodedParams.newValue)
+            SET_FIELD_VALUE.name -> {
+                val decodedParams = decodeToOrThrow<SetFieldValueParams>(params)
+                val result = bridge.setFieldValue(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "hookMethod" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.HookParams>(params)
-                val result = bridge.hookMethod(decodedParams.className, decodedParams.methodSig)
+            HOOK_METHOD.name -> {
+                val decodedParams = decodeToOrThrow<HookParams>(params)
+                val result = bridge.hookMethod(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "getHookEvents" -> {
+            GET_HOOK_EVENTS.name -> {
                 val result = bridge.getHookEvents()
                 jsonParser.encodeToJsonElement(result)
             }
-            "setMethodImplementation" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.SetMethodImplementationParams>(params)
-                val result = bridge.setMethodImplementation(decodedParams.className, decodedParams.methodSig, decodedParams.code)
+            SET_METHOD_IMPLEMENTATION.name -> {
+                val decodedParams = decodeToOrThrow<SetMethodImplementationParams>(params)
+                val result = bridge.setMethodImplementation(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "runOnce" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.RunOnceParams>(params)
-                val result = bridge.runOnce(decodedParams.className, decodedParams.methodSig, decodedParams.code)
+            RUN_ONCE.name -> {
+                val decodedParams = decodeToOrThrow<RunOnceParams>(params)
+                val result = bridge.runOnce(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "getInstanceAddresses" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.GetInstanceAddressesParams>(params)
-                val res = bridge.getInstanceAddresses(decodedParams.className)
+            GET_INSTANCE_ADDRESSES.name -> {
+                val decodedParams = decodeToOrThrow<GetInstanceAddressesParams>(params)
+                val res = bridge.getInstanceAddresses(decodedParams)
                 jsonParser.encodeToJsonElement(res)
             }
-            "prepareEnvironment" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.PrepareEnvParams>(params)
-                val result = bridge.prepareEnvironment(decodedParams.target)
+            PREPARE_ENVIRONMENT.name -> {
+                val decodedParams = decodeToOrThrow<PrepareEnvParams>(params)
+                val result = bridge.prepareEnvironment(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "injectGadgetFromScratch" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.InjectGadgetParams>(params)
-                val result = bridge.injectGadgetFromScratch(decodedParams.with_logs, decodedParams.limit)
+            INJECT_GADGET_FROM_SCRATCH.name -> {
+                val decodedParams = decodeToOrThrow<InjectGadgetParams>(params)
+                val result = bridge.injectGadgetFromScratch(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "injectJdwp" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.InjectJdwpParams>(params)
-                val result = bridge.injectJdwp(decodedParams.target, decodedParams.port, decodedParams.package_name)
+            INJECT_JDWP.name -> {
+                val decodedParams = decodeToOrThrow<InjectJdwpParams>(params)
+                val result = bridge.injectJdwp(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
-            "healthCheck" -> {
+            HEALTH_CHECK.name -> {
                 val result = bridge.healthCheck()
-                jsonParser.encodeToJsonElement(result)
-            }
-            "patchAndInstallIosApp" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.PatchAndInstallIosAppParams>(params)
-                val result = bridge.patchAndInstallIosApp(decodedParams.appPath)
-                jsonParser.encodeToJsonElement(result)
-            }
-            "checkIosJailbreakStatus" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.IosJailbreakParams>(params)
-                val result = bridge.checkIosJailbreakStatus(decodedParams.serial)
-                jsonParser.encodeToJsonElement(result)
-            }
-            "injectJailbrokenIos" -> {
-                val decodedParams = decodeToOrThrow<model.rpc.IosJailbreakParams>(params)
-                val result = bridge.injectJailbrokenIos(decodedParams.serial)
-                jsonParser.encodeToJsonElement(result)
-            }
-            "checkIosDeployStatus" -> {
-                val result = bridge.checkIosDeployStatus()
                 jsonParser.encodeToJsonElement(result)
             }
             else -> throw Exception("Method $method not found")
         }
     }
-    private inline fun <reified T: RpcParams>decodeToOrThrow(params: JsonElement?): T =
-        decodeToOrNull(params) ?: throw Exception("Missing params")
 
-    private inline fun <reified T: RpcParams>decodeToOrNull(params: JsonElement?): T? =
-        params?.let { jsonParser.decodeFromJsonElement<T>(it) }
+    companion object {
+        internal val DEBUG_PING = ActionDescriptor.create(
+            name = "debugPing",
+            description = "",
+        )
+        internal val TEST_RPC = ActionDescriptor.create(
+            name = "testRpc",
+            description = "",
+        )
+        internal val COUNT_INSTANCES = ActionDescriptor.create<CountInstancesParams>(
+            name = "countInstances",
+            description = "",
+        )
+        internal val INSPECT_CLASS = ActionDescriptor.create<InspectClassParams>(
+            name = "inspectClass",
+            description = "",
+        )
+        internal val LIST_INSTANCES = ActionDescriptor.create<ListInstancesParams>(
+            name = "listInstances",
+            description = "",
+        )
+        internal val INSPECT_INSTANCE = ActionDescriptor.create<InspectInstanceParams>(
+            name = "inspectInstance",
+            description = "",
+        )
+        internal val SET_FIELD_VALUE = ActionDescriptor.create<SetFieldValueParams>(
+            name = "setFieldValue",
+            description = "",
+        )
+        internal val HOOK_METHOD = ActionDescriptor.create<HookParams>(
+            name = "hookMethod",
+            description = "",
+        )
+        internal val GET_HOOK_EVENTS = ActionDescriptor.create(
+            name = "getHookEvents",
+            description = "",
+        )
+        internal val SET_METHOD_IMPLEMENTATION = ActionDescriptor.create<SetMethodImplementationParams>(
+            name = "setMethodImplementation",
+            description = "",
+        )
+        internal val RUN_ONCE = ActionDescriptor.create<RunOnceParams>(
+            name = "runOnce",
+            description = "",
+        )
+        internal val GET_INSTANCE_ADDRESSES = ActionDescriptor.create<GetInstanceAddressesParams>(
+            name = "getInstanceAddresses",
+            description = "",
+        )
+        internal val PREPARE_ENVIRONMENT = ActionDescriptor.create<PrepareEnvParams>(
+            name = "prepareEnvironment",
+            description = "",
+        )
+        internal val INJECT_GADGET_FROM_SCRATCH = ActionDescriptor.create<InjectGadgetParams>(
+            name = "injectGadgetFromScratch",
+            description = "",
+        )
+        internal val INJECT_JDWP = ActionDescriptor.create<InjectJdwpParams>(
+            name = "injectJdwp",
+            description = "",
+        )
+        internal val HEALTH_CHECK = ActionDescriptor.create(
+            name = "healthCheck",
+            description = "",
+        )
 
+        public val tools = listOf(
+            DEBUG_PING,
+            TEST_RPC,
+            COUNT_INSTANCES,
+            INSPECT_CLASS,
+            LIST_INSTANCES,
+            INSPECT_INSTANCE,
+            SET_FIELD_VALUE,
+            HOOK_METHOD,
+            GET_HOOK_EVENTS,
+            SET_METHOD_IMPLEMENTATION,
+            RUN_ONCE,
+            GET_INSTANCE_ADDRESSES,
+            PREPARE_ENVIRONMENT,
+            INJECT_GADGET_FROM_SCRATCH,
+            INJECT_JDWP,
+            HEALTH_CHECK,
+        )
+
+    }
 }

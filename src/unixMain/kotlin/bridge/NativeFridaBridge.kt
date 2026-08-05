@@ -12,23 +12,14 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
+import model.actions.params.*
+import model.actions.result.*
 import model.bridge.FridaBridge
 import model.bridge.FridaMessage
 import model.bridge.FridaPayload
-import model.rpc.CheckResponse
-import model.rpc.ClassInspectionResult
-import model.rpc.GenericStatusResult
-import model.rpc.HealthCheckResult
-import model.rpc.HookEvent
-import model.rpc.InjectionProgressResult
-import model.rpc.InjectionStep
-import model.rpc.InspectInstanceResult
-import model.rpc.ListInstancesResult
-import model.rpc.PrepareEnvResult
 import utils.EmbeddedScripts
 
 private val jsonParser = Json {
@@ -124,18 +115,17 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
     override fun testRpc(): String = try { invokeRpc("testrpc") } catch (e: Exception) { "error: ${e.message}" }
 
     override fun listClassesStream(
-        searchParam: String,
-        appPackage: String,
-        offset: Int,
-        limit: Int,
-        onChunk: suspend (List<String>) -> Unit,
+        params: ListClassesParams,
+        onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit,
         onComplete: () -> Unit
     ) {
         val scriptPtr = script ?: throw IllegalStateException("Frida script not loaded or attached.")
 
         FridaRpcManager.onChunkReceived = { classes ->
             fridaCoroutineScope.launch {
-                onChunk(classes)
+                onChunk(
+                    ListClassesPartialResult(classes)
+                )
             }
         }
         FridaRpcManager.isStreamCompleted = false
@@ -146,7 +136,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         scriptPtr.sendRpcRequest(
             reqId = "stream-0",
             method = "listclassesstream",
-            searchParam,
+            params.searchParam,
             "stream-0"
         )
 
@@ -171,64 +161,90 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
     }
 
-    override fun countInstances(className: String): Int {
-        val jsonResult = invokeRpc("countinstances", listOf(className))
-        return jsonResult.toIntOrNull() ?: -1
+    override fun countInstances(params: CountInstancesParams): CountInstancesResult {
+        val jsonResult = invokeRpc("countinstances", listOf(params.className))
+        return CountInstancesResult(
+            count = jsonResult.toIntOrNull() ?: -1
+        )
     }
 
-    override fun inspectClass(className: String): ClassInspectionResult {
-        val jsonResult = invokeRpc("inspectclass", listOf(className))
+    override fun inspectClass(params: InspectClassParams): InspectClassResult {
+        val jsonResult = invokeRpc("inspectclass", listOf(params.className))
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun listInstances(className: String): ListInstancesResult {
-        val jsonResult = invokeRpc("listinstances", listOf(className))
+    override fun listInstances(params: ListInstancesParams): ListInstancesResult {
+        val jsonResult = invokeRpc("listinstances", listOf(params.className))
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult {
-        val jsonResult = invokeRpc("inspectinstance", listOf(id, offset.toString(), limit.toString()))
+    override fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult {
+        val jsonResult = invokeRpc(
+            "inspectinstance",
+            listOf(
+                params.id,
+                params.offset.toString(),
+                params.limit.toString(),
+            )
+        )
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String {
-        val safeValue = newValue.replace("\"", "\\\"")
-        return invokeRpc("setfieldvalue", listOf(className, id, fieldName, type, safeValue))
+    override fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult {
+        val safeValue = params.newValue.replace("\"", "\\\"")
+        return SetFieldValueResult(
+            status = invokeRpc(
+                "setfieldvalue",
+                listOf(params.className, params.id, params.fieldName, params.type, safeValue)
+            )
+        )
     }
 
-    override fun hookMethod(className: String, methodSig: String): String = 
-        invokeRpc("hookmethod", listOf(className, methodSig))
+    override fun hookMethod(params: HookParams): HookMethodResult {
+        return HookMethodResult(
+            status = invokeRpc("hookmethod", listOf(params.className, params.methodSig))
+        )
+    }
 
-    override fun getHookEvents(): List<HookEvent> {
+    override fun getHookEvents(): HookEventsResult {
         val jsonResult = invokeRpc("gethookevents")
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun setMethodImplementation(className: String, methodSig: String, code: String): String {
-        val escapedCode = code.replace("\"", "\\\"").replace("\n", "\\n")
-        return invokeRpc("setmethodimplementation", listOf(className, methodSig, escapedCode))
+    override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult {
+        val escapedCode = params.code.replace("\"", "\\\"").replace("\n", "\\n")
+        return SetMethodImplementationResult(
+            status = invokeRpc(
+                "setmethodimplementation",
+                listOf(params.className, params.methodSig, escapedCode)
+            )
+        )
     }
 
-    override fun runOnce(className: String, methodSig: String, code: String): String {
-        val escapedCode = code.replace("\"", "\\\"").replace("\n", "\\n")
-        return invokeRpc("runonce", listOf(className, methodSig, escapedCode))
+    override fun runOnce(params: RunOnceParams): RunOnceResult {
+        val escapedCode = params.code.replace("\"", "\\\"").replace("\n", "\\n")
+        return RunOnceResult(
+            status = invokeRpc("runonce", listOf(params.className, params.methodSig, escapedCode))
+        )
     }
 
-    override fun getInstanceAddresses(className: String): List<String> {
-        val jsonResult = invokeRpc("getinstanceaddresses", listOf(className))
-        return jsonParser.decodeFromString(jsonResult)
+    override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult {
+        val jsonResult = invokeRpc("getinstanceaddresses", listOf(params.className))
+        return GetInstanceAddressesResult(
+            addresses = jsonParser.decodeFromString(jsonResult)
+        )
     }
 
-    override fun prepareEnvironment(target: String, pid: Int?): PrepareEnvResult {
+    override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult {
         memScoped {
             val error = allocPointerTo<GError>()
             
             frida_device_manager_enumerate_devices_sync(manager, null, error.ptr)
             checkError(error.ptr)
 
-            var targetPid: UInt? = pid?.toUInt()
+            var targetPid: UInt? = params.pid?.toUInt()
 
-            if (target == "Gadget" || target == "127.0.0.1") {
+            if (params.target == "Gadget" || params.target == "127.0.0.1") {
                 val options = frida_remote_device_options_new()
                 device = frida_device_manager_add_remote_device_sync(manager, "127.0.0.1:27042", options, null, error.ptr)
                 g_object_unref(options)
@@ -252,8 +268,8 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                     val p = if (targetPid != null) {
                         frida_device_get_process_by_pid_sync(d, targetPid, null, null, null)
                     } else {
-                        target.toIntOrNull()?.let { frida_device_get_process_by_pid_sync(d, it.toUInt(), null, null, null) }
-                            ?: frida_device_get_process_by_name_sync(d, target, null, null, null)
+                        params.target?.toIntOrNull()?.let { frida_device_get_process_by_pid_sync(d, it.toUInt(), null, null, null) }
+                            ?: frida_device_get_process_by_name_sync(d, params.target, null, null, null)
                     }
                     
                     if (p != null) {
@@ -268,7 +284,7 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             }
 
             if (device == null || targetPid == null) {
-                throw RuntimeException("Process '$target' not found on any USB or Local device.")
+                throw RuntimeException("Process '${params.target}' not found on any USB or Local device.")
             }
 
             session = frida_device_attach_sync(device, targetPid, null, null, error.ptr)
@@ -286,21 +302,31 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             checkError(error.ptr)
         }
 
-        return PrepareEnvResult(0, "Ready", 0, "Attached to $target, ready to receive commands")
+        return PrepareEnvResult("Attached to ${params.target}, ready to receive commands")
     }
 
-    override fun injectGadgetFromScratch(withLogs: Boolean, limit: Int): InjectionProgressResult {
+    override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult {
         val adb = AdbManagerImpl()
         val devices = try { adb.listDevices() } catch (e: Exception) { emptyList() }
         if (devices.isEmpty()) {
-            return InjectionProgressResult(
-                "error",
-                listOf(InjectionStep("get_target", "No devices found", "error")),
-                error_message = "No ADB devices connected"
+            return InjectGadgetResult(
+                status = "error",
+                steps = listOf(InjectionStep("get_target", "No devices found", "error")),
+                errorMessage = "No ADB devices connected"
             )
+        } else {
+            if (params.serial?.isNotEmpty() == true && !devices.contains(params.serial)) {
+                return InjectGadgetResult(
+                    status = "error",
+                    steps = listOf(InjectionStep("get_target", "Device not found", "error")),
+                    errorMessage = "Device '${params.serial}' not found"
+                )
+            }
         }
-        
-        val serial = devices.first()
+        val serial = params.serial
+                ?.takeIf { it.isNotEmpty() }
+                ?: devices.first()
+
         val steps = mutableListOf<InjectionStep>()
         
         return try {
@@ -340,14 +366,19 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                 steps.add(
                     InjectionStep(
                         "load_agent",
-                        "Attach to process and load agent",
+                        "Attach to process (pid=$pid, pkg=$pkg) and load agent",
                         "running"
                     )
                 )
-                prepareEnvironment(pkg, pid)
+                prepareEnvironment(
+                    PrepareEnvParams(
+                        pid = pid,
+                        packageName = pkg
+                    )
+                )
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
 
-                InjectionProgressResult("completed", steps)
+                InjectGadgetResult("completed", steps)
             } else if (isDebuggable) {
                 steps.add(InjectionStep("setup_adb", "Configure ADB port forwards", "running"))
                 adb.removeForwardAll(serial)
@@ -377,10 +408,16 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                     )
                 )
                 platform.posix.sleep(5u)
-                prepareEnvironment("Gadget")
+                prepareEnvironment(
+                    PrepareEnvParams(
+                        pid = pid,
+                        packageName = pkg,
+                        target = "Gadget",
+                    )
+                )
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
 
-                InjectionProgressResult("completed", steps)
+                InjectGadgetResult("completed", steps)
             } else {
                 throw Exception("App '$pkg' is not debuggable and device is not rooted.")
             }
@@ -389,26 +426,29 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
             if (lastStep != null && lastStep.status == "running") {
                 steps[steps.size - 1] = lastStep.copy(status = "error")
             }
-            InjectionProgressResult("error", steps, error_message = e.message)
+            InjectGadgetResult("error", steps, errorMessage = e.message)
         }
     }
-    
-    override fun injectJdwp(target: String, port: Int, packageName: String): String {
+
+    override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
         val adbManager = AdbManagerImpl()
         val jdwpManager = JdwpManagerImpl(adbManager)
         val home = platform.posix.getenv("HOME")?.toKString() ?: "/tmp"
         val libraryPath = "$home/.cache/barbatos/frida-gadget.so"
-        val serial = if (target == "127.0.0.1" || target == "localhost") "" else target
+        val serial = if (params.target == "127.0.0.1" || params.target == "localhost") "" else params.target
         
         val result = jdwpManager.load(
-            target = target,
-            port = port,
+            target = params.target,
+            port = params.port,
             libraryPath = libraryPath,
             breakOn = null,
-            packageName = packageName,
+            packageName = params.packageName,
             serial = serial,
         )
-        return if (result.isSuccess) "Success" else "Error: ${result.exceptionOrNull()?.message}"
+        return InjectJdwpResult(
+            status = "Success".takeIf { result.isSuccess }
+                ?: "Error: ${result.exceptionOrNull()?.message}",
+        )
     }
     
     override fun healthCheck(): HealthCheckResult {
@@ -488,11 +528,6 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
         val overall = if (checks.values.any { it.status == "error" }) "degraded" else "ok"
         return HealthCheckResult(overall, checks, null)
     }
-
-    override fun patchAndInstallIosApp(appPath: String): String = "Not implemented"
-    override fun checkIosJailbreakStatus(serial: String): String = "Not implemented"
-    override fun injectJailbrokenIos(serial: String): String = "Not implemented"
-    override fun checkIosDeployStatus(): GenericStatusResult = GenericStatusResult("idle")
 
     internal fun CPointer<FridaScript>.sendRpcRequest(reqId: String, method: String, vararg args: String) {
         val request = FridaPayload.RpcRequest(

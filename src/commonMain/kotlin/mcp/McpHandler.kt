@@ -7,8 +7,6 @@ import model.mcp.McpCallToolResult
 import model.mcp.McpContent
 import model.mcp.McpInitializeResult
 import model.mcp.McpServerInfo
-import model.mcp.McpTool
-import model.mcp.McpToolDef
 import model.mcp.McpToolsListResult
 import platform.posix.fflush
 import platform.posix.fprintf
@@ -17,13 +15,16 @@ import model.rpc.RpcError
 import model.rpc.RpcErrorResponse
 import model.rpc.RpcRequest
 import model.rpc.RpcResponse
+import rpc.RpcHandler.Companion.tools
 
 /**
  * Custom exception to trigger the -32601 (Method not found) JSON-RPC error.
  */
 class McpMethodNotFoundException(message: String) : Exception(message)
 
-class McpHandler(private val tools: List<McpTool>) {
+class McpHandler(
+    private val execute: (McpCallToolParams) -> JsonElement,
+) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     fun handle(requestJson: String): String? {
@@ -89,10 +90,7 @@ class McpHandler(private val tools: List<McpTool>) {
                 buildJsonObject { putJsonArray("prompts") {} }
             }
             "resources/list" -> buildJsonObject { putJsonArray("resources") {} }
-            "tools/list" -> json.encodeToJsonElement(
-                McpToolsListResult(
-                tools.map { McpToolDef(it.name, it.description, it.inputSchema) }
-            ))
+            "tools/list" -> json.encodeToJsonElement(McpToolsListResult(tools))
             "tools/call" -> {
                 val decodedParams = params?.let { json.decodeFromJsonElement<McpCallToolParams>(it) }
                     ?: return json.encodeToJsonElement(
@@ -105,21 +103,9 @@ class McpHandler(private val tools: List<McpTool>) {
                             ), true
                         )
                     )
-                
-                val tool = tools.find { it.name == decodedParams.name }
-                    ?: return json.encodeToJsonElement(
-                        McpCallToolResult(
-                            listOf(
-                                McpContent(
-                                    "text",
-                                    "Tool not found"
-                                )
-                            ), true
-                        )
-                    )
-                
-                try {
-                    json.encodeToJsonElement(tool.execute(decodedParams.arguments))
+
+                return try {
+                    execute(decodedParams)
                 } catch (e: Exception) {
                     json.encodeToJsonElement(
                         McpCallToolResult(

@@ -1,15 +1,14 @@
 import bridge.NativeFridaBridge
-import bridge.MockFridaBridge
 import mcp.McpHandler
-import rpc.tools.*
 import platform.posix.fprintf
 import platform.posix.stderr
+import rpc.RpcHandler
 
 fun main(args: Array<String>) {
     val isMock = args.contains("--mock")
     val bridge = if (isMock) {
         fprintf(stderr, "Using MockFridaBridge (Simulation Mode)\n")
-        MockFridaBridge()
+        error("invalid state - mock not implemented")
     } else {
         NativeFridaBridge()
     }
@@ -18,32 +17,12 @@ fun main(args: Array<String>) {
         // IMPORTANT: Redirect all system logs to stderr to keep stdout clean for JSON-RPC
         fprintf(stderr, "Starting Barbatos MCP Server (Stdio Mode)...\n")
         fprintf(stderr, "Note: This transport is synchronous/blocking in v1.\n")
-        
-        // Register tools
-        val tools = listOf(
-            ListClassesTool(bridge),
-            InspectClassTool(bridge),
-            CountInstancesTool(bridge),
-            ListInstancesTool(bridge),
-            InspectInstanceTool(bridge),
-            GetInstanceAddressesTool(bridge),
-            SetFieldValueTool(bridge),
-            HookMethodTool(bridge),
-            GetHookEventsTool(bridge),
-            SetMethodImplementationTool(bridge),
-            RunOnceTool(bridge),
-            PrepareEnvironmentTool(bridge),
-            InjectGadgetFromScratchTool(bridge),
-            InjectJdwpTool(bridge),
-            // todo: work on ios support
-            // PatchAndInstallIosAppTool(bridge),
-            // CheckIosJailbreakStatusTool(bridge),
-            // InjectJailbrokenIosTool(bridge),
-            // CheckIosDeployStatusTool(bridge),
-            HealthCheckTool(bridge),
-        )
-        val mcpHandler = McpHandler(tools)
-        
+        val rpcHandler = RpcHandler(bridge)
+
+        val mcpHandler = McpHandler {
+            rpcHandler.processMethod(it.name, it.arguments)
+        }
+
         while (true) {
             val line = readlnOrNull() ?: break
             if (line.isBlank()) continue

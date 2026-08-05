@@ -2,24 +2,10 @@ package model.mcp
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
-
-interface McpTool {
-    val name: String
-    val description: String
-    val inputSchema: JsonObject
-    fun execute(args: JsonObject?): McpCallToolResult
-}
-
+import model.actions.ActionDescriptor
 
 @Serializable
-data class McpToolDef(
-    val name: String,
-    val description: String,
-    val inputSchema: JsonObject
-)
-
-@Serializable
-data class McpToolsListResult(val tools: List<McpToolDef>)
+data class McpToolsListResult(val tools: List<ActionDescriptor>)
 
 @Serializable
 data class McpCallToolParams(

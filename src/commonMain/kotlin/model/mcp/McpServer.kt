@@ -25,9 +25,3 @@ data class McpContent(
     val data: String? = null,
     val mimeType: String? = null
 )
-
-
-val mcpJson = Json {
-    encodeDefaults = true
-    ignoreUnknownKeys = true
-}
