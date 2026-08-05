@@ -5,19 +5,39 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import model.actions.params.CountInstancesParams
+import model.actions.params.GetInstanceAddressesParams
+import model.actions.params.HookParams
+import model.actions.params.InjectGadgetParams
+import model.actions.params.InjectJdwpParams
+import model.actions.params.InspectClassParams
+import model.actions.params.InspectInstanceParams
+import model.actions.params.ListClassesParams
+import model.actions.params.ListInstancesParams
+import model.actions.params.PrepareEnvParams
+import model.actions.params.RunOnceParams
+import model.actions.params.SetFieldValueParams
+import model.actions.params.SetMethodImplementationParams
+import model.actions.result.CheckResponse
+import model.actions.result.CountInstancesResult
+import model.actions.result.GetInstanceAddressesResult
+import model.actions.result.HealthCheckResult
+import model.actions.result.HookEventsResult
+import model.actions.result.HookMethodResult
+import model.actions.result.InjectGadgetResult
+import model.actions.result.InjectJdwpResult
+import model.actions.result.InjectionStep
+import model.actions.result.InspectClassResult
+import model.actions.result.InspectInstanceResult
+import model.actions.result.InstanceAttribute
+import model.actions.result.InstanceInfo
+import model.actions.result.ListClassesPartialResult
+import model.actions.result.ListInstancesResult
+import model.actions.result.PrepareEnvResult
+import model.actions.result.RunOnceResult
+import model.actions.result.SetFieldValueResult
+import model.actions.result.SetMethodImplementationResult
 import model.bridge.FridaBridge
-import model.rpc.CheckResponse
-import model.rpc.ClassInspectionResult
-import model.rpc.GenericStatusResult
-import model.rpc.HealthCheckResult
-import model.rpc.HookEvent
-import model.rpc.InjectionProgressResult
-import model.rpc.InjectionStep
-import model.rpc.InspectInstanceResult
-import model.rpc.InstanceAttribute
-import model.rpc.InstanceInfo
-import model.rpc.ListInstancesResult
-import model.rpc.PrepareEnvResult
 
 /**
  * Fully configurable FridaBridge for unit tests.
@@ -33,61 +53,67 @@ import model.rpc.PrepareEnvResult
  * that do not need customisation can use FakeFridaBridge as a drop-in.
  */
 class FakeFridaBridge(
-    var listClassesStreamFn: (String, String, Int, Int, suspend (List<String>) -> Unit, () -> Unit) -> Unit = { searchParam, _, _, _, onChunk, onComplete ->
+    var listClassesStreamFn: (ListClassesParams, suspend (ListClassesPartialResult) -> Unit, () -> Unit) -> Unit = { params, onChunk, onComplete ->
         val all = listOf("com.example.MainActivity", "java.lang.String")
-        val filtered = all.filter { it.contains(searchParam, ignoreCase = true) }
-        CoroutineScope(Dispatchers.Default).launch { onChunk(filtered) }
+        val filtered = all.filter { it.contains(params.searchParam, ignoreCase = true) }
+        CoroutineScope(Dispatchers.Default).launch {
+            onChunk(ListClassesPartialResult(filtered))
+        }
         onComplete()
     },
     var pingJavaFn: () -> String = { "Mock: Java OK" },
     var testRpcFn: () -> String = { "Mock: RPC OK" },
-    var countInstancesFn: (String) -> Int = { className ->
-        if (className == "com.example.MainActivity") 5 else 0
+    var countInstancesFn: (CountInstancesParams) -> CountInstancesResult = { params ->
+        CountInstancesResult(if (params.className == "com.example.MainActivity") 5 else 0)
     },
-    var inspectClassFn: (String) -> ClassInspectionResult = { _ ->
-        ClassInspectionResult(
+    var inspectClassFn: (InspectClassParams) -> InspectClassResult = { _ ->
+        InspectClassResult(
             staticAttributes = listOf("public static final java.lang.String TAG"),
             instanceAttributes = listOf("private int mCount"),
             methods = listOf("public void onCreate(android.os.Bundle)")
         )
     },
-    var listInstancesFn: (String) -> ListInstancesResult = { _ ->
+    var listInstancesFn: (ListInstancesParams) -> ListInstancesResult = { _ ->
         ListInstancesResult(
             instances = listOf(InstanceInfo("123", "0x123", "com.example.MainActivity@123")),
             totalCount = 1
         )
     },
-    var inspectInstanceFn: (String, Int, Int) -> InspectInstanceResult = { _, _, _ ->
+    var inspectInstanceFn: (InspectInstanceParams) -> InspectInstanceResult = { _ ->
         InspectInstanceResult(attributes = listOf(InstanceAttribute("mCount", "int", "5")))
     },
-    var setFieldValueFn: (String, String, String, String, String) -> String = { _, _, fieldName, _, newValue ->
-        "Success: $fieldName set to $newValue"
+    var setFieldValueFn: (SetFieldValueParams) -> SetFieldValueResult = { params ->
+        SetFieldValueResult("Success: ${params.fieldName} set to ${params.newValue}")
     },
-    var hookMethodFn: (String, String) -> String = { className, methodSig ->
-        "Hooked $className.$methodSig"
+    var hookMethodFn: (HookParams) -> HookMethodResult = { params ->
+        HookMethodResult("Hooked ${params.className}.${params.methodSig}")
     },
-    var getHookEventsFn: () -> List<HookEvent> = {
-        listOf(HookEvent("com.example.MainActivity", "onCreate(android.os.Bundle)"))
+    var getHookEventsFn: () -> HookEventsResult = {
+        HookEventsResult(
+            eventData = listOf("com.example.MainActivity", "onCreate(android.os.Bundle)").joinToString(",")
+        )
     },
-    var setMethodImplementationFn: (String, String, String) -> String = { className, methodSig, _ ->
-        "Implementation replaced for $className.$methodSig"
+    var setMethodImplementationFn: (SetMethodImplementationParams) -> SetMethodImplementationResult = { params ->
+        SetMethodImplementationResult("Implementation replaced for ${params.className}.${params.methodSig}")
     },
-    var runOnceFn: (String, String, String) -> String = { _, _, _ -> "Script executed" },
-    var getInstanceAddressesFn: (String) -> List<String> = { _ -> listOf("0x123", "0x456") },
-    var prepareEnvironmentFn: (String, Int?) -> PrepareEnvResult = { target, _ ->
-        PrepareEnvResult(1234, "com.example", 8080, "Attached to $target")
+    var runOnceFn: (RunOnceParams) -> RunOnceResult = { _ ->
+        RunOnceResult("Script executed")
     },
-    var injectGadgetFromScratchFn: (Boolean, Int) -> InjectionProgressResult = { _, _ ->
-        InjectionProgressResult("completed", listOf(InjectionStep("1", "Step 1", "done")))
+    var getInstanceAddressesFn: (GetInstanceAddressesParams) -> GetInstanceAddressesResult = { _ ->
+        GetInstanceAddressesResult(listOf("0x123", "0x456"))
     },
-    var injectJdwpFn: (String, Int, String) -> String = { _, _, _ -> "Success" },
+    var prepareEnvironmentFn: (PrepareEnvParams) -> PrepareEnvResult = { params ->
+        PrepareEnvResult("Attached to ${params.target ?: "unknown"}, ready to receive commands")
+    },
+    var injectGadgetFromScratchFn: (InjectGadgetParams) -> InjectGadgetResult = { _ ->
+        InjectGadgetResult("completed", listOf(InjectionStep("1", "Step 1", "completed")))
+    },
+    var injectJdwpFn: (InjectJdwpParams) -> InjectJdwpResult = { _ ->
+        InjectJdwpResult("Success")
+    },
     var healthCheckFn: () -> HealthCheckResult = {
         HealthCheckResult("ok", mapOf("bridge" to CheckResponse("ok", "Bridge is running")))
     },
-    var patchAndInstallIosAppFn: (String) -> String = { _ -> "success" },
-    var checkIosJailbreakStatusFn: (String) -> String = { _ -> "jailbroken" },
-    var injectJailbrokenIosFn: (String) -> String = { _ -> "success" },
-    var checkIosDeployStatusFn: () -> GenericStatusResult = { GenericStatusResult("completed") },
     var closeFn: () -> Unit = {}
 ) : FridaBridge {
 
@@ -99,35 +125,42 @@ class FakeFridaBridge(
     override val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     override fun listClassesStream(
-        searchParam: String,
-        appPackage: String,
-        offset: Int,
-        limit: Int,
-        onChunk: suspend (List<String>) -> Unit,
+        params: ListClassesParams,
+        onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit,
         onComplete: () -> Unit
-    ) = listClassesStreamFn(searchParam, appPackage, offset, limit, onChunk, onComplete)
+    ) = listClassesStreamFn(params, onChunk, onComplete)
 
     override fun pingJava(): String = pingJavaFn()
+
     override fun testRpc(): String = testRpcFn()
-    override fun countInstances(className: String): Int = countInstancesFn(className)
-    override fun inspectClass(className: String): ClassInspectionResult = inspectClassFn(className)
-    override fun listInstances(className: String): ListInstancesResult = listInstancesFn(className)
-    override fun inspectInstance(id: String, offset: Int, limit: Int): InspectInstanceResult = inspectInstanceFn(id, offset, limit)
-    override fun setFieldValue(className: String, id: String, fieldName: String, type: String, newValue: String): String =
-        setFieldValueFn(className, id, fieldName, type, newValue)
-    override fun hookMethod(className: String, methodSig: String): String = hookMethodFn(className, methodSig)
-    override fun getHookEvents(): List<HookEvent> = getHookEventsFn()
-    override fun setMethodImplementation(className: String, methodSig: String, code: String): String =
-        setMethodImplementationFn(className, methodSig, code)
-    override fun runOnce(className: String, methodSig: String, code: String): String = runOnceFn(className, methodSig, code)
-    override fun getInstanceAddresses(className: String): List<String> = getInstanceAddressesFn(className)
-    override fun prepareEnvironment(target: String, pid: Int?): PrepareEnvResult = prepareEnvironmentFn(target, pid)
-    override fun injectGadgetFromScratch(serial: String?, withLogs: Boolean, limit: Int): InjectionProgressResult = injectGadgetFromScratchFn(withLogs, limit)
-    override fun injectJdwp(target: String, port: Int, packageName: String): String = injectJdwpFn(target, port, packageName)
+
+    override fun countInstances(params: CountInstancesParams): CountInstancesResult = countInstancesFn(params)
+
+    override fun inspectClass(params: InspectClassParams): InspectClassResult = inspectClassFn(params)
+
+    override fun listInstances(params: ListInstancesParams): ListInstancesResult = listInstancesFn(params)
+
+    override fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult = inspectInstanceFn(params)
+
+    override fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult = setFieldValueFn(params)
+
+    override fun hookMethod(params: HookParams): HookMethodResult = hookMethodFn(params)
+
+    override fun getHookEvents(): HookEventsResult = getHookEventsFn()
+
+    override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult = setMethodImplementationFn(params)
+
+    override fun runOnce(params: RunOnceParams): RunOnceResult = runOnceFn(params)
+
+    override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult = getInstanceAddressesFn(params)
+
+    override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult = prepareEnvironmentFn(params)
+
+    override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult = injectGadgetFromScratchFn(params)
+
+    override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult = injectJdwpFn(params)
+
     override fun healthCheck(): HealthCheckResult = healthCheckFn()
-    override fun patchAndInstallIosApp(appPath: String): String = patchAndInstallIosAppFn(appPath)
-    override fun checkIosJailbreakStatus(serial: String): String = checkIosJailbreakStatusFn(serial)
-    override fun injectJailbrokenIos(serial: String): String = injectJailbrokenIosFn(serial)
-    override fun checkIosDeployStatus(): GenericStatusResult = checkIosDeployStatusFn()
+
     override fun close() = closeFn()
 }

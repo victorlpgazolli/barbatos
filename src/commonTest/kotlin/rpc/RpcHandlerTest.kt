@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
+import model.actions.result.CountInstancesResult
 import model.rpc.RpcErrorResponse
 import model.rpc.RpcResponse
 
@@ -248,12 +249,11 @@ class RpcHandlerTest {
     }
 
     @Test
-    fun handle_prepareEnvironment_returnsPackageName() {
+    fun handle_prepareEnvironment_returnsStatus() {
         val handler = RpcHandler(FakeFridaBridge())
         val result = handler.handle("""{"jsonrpc":"2.0","method":"prepareEnvironment","params":{"target":"com.example.app"},"id":13}""")
         val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("package_name"))
-        assertTrue(res.result.toString().contains("com.example"))
+        assertTrue(res.result.toString().contains("Attached to com.example.app"))
     }
 
     @Test
@@ -282,39 +282,6 @@ class RpcHandlerTest {
         assertTrue(res.result.toString().contains("ok"))
     }
 
-    @Test
-    fun handle_patchAndInstallIosApp_returnsSuccess() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"patchAndInstallIosApp","params":{"appPath":"/path/to/app"},"id":17}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("success"))
-    }
-
-    @Test
-    fun handle_checkIosJailbreakStatus_returnsJailbroken() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"checkIosJailbreakStatus","params":{"serial":"12345"},"id":18}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("jailbroken"))
-    }
-
-    @Test
-    fun handle_injectJailbrokenIos_returnsSuccess() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"injectJailbrokenIos","params":{"serial":"12345"},"id":19}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("success"))
-    }
-
-    @Test
-    fun handle_checkIosDeployStatus_returnsStatus() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"checkIosDeployStatus","id":20}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("status"))
-        assertTrue(res.result.toString().contains("completed"))
-    }
-
     // ─── handle — custom bridge response ──────────────────────────────────────
 
     @Test
@@ -328,7 +295,7 @@ class RpcHandlerTest {
 
     @Test
     fun handle_countInstances_returnsCustomCount_whenBridgeOverridden() {
-        val bridge = FakeFridaBridge(countInstancesFn = { _ -> 42 })
+        val bridge = FakeFridaBridge(countInstancesFn = { _ -> CountInstancesResult(42) })
         val handler = RpcHandler(bridge)
         val result = handler.handle("""{"jsonrpc":"2.0","method":"countInstances","params":{"className":"any.Class"},"id":1}""")
         val res = json.decodeFromString<RpcResponse>(result.body)
@@ -364,7 +331,7 @@ class RpcHandlerTest {
     @Test
     fun handleStream_emitsInternalError_whenBridgeThrows() {
         val bridge = FakeFridaBridge(
-            listClassesStreamFn = { _, _, _, _, _, _ ->
+            listClassesStreamFn = { _, _, _ ->
                 throw RuntimeException("stream bridge failure")
             }
         )
