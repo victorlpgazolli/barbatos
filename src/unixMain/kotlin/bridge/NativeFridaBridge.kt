@@ -12,6 +12,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
@@ -21,6 +22,8 @@ import model.bridge.FridaBridge
 import model.bridge.FridaMessage
 import model.bridge.FridaPayload
 import utils.EmbeddedScripts
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 private val jsonParser = Json {
     ignoreUnknownKeys = true
@@ -358,7 +361,31 @@ class NativeFridaBridge : FridaBridge, AutoCloseable {
                 steps.add(InjectionStep("start_server", "Start frida-server as root", "running"))
                 try { adb.executeShellCommand(serial, "su -c 'pkill -f frida-server 2>/dev/null || true'") } catch (e: Exception){}
                 fridaCoroutineScope.launch(Dispatchers.IO) {
-                    adb.executeShellCommand(serial, "su -c 'nohup /data/local/tmp/frida-server &'")
+                    suspendCancellableCoroutine { continuation ->
+                        fun killFridaServer() {
+                            try {
+                                adb.executeShellCommand(serial, "su -c 'killall frida-server'")
+                            } catch (e: Exception) { }
+                        }
+
+                        continuation.invokeOnCancellation {
+                            killFridaServer()
+                        }
+
+                        try {
+                            killFridaServer()
+
+                            adb.executeShellCommand(serial, "su -c '/data/local/tmp/frida-server'")
+
+                            if (continuation.isActive) {
+                                continuation.resume(Unit)
+                            }
+                        } catch (e: Exception) {
+                            if (continuation.isActive) {
+                                continuation.resumeWithException(e)
+                            }
+                        }
+                    }
                 }
                 platform.posix.sleep(2u)
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
