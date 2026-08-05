@@ -375,8 +375,11 @@ rpc.exports = {
 
     inspectinstance: function(id, offset, limit) {
         var attributes = [];
-        offset = offset || 0;
-        limit = limit || 50;
+        offset = parseInt(offset, 10);
+        if (isNaN(offset)) offset = 0;
+        
+        limit = parseInt(limit, 10);
+        if (isNaN(limit)) limit = 50;
         try {
             Java.perform(function() {
                 var instance = instanceCache[id];
@@ -386,6 +389,7 @@ rpc.exports = {
                 
                 // Use the actual runtime class of the instance instead of the passed className
                 var actualClassName = instance.getClass().getName();
+                console.log("[SCRIPT] Inspecting instance of class: " + actualClassName + " with id: " + id);
                 var clazz = Java.use(actualClassName);
                 var classDef = clazz.class;
                 
@@ -526,6 +530,7 @@ rpc.exports = {
                 // 3. Only show regular fields on the FIRST page (offset 0)
                 if (offset === 0) {
                     var fields = classDef.getDeclaredFields();
+                    console.log("[SCRIPT] Inspecting fields of class: " + classDef.$className + ", total fields: " + fields.length);
                     for (var i = 0; i < fields.length; i++) {
                         var field = fields[i];
                         field.setAccessible(true);
