@@ -9,6 +9,7 @@ import io.ktor.server.request.*
 import io.ktor.utils.io.*
 import rpc.RpcHandler
 import model.bridge.FridaBridge
+import platform.posix.system
 import utils.EmbeddedScripts
 
 fun Application.module(bridge: FridaBridge) {
@@ -46,7 +47,13 @@ fun Application.module(bridge: FridaBridge) {
 }
 
 fun startServer(bridge: FridaBridge) {
-    embeddedServer(CIO, port = 8080, host = "127.0.0.1") {
+    val port = 8080
+
+    val cmd = $$"kill -9 $(lsof -t -i:$$port) 2>/dev/null"
+
+    system(cmd)
+
+    embeddedServer(CIO, port = port, host = "127.0.0.1") {
         module(bridge)
     }.start(wait = true)
 }
