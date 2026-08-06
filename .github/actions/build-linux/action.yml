@@ -21,23 +21,7 @@ runs:
     - name: Compile JS Agent & Kotlin Binary
       shell: bash
       run: |
-        make compile_bridge_agent
         make compile_binary ARCH=${{ inputs.architecture }}
-
-    - name: Compile Python Bridge & MCP (x86_64 native)
-      if: inputs.architecture == 'x86_64'
-      shell: bash
-      run: |
-        make compile_bridge
-
-    - name: Compile Python Bridge & MCP (ARM64 Docker)
-      if: inputs.architecture == 'aarch64'
-      shell: bash
-      run: |
-        docker run --rm --platform linux/arm64 \
-          -v ${{ github.workspace }}:/app -w /app \
-          python:3.11-slim \
-          bash -c "apt-get update && apt-get install -y binutils && pip install -r bridge/requirements.txt && cd bridge && pyinstaller bridge.spec"
 
     - name: Prepare release artifacts
       shell: bash
@@ -47,8 +31,7 @@ runs:
       shell: bash
       run: |
         zip -r ./barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}.zip ./dist
-        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-tui
-        cp dist/barbatos-bridge barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-bridge
+        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-cli
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v7
@@ -56,6 +39,5 @@ runs:
         name: linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}
         path: |
           barbatos-linux-*.zip
-          barbatos-linux-*-tui
-          barbatos-linux-*-bridge
+          barbatos-linux-*-cli
         retention-days: 1

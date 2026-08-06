@@ -26,8 +26,8 @@ else
     # 1. Compile Frida JS Agent (Architecture agnostic)
     make compile_bridge_agent
     
-    # 2. Build Kotlin Native TUI
-    echo "Building Kotlin Native TUI..."
+    # 2. Build Kotlin Native CLI
+    echo "Building Kotlin Native CLI..."
     ./gradlew "link${BUILD_TYPE}ExecutableLinuxArm64" --no-daemon
     
     # 3. Build Python bridge component inside ARM64 Docker

@@ -33,6 +33,7 @@ build/
 .idea/libraries/Maven*.xml
 .idea/modules
 .idea/runConfigurations/JPS_*.xml
+.idea/deviceManager.xml
 .idea/runConfigurations/_JPS_*.xml
 .idea/runConfigurations/_FP_*.xml
 .idea/runConfigurations/_MT_*.xml
@@ -50,6 +51,7 @@ build/
 .idea/uiDesigner.xml
 .idea/copilot.data.migration.*.xml
 .idea/junie.xml
+.idea/caches
 node_modules/
 .rpt2_cache/
 local.properties
@@ -84,3 +86,9 @@ web/*.gpg
 !web/barbatos-repo.gpg
 *.deb
 web/pool/.worktrees/
+
+# Frida Devkit
+src/nativeInterop/cinterop/libfrida-core.a
+src/nativeInterop/cinterop/*.gir
+src/nativeInterop/cinterop/*.h
+frida*.tar.*
