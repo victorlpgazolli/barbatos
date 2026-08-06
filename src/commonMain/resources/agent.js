@@ -287,7 +287,31 @@ rpc.exports = {
         });
         return classes;
     },
-    
+
+    testrpc: function() {
+        var result = null;
+        try {
+            Java.perform(function() {
+                result = "ok";
+            });
+        } catch(e) {
+            result = "error: " + e.toString();
+        }
+        return result || "no_java";
+    },
+
+    pingjava: function() {
+        var result = null;
+        try {
+            Java.perform(function() {
+                result = "pong";
+            });
+        } catch(e) {
+            result = "error: " + e.toString();
+        }
+        return result || "no_java";
+    },
+
     getpackagename: function() {
         var pkgName = "";
         try {
@@ -902,39 +926,65 @@ rpc.exports = {
         return true;
     },
     setfieldvalue: function(className, id, fieldName, type, newValue) {
+        // NOTE: Java.perform()'s own return value is not reliable (it may run its callback
+        // asynchronously), so — like every other RPC in this file — we capture the outcome via
+        // closured variables and return AFTER perform() has been dispatched, never `return
+        // Java.perform(...)` directly.
+        var execResult = null;
+        var execError = null;
+
         try {
-            return Java.perform(function() {
-                var instance = instanceCache[id];
-                if (!instance) {
-                    throw new Error("Instance not found in cache.");
+            Java.perform(function() {
+                try {
+                    var instance = instanceCache[id];
+                    if (!instance) {
+                        throw new Error("Instance not found in cache.");
+                    }
+
+                    var actualClassName = instance.getClass().getName();
+                    var clazz = Java.use(actualClassName);
+
+                    // getDeclaredField only looks at the exact class, not inherited fields, so
+                    // walk up the hierarchy (same approach as hookmethod's field-watch path).
+                    var currentClass = clazz.class;
+                    var field = null;
+                    while (currentClass !== null) {
+                        try {
+                            field = currentClass.getDeclaredField(fieldName);
+                            break;
+                        } catch (e) {
+                            currentClass = currentClass.getSuperclass();
+                        }
+                    }
+                    if (field === null) {
+                        throw new Error("Field '" + fieldName + "' not found on " + actualClassName + " or its superclasses.");
+                    }
+                    field.setAccessible(true);
+
+                    var t = type.toLowerCase();
+                    var val = null;
+                    if (t === "boolean" || t === "bool") val = Java.use("java.lang.Boolean").valueOf(newValue === "true");
+                    else if (t === "int") val = Java.use("java.lang.Integer").valueOf(parseInt(newValue, 10));
+                    else if (t === "long") val = Java.use("java.lang.Long").valueOf(parseInt(newValue, 10));
+                    else if (t === "float") val = Java.use("java.lang.Float").valueOf(parseFloat(newValue));
+                    else if (t === "double") val = Java.use("java.lang.Double").valueOf(parseFloat(newValue));
+                    else if (t === "short") val = Java.use("java.lang.Short").valueOf(parseInt(newValue, 10));
+                    else if (t === "byte") val = Java.use("java.lang.Byte").valueOf(parseInt(newValue, 10));
+                    else if (t === "char") val = Java.use("java.lang.Character").valueOf(newValue.charAt(0));
+                    else if (t === "string" || t === "charsequence") val = Java.use("java.lang.String").$new(newValue);
+                    else throw new Error("Unsupported type for editing");
+
+                    field.set(instance, val);
+                    execResult = true;
+                } catch (e) {
+                    execError = e.toString();
                 }
-                
-                var actualClassName = instance.getClass().getName();
-                var clazz = Java.use(actualClassName);
-                var classDef = clazz.class;
-                
-                var field = classDef.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                
-                var t = type.toLowerCase();
-                var val = null;
-                if (t === "boolean" || t === "bool") val = Java.use("java.lang.Boolean").valueOf(newValue === "true");
-                else if (t === "int") val = Java.use("java.lang.Integer").valueOf(parseInt(newValue, 10));
-                else if (t === "long") val = Java.use("java.lang.Long").valueOf(parseInt(newValue, 10));
-                else if (t === "float") val = Java.use("java.lang.Float").valueOf(parseFloat(newValue));
-                else if (t === "double") val = Java.use("java.lang.Double").valueOf(parseFloat(newValue));
-                else if (t === "short") val = Java.use("java.lang.Short").valueOf(parseInt(newValue, 10));
-                else if (t === "byte") val = Java.use("java.lang.Byte").valueOf(parseInt(newValue, 10));
-                else if (t === "char") val = Java.use("java.lang.Character").valueOf(newValue.charAt(0));
-                else if (t === "string" || t === "charsequence") val = Java.use("java.lang.String").$new(newValue);
-                else throw new Error("Unsupported type for editing");
-                
-                field.set(instance, val);
-                return true;
             });
         } catch (e) {
-            return { error: e.toString() };
+            execError = e.toString();
         }
+
+        return execError ? { error: execError } : execResult;
     }
 };
 

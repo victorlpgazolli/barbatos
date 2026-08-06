@@ -32,7 +32,7 @@ setup_devkit:
 	./scripts/download_frida_devkit.sh
 
 compile_binary:
-	./gradlew $(GRADLE_TARGET)
+	./gradlew $(GRADLE_TARGET) --no-daemon
 
 release: compile_binary prepare_release
 

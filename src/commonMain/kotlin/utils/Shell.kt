@@ -13,7 +13,7 @@ object Shell {
     @OptIn(ExperimentalForeignApi::class)
     fun execute(command: String, redirectStderr: Boolean = true): ShellResult {
         val result = StringBuilder()
-        val fullCommand = if (redirectStderr) "$command 2>&1" else command
+        val fullCommand = if (redirectStderr) "$command < /dev/null 2>&1" else "$command < /dev/null"
         val pipe = popen(fullCommand, "r") ?: return ShellResult("", -1)
         var status = -1
         try {

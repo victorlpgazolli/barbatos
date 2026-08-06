@@ -39,20 +39,37 @@ object BinaryManager {
         val dir = "$home/.cache/barbatos"
         Shell.execute("mkdir -p $dir")
 
-        val url = "https://github.com/frida/frida/releases/download/$FRIDA_VERSION/$name-$FRIDA_VERSION-android-$arch.$extension"
+        // Frida only publishes xz-compressed release assets. Callers pass the extension of the
+        // FINAL (decompressed) local file (e.g. "so" for the gadget), which doesn't necessarily
+        // match the remote asset name — the remote file always has an extra ".xz" suffix, unless
+        // the caller already accounts for it (e.g. frida-server's extension is "xz" itself).
+        val remoteExtension = if (extension.endsWith("xz")) extension else "$extension.xz"
+        val url = "https://github.com/frida/frida/releases/download/$FRIDA_VERSION/$name-$FRIDA_VERSION-android-$arch.$remoteExtension"
         val xzPath = "$localPath.xz"
-        
+
         println("[BinaryManager] Downloading $url...")
         val response = client.get(url)
         val bytes = response.readRawBytes()
-        
+
+        // Validate the response before caching anything: a non-2xx status (e.g. 404) or a
+        // suspiciously tiny body means we got an error page/text, not the real binary. Writing
+        // that to disk would permanently poison the cache with a file that always fails to
+        // decompress on every subsequent run.
+        if (!response.status.value.let { it in 200..299 }) {
+            throw Exception("Download failed: HTTP ${response.status.value} for $url")
+        }
+        if (bytes.size < 1024) {
+            throw Exception(
+                "Download failed: response for $url was only ${bytes.size} bytes, " +
+                    "expected a real binary (got: ${bytes.decodeToString().take(200)})"
+            )
+        }
+
         val xzFile = fopen(xzPath, "wb")
         if (xzFile == null) throw Exception("Failed to open $xzPath for writing")
-        
+
         try {
-            if (bytes.isNotEmpty()) {
-                fwrite(bytes.refTo(0), 1u, bytes.size.toULong(), xzFile)
-            }
+            fwrite(bytes.refTo(0), 1u, bytes.size.toULong(), xzFile)
         } finally {
             fclose(xzFile)
         }
@@ -60,14 +77,16 @@ object BinaryManager {
         println("[BinaryManager] Decompressing $xzPath...")
         val xzResult = Shell.execute("xz -d $xzPath")
         if (xzResult.exitCode != 0) {
-            // Try fallback to 'unzip' or similar if xz is missing? 
+            // Clean up the bad archive so it doesn't get mistaken for a valid cache entry later.
+            remove(xzPath)
+            // Try fallback to 'unzip' or similar if xz is missing?
             // For now, assume xz is present on unix systems as per plan.
             if (xzResult.output.contains("not found")) {
                 throw Exception("xz command not found. Please install xz-utils.")
             }
             throw Exception("Decompression failed: ${xzResult.output}")
         }
-        
+
         return localPath
     }
 }

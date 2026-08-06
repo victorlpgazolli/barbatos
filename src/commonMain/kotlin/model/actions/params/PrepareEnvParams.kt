@@ -9,4 +9,5 @@ data class PrepareEnvParams(
     @SerialName("package_name")
     val packageName: String,
     val target: String? = null,
+    val serial: String? = null,
 ): ActionParam()

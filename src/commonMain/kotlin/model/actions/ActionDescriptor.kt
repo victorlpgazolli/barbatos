@@ -3,6 +3,7 @@ package model.actions
 import kotlinx.schema.generator.json.jsonSchemaOf
 import kotlinx.schema.json.JsonSchema
 import kotlinx.schema.json.jsonSchema
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import model.actions.params.ActionParam
 
@@ -10,7 +11,8 @@ import model.actions.params.ActionParam
 data class ActionDescriptor(
     val name: String,
     val description: String,
-    val scheme: JsonSchema?,
+    @SerialName("inputSchema")
+    val scheme: JsonSchema = jsonSchema { },
 ) {
     companion object {
         inline fun <reified Param : ActionParam> create(
@@ -27,7 +29,7 @@ data class ActionDescriptor(
         ): ActionDescriptor = ActionDescriptor(
             name = name,
             description = description,
-            scheme = null
+            scheme = jsonSchema { }
         )
     }
 }

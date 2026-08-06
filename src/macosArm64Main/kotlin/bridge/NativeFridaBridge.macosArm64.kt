@@ -11,7 +11,6 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonPrimitive
@@ -21,8 +20,6 @@ import model.bridge.FridaBridge
 import model.bridge.FridaMessage
 import model.bridge.FridaPayload
 import utils.EmbeddedScripts
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 @Suppress("EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA_WARNING")
 actual class NativeFridaBridge : FridaBridge, AutoCloseable {
@@ -151,7 +148,8 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
 
     override fun getHookEvents(): HookEventsResult {
         val jsonResult = invokeRpc("gethookevents")
-        return jsonParser.decodeFromString(jsonResult)
+        val events: List<HookEvent> = jsonParser.decodeFromString(jsonResult)
+        return HookEventsResult(events = events)
     }
 
     override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult {
@@ -203,6 +201,28 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
                 if (process == null) throw RuntimeException("Could not find 'Gadget' process on remote device, try running rpcInjectGadgetFromScratch first")
                 targetPid = frida_process_get_pid(process)
                 g_object_unref(process)
+            } else if (params.serial != null) {
+                // When a specific device serial is provided, look it up by ID directly
+                // instead of iterating by type — avoids picking the wrong device when
+                // multiple USB devices are connected.
+                val d = frida_device_manager_get_device_by_id_sync(manager, params.serial, 5000, null, error.ptr)
+                checkError(error.ptr)
+                if (d != null) {
+                    val p = if (targetPid != null) {
+                        frida_device_get_process_by_pid_sync(d, targetPid, null, null, null)
+                    } else {
+                        val processName = params.target ?: params.packageName
+                        processName.toIntOrNull()?.let { frida_device_get_process_by_pid_sync(d, it.toUInt(), null, null, null) }
+                            ?: frida_device_get_process_by_name_sync(d, processName, null, null, null)
+                    }
+                    if (p != null) {
+                        device = d
+                        targetPid = frida_process_get_pid(p)
+                        g_object_unref(p)
+                    } else {
+                        g_object_unref(d)
+                    }
+                }
             } else {
                 val deviceTypes = listOf(FridaDeviceType.FRIDA_DEVICE_TYPE_USB, FridaDeviceType.FRIDA_DEVICE_TYPE_LOCAL)
                 for (type in deviceTypes) {
@@ -211,8 +231,9 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
                     val p = if (targetPid != null) {
                         frida_device_get_process_by_pid_sync(d, targetPid, null, null, null)
                     } else {
-                        params.target?.toIntOrNull()?.let { frida_device_get_process_by_pid_sync(d, it.toUInt(), null, null, null) }
-                            ?: frida_device_get_process_by_name_sync(d, params.target, null, null, null)
+                        val processName = params.target ?: params.packageName
+                        processName.toIntOrNull()?.let { frida_device_get_process_by_pid_sync(d, it.toUInt(), null, null, null) }
+                            ?: frida_device_get_process_by_name_sync(d, processName, null, null, null)
                     }
 
                     if (p != null) {
@@ -227,7 +248,8 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
             }
 
             if (device == null || targetPid == null) {
-                throw RuntimeException("Process '${params.target}' not found on any USB or Local device.")
+                val identifier = params.serial ?: params.target ?: params.packageName
+                throw RuntimeException("Process not found on device '$identifier' (pid=${params.pid}, pkg=${params.packageName}).")
             }
 
             session = frida_device_attach_sync(device, targetPid, null, null, error.ptr)
@@ -300,34 +322,50 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
 
                 steps.add(InjectionStep("start_server", "Start frida-server as root", "running"))
                 try { adb.executeShellCommand(serial, "su -c 'pkill -f frida-server 2>/dev/null || true'") } catch (e: Exception){}
-                fridaCoroutineScope.launch(Dispatchers.IO) {
-                    suspendCancellableCoroutine { continuation ->
-                        fun killFridaServer() {
-                            try {
-                                adb.executeShellCommand(serial, "su -c 'killall frida-server'")
-                            } catch (e: Exception) { }
-                        }
 
-                        continuation.invokeOnCancellation {
-                            killFridaServer()
-                        }
+                // `pidof` exits non-zero (the standard Unix convention) when it finds no match,
+                // and AdbManagerImpl.executeShellCommand treats any non-zero exit as a thrown
+                // failure — so "no frida-server running" (the common/expected case) must be read
+                // as an exception here, not a real error.
+                fun pidofFridaServerOrEmpty(): String =
+                    try { adb.executeShellCommand(serial, "pidof frida-server").trim() } catch (e: Exception) { "" }
 
-                        try {
-                            killFridaServer()
-
-                            adb.executeShellCommand(serial, "su -c '/data/local/tmp/frida-server'")
-
-                            if (continuation.isActive) {
-                                continuation.resume(Unit)
-                            }
-                        } catch (e: Exception) {
-                            if (continuation.isActive) {
-                                continuation.resumeWithException(e)
-                            }
-                        }
-                    }
+                // Confirm no frida-server instance survived the kill before starting a new one.
+                // Earlier/aborted injection attempts could have left one running detached on the
+                // device (killing barbatos on the host doesn't kill a process it started remotely
+                // via adb), and a stale instance can hold the port a fresh one needs.
+                for (attempt in 1..10) {
+                    val remaining = pidofFridaServerOrEmpty()
+                    if (remaining.isEmpty()) break
+                    try { adb.executeShellCommand(serial, "su -c 'kill -9 $remaining 2>/dev/null || true'") } catch (e: Exception) {}
+                    platform.posix.usleep(250_000u)
                 }
-                platform.posix.sleep(2u)
+
+                // Launch frida-server detached/backgrounded ON THE DEVICE (nohup + trailing `&`)
+                // so this adb shell command returns immediately once the remote shell forks,
+                // instead of blocking forever on the daemon's lifetime. The previous approach ran
+                // frida-server in the foreground and wrapped the blocking call in a Kotlin
+                // coroutine that was never awaited nor cancelled — the orphaned coroutine kept
+                // occupying a Dispatchers.IO thread indefinitely, and repeated injection attempts
+                // (e.g. after a failed attach) could leave multiple such blocked threads/adb
+                // sessions around, causing later calls to hang.
+                adb.executeShellCommand(serial, "su -c 'nohup /data/local/tmp/frida-server >/dev/null 2>&1 &'")
+
+                // Poll for readiness instead of a single fixed sleep — verifies frida-server is
+                // actually up (not just that the launch command returned) before moving on,
+                // which matters more on older/slower devices.
+                var serverReady = false
+                for (attempt in 1..20) {
+                    val pidCheck = pidofFridaServerOrEmpty()
+                    if (pidCheck.isNotEmpty() && pidCheck.toIntOrNull() != null) {
+                        serverReady = true
+                        break
+                    }
+                    platform.posix.usleep(250_000u)
+                }
+                if (!serverReady) {
+                    throw RuntimeException("frida-server did not start within 5s on device '$serial'.")
+                }
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
 
                 steps.add(
@@ -340,7 +378,8 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
                 prepareEnvironment(
                     PrepareEnvParams(
                         pid = pid,
-                        packageName = pkg
+                        packageName = pkg,
+                        serial = serial
                     )
                 )
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
@@ -380,6 +419,7 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
                         pid = pid,
                         packageName = pkg,
                         target = "Gadget",
+                        serial = serial
                     )
                 )
                 steps[steps.size - 1] = steps[steps.size - 1].copy(status = "completed")
