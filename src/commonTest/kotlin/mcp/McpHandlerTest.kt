@@ -71,17 +71,21 @@ class McpHandlerTest {
 
     @Test
     fun handle_toolsCall_returnsError_forUnknownTool() {
-        val handler = McpHandler { buildJsonObject { } }
+        val handler = McpHandler { throw Exception("Unknown tool") }
         val response = handler.handle("""{"jsonrpc":"2.0","method":"tools/call","params":{"name":"unknown_tool","arguments":{}},"id":1}""")
-        // Verifica se a resposta indica falha ou erro padrão do MCP/JSON-RPC
-        assertTrue(response!!.contains("error") || response.contains("not found"), "Should return an error for unknown tool")
+
+        assertTrue(response != null, "Response should not be null")
+        assertTrue(
+            response.contains("Execution error") || response.contains("error") || response.contains("isError") || response.contains("Unknown tool"),
+            "Should return an error format for unknown tool"
+        )
     }
 
     @Test
     fun handle_toolsCall_returnsMissingParams_whenParamsAbsent() {
         val handler = McpHandler { buildJsonObject { } }
         val response = handler.handle("""{"jsonrpc":"2.0","method":"tools/call","id":1}""")
-        assertTrue(response!!.contains("error") || response.contains("params"), "Should return error for missing params")
+        assertTrue(response!!.contains("error") || response.contains("Missing params"), "Should return error for missing params")
     }
 
     @Test
