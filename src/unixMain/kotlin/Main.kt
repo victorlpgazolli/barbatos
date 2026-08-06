@@ -26,7 +26,7 @@ fun main(args: Array<String>) {
         while (true) {
             val line = readlnOrNull() ?: break
             if (line.isBlank()) continue
-            
+
             fprintf(stderr, ">> %s\n", line)
             platform.posix.fflush(platform.posix.stderr)
             

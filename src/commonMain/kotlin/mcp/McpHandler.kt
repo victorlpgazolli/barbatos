@@ -26,6 +26,7 @@ class McpHandler(
     private val execute: (McpCallToolParams) -> JsonElement,
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val toolsJson = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
 
     fun handle(requestJson: String): String? {
         val req = try {
@@ -90,7 +91,7 @@ class McpHandler(
                 buildJsonObject { putJsonArray("prompts") {} }
             }
             "resources/list" -> buildJsonObject { putJsonArray("resources") {} }
-            "tools/list" -> json.encodeToJsonElement(McpToolsListResult(tools))
+            "tools/list" -> toolsJson.encodeToJsonElement(McpToolsListResult(tools))
             "tools/call" -> {
                 val decodedParams = params?.let { json.decodeFromJsonElement<McpCallToolParams>(it) }
                     ?: return json.encodeToJsonElement(
@@ -105,7 +106,12 @@ class McpHandler(
                     )
 
                 return try {
-                    execute(decodedParams)
+                    val result = execute(decodedParams)
+                    json.encodeToJsonElement(
+                        McpCallToolResult(
+                            listOf(McpContent("text", result.toString()))
+                        )
+                    )
                 } catch (e: Exception) {
                     json.encodeToJsonElement(
                         McpCallToolResult(
