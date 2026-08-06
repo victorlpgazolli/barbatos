@@ -16,7 +16,13 @@ repositories {
 val downloadFridaDevkitTask = tasks.register<Exec>("downloadFridaDevkit") {
     group = "setup"
     description = "Download Frida Devkit for the current platform"
-    commandLine("./scripts/download_frida_devkit.sh")
+    val targetArch = project.findProperty("fridaArch")?.toString() ?: ""
+
+    if (targetArch.isNotEmpty()) {
+        commandLine("./scripts/download_frida_devkit.sh", targetArch)
+    } else {
+        commandLine("./scripts/download_frida_devkit.sh")
+    }
 
     // Only run if the devkit headers/libs are missing
     outputs.file("src/nativeInterop/cinterop/frida-core.h")

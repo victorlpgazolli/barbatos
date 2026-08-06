@@ -79,18 +79,12 @@ jobs:
             sudo apt-get install -y libcurl4-openssl-dev
           fi
 
-      - name: Download Frida Devkit
-        run: |
-          chmod +x scripts/download_frida_devkit.sh
-          # CI runner for Linux X64/ARM64
-          ./scripts/download_frida_devkit.sh ${{ matrix.name == 'ARM64' && 'aarch64' || 'x86_64' }}
-
       - name: Run Kotlin Unit Tests
         if: matrix.name == 'x64'
         run: ./gradlew linuxX64Test --no-daemon
 
       - name: Compile Linux ${{ matrix.name }} Binary
-        run: ./gradlew ${{ matrix.target }} --no-daemon
+        run: ./gradlew ${{ matrix.target }} -PfridaArch=${{ matrix.name == 'ARM64' && 'aarch64' || 'x86_64' }} --no-daemon
 
   kotlin-macos-build:
     name: Kotlin (macOS ARM64)
@@ -107,11 +101,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
-
-      - name: Download Frida Devkit
-        run: |
-          chmod +x scripts/download_frida_devkit.sh
-          ./scripts/download_frida_devkit.sh arm64
 
       - name: Compile macOS ARM64 Binary
         run: ./gradlew linkDebugExecutableMacosArm64 macosArm64Test --no-daemon
