@@ -1,15 +1,15 @@
 name: barbatos
 base: core24
 version: '1.0.0'
-summary: Frictionless Android Runtime Debugger & MCP Server
+summary: Frictionless Android/iOS Runtime Debugger & MCP Server
 description: |
-  Barbatos is a zero-setup Android runtime debugger designed to bring the power of 
+  Barbatos is a zero-setup mobile runtime debugger designed to bring the power of 
   Frida to developers and AI agents without the complexity of manual setup. 
   It grants the ability to deeply understand an app's behavior, reveal hidden 
   states in the heap, and modify execution flow in real-time.
 
   Main Features:
-  - Class Discovery: Real-time enumeration of loaded Java/Kotlin classes.
+  - Class Discovery: Real-time enumeration of loaded Java/Kotlin/ObjC classes.
   - Deep Inspection: Recursive traversal of object hierarchies (Fields, Maps, 
     Collections).
   - Method Hooking: Intercept execution flow, inspect arguments, and capture 
@@ -20,9 +20,7 @@ description: |
     LLMs (Claude/Cursor) debug your app autonomously.
 
   This snap includes:
-  - 'barbatos': The interactive TUI shell.
-  - 'barbatos.bridge': The Frida RPC bridge (required for TUI and MCP).
-  - 'barbatos.mcp': The MCP server for connecting AI agents.
+  - 'barbatos': The CLI and MCP server.
 
   Note: After installation, run 'sudo snap connect barbatos:adb-support' 
   to allow the debugger to communicate with your Android devices.
@@ -43,12 +41,6 @@ apps:
   barbatos:
     command: bin/barbatos
     plugs: [network, network-bind, adb-support, home]
-  bridge:
-    command: bin/barbatos-bridge
-    plugs: [network, network-bind, adb-support]
-  mcp:
-    command: bin/barbatos-mcp
-    plugs: [network]
 
 parts:
   # We just "dump" the pre-built binaries from our 'dist/' directory
@@ -57,7 +49,5 @@ parts:
     source: dist/
     organize:
       barbatos: bin/barbatos
-      barbatos-bridge: bin/barbatos-bridge
-      barbatos-mcp: bin/barbatos-mcp
     stage-packages:
       - libcurl4

@@ -1,0 +1,29 @@
+Package: barbatos-bridge
+Architecture: arm64
+Version: 1.4.1-alpha01
+Priority: optional
+Section: utils
+Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
+Depends: python3, nodejs, npm, frida
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.1-alpha01/barbatos-bridge_1.4.1-alpha01_arm64.deb
+Size: 40166484
+MD5sum: cd368455855d2e8f29733509118a3ad8
+SHA1: 13d8f90468fd45f9ee1184198ccf300615d5be67
+SHA256: c13e9b737d97b7c67dd50e0659fc8ff9ea3d054319a211cb37e8e99814e263f9
+SHA512: d890ff8d91a05390be2ddbdd61e8bad3eacc553986ae77eafdf4d1cea5e538f7d937fb1aa72c0f3375969040f5b507a3c749c3deaccd77e28cf3952a11b86639
+Description: Frida bridge for Barbatos debugger
+
+Package: barbatos
+Architecture: arm64
+Version: 1.4.1-alpha01
+Priority: optional
+Section: utils
+Maintainer: Victor Gazolli <victorlpgazolli@gmail.com>
+Filename: https://github.com/victorlpgazolli/barbatos/releases/download/v1.4.1-alpha01/barbatos_1.4.1-alpha01_arm64.deb
+Size: 1438986
+MD5sum: 0a4833b26c9932e5a1f3bba3ca3e9a36
+SHA1: af0ac0815f32606217c73356f27268fee98d88e9
+SHA256: 4386cc65bd139aa9d74970e08b0f0eaa9df56454873c4fe8aa178f92dba4b7db
+SHA512: b77bfb4b0d2d3856531bae7473124b5058063176a4d2d3d72ad7a97ba84e94cb46f0cec2ab22ab603142b1ce32fd8ca9ad967a8cc60a86f6e80de16982aa8b43
+Description: Barbatos TUI Debugger for Android
+

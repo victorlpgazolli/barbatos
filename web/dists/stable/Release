@@ -1,0 +1,40 @@
+Architectures: amd64 arm64
+Codename: stable
+Components: main
+Date: Sat, 25 Apr 2026 20:16:52 +0000
+Description: Barbatos TUI Debugger APT Repository
+Label: Barbatos
+Origin: Barbatos Repository
+Suite: stable
+MD5Sum:
+ 0b53177c5a445a4c4403dff734da9aac              207 Release
+ d41d8cd98f00b204e9800998ecf8427e                0 main/binary-amd64/Packages
+ 75396d17db13836a075efc80a6b788ec               29 main/binary-amd64/Packages.gz
+ a0e4f486c54a92d86fe8b2113def1126             1204 main/binary-amd64/Release
+ 69ba070bffab4ec56e8baf7ad16798ea             1313 main/binary-arm64/Packages
+ e6cda8ba7e19d6f58c926df2941061d2              696 main/binary-arm64/Packages.gz
+ 6237c9b0262c4f2fa95be0e4258ef48b             1204 main/binary-arm64/Release
+SHA1:
+ 528b240c483ab9b87eb79aa68fb0a4db31a74441              207 Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709                0 main/binary-amd64/Packages
+ 4e6c36f1296d4706e6a256bbb6e2a7f5ecb2b3e2               29 main/binary-amd64/Packages.gz
+ ab828d132c91296e03c204195fe276a727f0b495             1204 main/binary-amd64/Release
+ 7fadc3105e098202c2b2d20cbe480207b8d20018             1313 main/binary-arm64/Packages
+ 4901a04a565018caea3d3baf759acb46a96397c0              696 main/binary-arm64/Packages.gz
+ 2b3b046ae2008b2876d60e26c0d3cc5529644181             1204 main/binary-arm64/Release
+SHA256:
+ d7caa87a6ba7125816f34c73d0ab7bcee32d17fc8186c5ce8f60b02d59100db0              207 Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                0 main/binary-amd64/Packages
+ 05b921322501bf488f5a8890f1bcc4f44af0a1c70269da24a92d5215e3b8f50f               29 main/binary-amd64/Packages.gz
+ 0dc8494f5c3e1871771300ad307c75088bd7cf8a3bf6b3422e7260643543266d             1204 main/binary-amd64/Release
+ e5591c61995a112dcde44e48fe16830708cdcc7e0564006528fdfb199f8e1b3e             1313 main/binary-arm64/Packages
+ 6061037af31fa95af01b654221f0d467c7047781ade91b8e6e4b142434841442              696 main/binary-arm64/Packages.gz
+ 4b45a934527e7ec4b2006def01b166c650ed7530da78644f94c2a17e84eabfa7             1204 main/binary-arm64/Release
+SHA512:
+ 3bced2c792de579994238bd576e9facd24e27e22a5ab6da394735b7bb07acf3c8ed80b8b570bf9cac7ebe9c222eca89b0194dd825a92e9a98e814083bfb33274              207 Release
+ cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e                0 main/binary-amd64/Packages
+ 45bbc7d44ff520a31dcc2c57da79abefeda97f5e9b767bdb919ab88dbadcddd379006b34b8a1d399714fe12907884f38df08b0ea8a4b9f07a5e8b6bb67cefb4e               29 main/binary-amd64/Packages.gz
+ 40dd21c5ad2248c9c0e01430da52d5efd08e1d4c107e933fd408bc6ddfacf0d83a8a8e06e0a56634b9c08828bcf043d3de977d1acebd56b4fcb69e9a3419af57             1204 main/binary-amd64/Release
+ 531ea5368799421924e7578984793d7acf9c84e821173464639f422fd36e012cce4b15226de1fee4bfbf5c69f96a6e684c7c262e072b0767f07cb1df28cd7a8e             1313 main/binary-arm64/Packages
+ e137317e0e4bf67b9f90eaa3436c2c6706def6ff7d5cfef58667811ba930165567cc97330b960095193c5651a4be7afef228e927e3bf6c3c7498b1c23a832ec9              696 main/binary-arm64/Packages.gz
+ fd82c50ec3bb14bb6b53fe1efc0f4ca835ec3c8d41d5378a35cf84b790bb9e4db60cd474553cd30a2a8761acf08c0c193b88a3389e7fadbda9ebb260a71bf515             1204 main/binary-arm64/Release

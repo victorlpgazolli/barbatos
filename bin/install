@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+install_path="$ASDF_INSTALL_PATH"
+download_path="$ASDF_DOWNLOAD_PATH"
+
+mkdir -p "$install_path/bin"
+
+# We check for existence of each file as some older releases might not have all components
+if [ -f "$download_path/dist/barbatos" ]; then
+    cp "$download_path/dist/barbatos" "$install_path/bin/barbatos"
+fi
+
+if [ -f "$download_path/dist/barbatos-bridge" ]; then
+    cp "$download_path/dist/barbatos-bridge" "$install_path/bin/barbatos-bridge"
+fi
+
+chmod +x "$install_path/bin/"*
+
+echo "barbatos ${ASDF_INSTALL_VERSION} installation successful!"

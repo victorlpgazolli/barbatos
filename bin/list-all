@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+curl -s https://api.github.com/repos/victorlpgazolli/barbatos/tags | grep '"name":' | sed -E 's/.*"v?([^"]+)".*/\1/' | sort -V

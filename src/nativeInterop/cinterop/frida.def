@@ -1,0 +1,6 @@
+headers = frida-core.h
+headerFilter = frida-core.h
+package = frida
+
+compilerOpts = -Isrc/nativeInterop/cinterop
+linkerOpts = -Lsrc/nativeInterop/cinterop -lfrida-core -lresolv -lpthread

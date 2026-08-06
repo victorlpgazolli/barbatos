@@ -1,3 +1,0 @@
-mcp
-httpx
-pyinstaller>=6.0.0

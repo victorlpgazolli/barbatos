@@ -1,0 +1,43 @@
+name: 'Build Linux Binaries'
+description: 'Compile Kotlin, Bridge, and MCP binaries for Linux (x86_64 or aarch64)'
+
+inputs:
+  architecture:
+    description: 'Target architecture (x86_64 or aarch64)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup build environment
+      uses: ./.github/actions/setup-build-env
+      with:
+        architecture: ${{ inputs.architecture }}
+
+    - name: Install dependencies
+      shell: bash
+      run: make install_dependencies
+
+    - name: Compile JS Agent & Kotlin Binary
+      shell: bash
+      run: |
+        make compile_binary ARCH=${{ inputs.architecture }}
+
+    - name: Prepare release artifacts
+      shell: bash
+      run: make prepare_release ARCH=${{ inputs.architecture }}
+
+    - name: Package artifacts
+      shell: bash
+      run: |
+        zip -r ./barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}.zip ./dist
+        cp dist/barbatos barbatos-linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}-cli
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-${{ inputs.architecture == 'x86_64' && 'x64' || 'arm64' }}
+        path: |
+          barbatos-linux-*.zip
+          barbatos-linux-*-cli
+        retention-days: 1

@@ -49,7 +49,7 @@ APT::FTPArchive::Release::Suite "stable";
 APT::FTPArchive::Release::Codename "stable";
 APT::FTPArchive::Release::Architectures "amd64 arm64";
 APT::FTPArchive::Release::Components "main";
-APT::FTPArchive::Release::Description "Barbatos TUI Debugger APT Repository";
+APT::FTPArchive::Release::Description "Barbatos CLI Debugger APT Repository";
 EOF
 
 apt-ftparchive -c dists/stable/apt-release.conf release dists/stable > dists/stable/Release

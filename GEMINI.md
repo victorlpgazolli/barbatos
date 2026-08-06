@@ -1,100 +1,86 @@
-# GEMINI.md — barbatos TUI Debugger
+# GEMINI.md — Barbatos JSON-RPC Bridge
 
 ## Project Overview
 
-`barbatos` (Interactive Debug Kit) is a **Kotlin Native TUI debugger** for Android apps. While primarily built for **macOS ARM64**, it supports **Linux (x64 and ARM64)** to ensure cross-platform compatibility. It provides an interactive terminal UI for live debugging via Frida, with no external TUI libraries — everything is built from scratch using POSIX `termios` and ANSI escape codes.
+`barbatos` is a high-performance **Kotlin Multiplatform (KMP) JSON-RPC Bridge** designed for Android and iOS runtime debugging via Frida. It replaces the legacy Python bridge and TUI with a unified, native binary that exposes a standardized JSON-RPC 2.0 API over HTTP.
 
-The tool bridges:
-- **Kotlin Native binary** (`src/nativeMain/kotlin/`) — the TUI shell and state machine.
-- **Python bridge** (`bridge/bridge.py`) — Frida host-side, exposes a JSON-RPC HTTP server.
-- **Frida JS agent** (`bridge/agent.js`) — injected into the Android process, exports RPC functions.
-- **MCP Server** (`mcp_server/server.py`) — wraps the Python bridge's RPC calls into standardized tools for AI agents.
-
-tmux is used to manage debug sessions and side-by-side inspection panels.
+The bridge enables both human developers (via TUI or Web) and AI agents (via MCP) to interact with live application memory, inspect objects, and hook methods with zero setup.
 
 ---
 
-## Architecture
+## Technical Architecture
 
+The project follows a modular, interface-driven design to ensure testability and multi-platform support.
+
+### Component Map
 ```
-Main.kt → AppState.kt (state machine)
-       → InputHandler.kt (key events & modifier parsing)
-       → Renderer.kt (ANSI output & layout)
-       → ListRenderer.kt (Shared viewport & selection utilities)
-       → CommandExecutor.kt (command dispatch & async orchestration)
-       → RpcClient.kt (Ktor HTTP → bridge.py → agent.js → Frida → Android)
-       → TmuxManager.kt (tmux session/window/pane management)
-       → HistoryStore.kt (~/.cache/barbatos/history.txt)
-       → SessionStore.kt (~/.cache/barbatos/sessions.toml)
-       → CacheManager.kt (~/.cache/barbatos/)
+Main.kt (Native) ──▶ NativeFridaBridge (Unix)
+Server.kt (Common) ──▶ RpcHandler (Common) ──▶ FridaBridge (Interface)
+                                             ┝━ MockFridaBridge (Test/Common)
+                                             ┕━ NativeFridaBridge (Prod/Native)
 ```
 
-### AppMode state machine
-
-Modes are defined in `AppState.kt` as an `AppMode` enum. Navigation is stack-based, utilizing `navigationStack`, `pushMode()`, and `popMode()` rather than simple state reassignment. The core modes include:
-- `DEFAULT` — command input with autocomplete and persistent history navigation.
-- `DEBUG_ENTRYPOINT` — menu after gadget install (inspect classes vs hook methods).
-- `DEBUG_CLASS_FILTER` — filterable class list from Frida with autofill package name.
-- `DEBUG_INSPECT_CLASS` — tree-based inspection of fields/methods and live instances.
-- `DEBUG_HOOK_WATCH` — live event logging and observation for intercepted method calls.
-- `DEBUG_EDIT_ATTRIBUTE` — UI mode for editing the value of a specific primitive attribute in an instance.
+### Key Modules
+- **Server (`src/commonMain/kotlin/server/`)**: Built on **Ktor (CIO engine)**. Exposes `/ping` for health checks and `/rpc` for all debugger operations.
+- **RPC Handler (`src/commonMain/kotlin/rpc/`)**: Orchestrates request parsing, validation against JSON-RPC 2.0 standards, and routing to the active `FridaBridge` implementation.
+- **Native Bridge (`src/unixMain/kotlin/bridge/`)**: The core engine. Interacts with **Frida Core (C API)** using Kotlin Native **CInterop**. It statically links `libfrida-core.a` and manages process attachment and script injection.
+- **Resources (`src/commonMain/resources/`)**: Contains the JavaScript agents (`agent.js`, `agent.objc.js`) that are injected into the target processes.
 
 ---
 
-## Build & Run
+## Build & Development
 
+### Requirements
+- **macOS ARM64** or **Linux (x64/ARM64)**.
+- **JDK 17+**.
+- **Frida Devkit**: Headers and static libraries managed by our automation.
+
+### Setup & Run
 ```bash
-# 1. Start the bridge (runs on localhost:8080 by default)
-# Ensure frida-java-bridge is installed: cd bridge && npm install
-python3 ./bridge/bridge.py
+# 1. Prepare environment (Download Frida Core SDK)
+./scripts/download_frida_devkit.sh
 
-# 2. Build native binary
-./gradlew linkDebugExecutableMacosArm64
+# 2. Compile Release Binary
+./gradlew linkReleaseExecutableMacosArm64
 
-# 3. Run
-./build/bin/macosArm64/debugExecutable/barbatos.kexe
+# 3. Start Bridge
+./build/bin/macosArm64/releaseExecutable/barbatos.kexe
 ```
 
-Target: `macosArm64`. Entry point: `main` in `Main.kt`. Binary base name: `barbatos`.
+The bridge will listen on `http://127.0.0.1:8080`.
 
 ---
 
-## Key Features
+## Engineering Standards
 
-- **Editor-like Navigation:** CMD+Arrows, Ctrl+A/E, and Option+Backspace work across all inputs.
-- **Persistent Command History:** Up/Down arrows in `DEFAULT` mode navigate history stored in `~/.cache/barbatos/history.txt`.
-- **Tree-based Inspection:** `DEBUG_INSPECT_CLASS` uses ASCII tree guidelines (`├──`, `└──`) for clear object hierarchies.
-- **Async Gadget Installation:** Step-by-step checklist UI for ADB preparation, gadget deployment, and JDWP injection.
-- **Flicker-free Polish:** Deterministic line counting and strict string truncation prevent implicit terminal scrolling.
-- **Sticky Footer:** Mode-specific keybinding shortcuts displayed at the bottom of the terminal.
+### TDD (Test Driven Development)
+All endpoints must be validated in `src/commonTest/kotlin/rpc/RpcHandlerTest.kt` using `MockFridaBridge`.
+- **Verify Failure**: `./gradlew macosArm64Test`
+- **Align Schema**: Check against `web/openapi.yaml`.
+- **Strict Logic**: Return HTTP 200 with standard JSON-RPC error codes (-32601, -32603, etc.) for application-level errors.
 
----
+### CInterop & Native
+- **Definition**: `src/nativeInterop/cinterop/frida.def`.
+- **Linkage**: Static linking to avoid runtime shared library dependency.
+- **Memory**: Use `memScoped` and `pin` when interacting with C pointers to ensure safety.
 
-## Development Conventions
-
-### Language & Documentation
-**All code comments, commit messages, and documentation MUST be in English.** Portuguese or other languages are strictly prohibited to maintain codebase consistency.
-
-### Async / non-blocking UI
-The main loop runs on the main thread. Network calls via Ktor must be launched in a background coroutine using `CoroutineScope(Dispatchers.Default)`. Results are passed back via `AtomicReference` fields on `AppState`, polled on `KeyEvent.Timeout` ticks (~100ms). **Never block the main loop.**
-
-### Input Handling
-Always use the `onInputChanged(state)` helper in `Main.kt` when modifying `inputBuffer`. This ensures suggestions, debounced searches, and "Ctrl+C" reset logic are handled consistently.
-
-### List Rendering
-Use `ListRenderer.computeViewport` for scrollable lists and `ListRenderer.selectionPrefix` for the standardized green `> ` marker. In tree views, ensure every logic row equals exactly one visual line to prevent "jumping" headers.
-
-### Frida RPC
-**Always use lowercase function names in `agent.js`** (e.g., `listclasses`, `countinstances`).
-Frida requests must have `encodeDefaults = true` in the Kotlin JSON configuration to ensure the `method` field is always serialized.
+### Documentation
+- **Language**: English only (code, comments, commits, and docs).
+- **Style**: No emojis, concise and technical tone.
 
 ---
 
-## Known Platform Gotchas (macOS ARM64)
+## CI/CD & Publishing
 
-| Problem | Solution |
-|---|---------|
-| `TIOCGWINSZ` value | macOS (0x40087468u) vs Linux (0x5413u) handled in `Terminal.getSize()`. |
-| `Runtime.getRuntime()` | JVM-only API — use POSIX equivalents or Frida `Java.perform`. |
-| Cursor flickering | Use `CLEAR_SCREEN` only at the start of frame and ensure total output height ≤ terminal height. |
-| Duplicate instances | Frida's `Java.choose` can yield same object multiple times; deduplicate via `$handle` in `agent.js`. |
+### GitHub Actions
+The project uses automated workflows for validation and distribution:
+- **Validation (`ci-validation.yml`)**: Triggered on every PR. Runs unit tests on macOS and Linux (x64/ARM64) and verifies native compilation.
+- **Release (`release.yml`)**: Triggered on tag push (`v*`). Builds production binaries, assembles Debian packages, builds Snaps, and publishes to:
+  - GitHub Releases
+  - Self-hosted APT Repository
+  - Snapcraft Store
+
+### Release Process
+1.  **Tagging**: `git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0`.
+2.  **SDK Management**: CI automatically downloads the correct Frida Devkit using `./scripts/download_frida_devkit.sh`.
+3.  **Artifacts**: A single unified binary `barbatos` is packaged for all supported platforms.

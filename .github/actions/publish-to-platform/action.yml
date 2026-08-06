@@ -1,0 +1,102 @@
+name: 'Publish to Platform'
+description: 'Publish artifacts to GitHub Release, APT Repository, or Snapcraft Store'
+
+inputs:
+  platform:
+    description: 'Target platform (github, apt, snapcraft)'
+    required: true
+  artifacts-dir:
+    description: 'Directory containing build artifacts'
+    required: true
+    default: 'artifacts'
+  gpg-private-key:
+    description: 'GPG Private Key for signing'
+    required: false
+  gpg-passphrase:
+    description: 'GPG Passphrase for signing'
+    required: false
+  gpg-key-id:
+    description: 'GPG Key ID for signing'
+    required: false
+  snapcraft-token:
+    description: 'Snapcraft Store Login Token'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    # GitHub Release Publishing
+    - name: Publish to GitHub Release
+      if: inputs.platform == 'github'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.ref_name }}
+      run: |
+        gh release upload ${RELEASE_TAG} \
+          ${{ inputs.artifacts-dir }}/barbatos-*.zip \
+          ${{ inputs.artifacts-dir }}/barbatos-*-cli \
+          --clobber
+
+    # APT Repository Publishing
+    - name: Update APT Repository
+      if: inputs.platform == 'apt'
+      env:
+        PACKAGES_BASE_URL: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+        GITHUB_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y apt-utils
+        mkdir -p apt_meta
+        
+        # Import GPG Key
+        mkdir -p ~/.gnupg
+        chmod 700 ~/.gnupg
+        echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+        gpgconf --kill gpg-agent
+        echo "${{ inputs.gpg-private-key }}" | gpg --batch --import
+
+        bash scripts/update-apt-repo.sh \
+          ${{ inputs.artifacts-dir }}/deb \
+          apt_meta \
+          ${{ inputs.gpg-key-id }} \
+          "${{ inputs.gpg-passphrase }}" \
+          "$PACKAGES_BASE_URL"
+
+        # Surgically update master branch
+        git clone --depth 1 --branch master https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} master_clone
+        cp -r apt_meta/dists/* master_clone/web/dists/
+        cd master_clone
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add web/dists
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: update apt repository for release ${{ github.ref_name }}"
+          git push origin master
+        fi
+        cd ..
+
+    # Snapcraft Publishing
+    - name: Publish to Snap Store
+      if: inputs.platform == 'snapcraft'
+      shell: bash
+      env:
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ inputs.snapcraft-token }}
+      run: |
+        for snap in ${{ inputs.artifacts-dir }}/snap/*.snap; do
+          if [ -f "$snap" ]; then
+            echo "Publishing $snap..."
+            # Retry up to 3 times on failure
+            for i in {1..3}; do
+              snapcraft upload "$snap" --release stable && break || {
+                if [ $i -lt 3 ]; then
+                  echo "Upload failed, retrying in 10s... ($i/3)"
+                  sleep 10
+                else
+                  echo "Upload failed after 3 attempts."
+                  exit 1
+                fi
+              }
+            done
+          fi
+        done

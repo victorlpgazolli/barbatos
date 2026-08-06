@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barbatos: Android Runtime Debugger</title>
+    <title>Barbatos: Multiplatform Runtime Debugger</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="hero">
         <div class="container">
             <h1>Barbatos</h1>
-            <p>Android Runtime Debugger & MCP Server.</p>
+            <p>Multiplatform Runtime Debugger & MCP Server.</p>
             <p class="quote"><i>"Understanding the language of systems, revealing hidden states, and reconciling the gap between developer and machine."</i></p>
             
-            <div class="placeholder-img">IMAGEM_AQUI_1</div>
+            <img src="demo.gif" alt="Barbatos Demo" class="placeholder-img">
+            <!-- <video autoplay muted playsinline loop src="demo.mp4" controls class="placeholder-img"></video> -->
 
             <div class="install-box">
                 <p>Quick Installation</p>
@@ -68,16 +69,11 @@
         <section id="architecture">
             <h2>Architecture Pipeline</h2>
             <div class="pipeline">
-                <div class="pipeline-group">
-                    <div class="step">Native TUI</div>
-                    <div class="step">MCP Client</div>
-                </div>
+                <div class="step">MCP Client</div>
                 <div class="arrow">↓</div>
-                <div class="step">Python Bridge</div>
+                <div class="step">Kotlin Multiplatform Bridge</div>
                 <div class="arrow">↓</div>
                 <div class="step">Frida JS Agent</div>
-                <div class="arrow">↓</div>
-                <div class="step">Android Runtime</div>
                 <div class="arrow">↓</div>
                 <div class="step">Target App</div>
             </div>
@@ -85,33 +81,49 @@
 
         <section id="mcp-setup">
             <h2>MCP Server Setup</h2>
-            <p>Add this to your <code>claude_desktop_config.json</code>:</p>
-            <pre><code>{
-                "mcpServers": {
-                    "barbatos-debugger": {
-                        "command": "python3",
-                        "args": ["/absolute/path/to/barbatos/mcp_server/server.py"]
-                    }
-                }
-            }</code></pre>
+            <p>Add this to your <code>~/.claude.json</code>:</p>
+<div class="install-box" style="padding: 0; margin: 0; margin-top: 1em;" id="json-box" 
+data-payload='{"mcpServers": {"barbatos-debugger": {"command": "barbatos-bridge", "args": ["mcp"]}}}' >
+<pre style="margin: 0; line-height: 125%;"><span></span><span style="color: #F8F8F2">{</span>
+<span style="color: #F8F8F2">    </span><span style="color: #FF79C6">&quot;mcpServers&quot;</span><span style="color: #F8F8F2">: {</span>
+<span style="color: #F8F8F2">        </span><span style="color: #FF79C6">&quot;barbatos-debugger&quot;</span><span style="color: #F8F8F2">: {</span>
+<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;command&quot;</span><span style="color: #F8F8F2">: </span><span style="color: #BD93F9">&quot;barbatos&quot;</span><span style="color: #F8F8F2">,</span>
+<span style="color: #F8F8F2">            </span><span style="color: #FF79C6">&quot;args&quot;</span><span style="color: #F8F8F2">: [</span><span style="color: #BD93F9">&quot;mcp&quot;</span><span style="color: #F8F8F2">]</span>
+<span style="color: #F8F8F2">        }</span>
+<span style="color: #F8F8F2">    }</span>
+<span style="color: #F8F8F2">}</span>
+<span class="copy-badge">Copy</span>
+</pre>
+</div>
+
+
             <br>
-            <p>Note: Ensure the <code>barbatos-bridge</code> is running (listening on port <code>8080</code>) before using the MCP tools.</p>
+            <p>Note: The unified bridge automatically handles Frida connection for the MCP server.</p>
+        </section>
+        <section id="openapi">
+            <h2>OpenApi specification</h2>
+            <p>Barbatos provides an API that is accessible through the bridge.</p>
+            <a href="./openapi">View API Docs ></a>
         </section>
     </div>
 
     <script>
-        document.getElementById('copy-box').addEventListener('click', function() {
-            const code = this.querySelector('code').innerText;
-            navigator.clipboard.writeText(code).then(() => {
-                const badge = this.querySelector('.copy-badge');
-                badge.innerText = 'Copied!';
-                badge.classList.add('copied');
-                setTimeout(() => {
-                    badge.innerText = 'Copy';
-                    badge.classList.remove('copied');
-                }, 2000);
+        function addCopyAction(elementId) {
+            document.getElementById(elementId).addEventListener('click', function() {
+                const code = this.querySelector('code') ? this.querySelector('code').innerText : this.dataset.payload;
+                navigator.clipboard.writeText(code).then(() => {
+                    const badge = this.querySelector('.copy-badge');
+                    badge.innerText = 'Copied!';
+                    badge.classList.add('copied');
+                    setTimeout(() => {
+                        badge.innerText = 'Copy';
+                        badge.classList.remove('copied');
+                    }, 2000);
+                });
             });
-        });
+        }
+        addCopyAction('copy-box');
+        addCopyAction('json-box');
     </script>
 </body>
 </html>
