@@ -59,9 +59,11 @@ val compileAgentsTask = tasks.register("compileAgents") {
 val generateResourcesTask = tasks.register("generateResources") {
     val compiledDir = layout.buildDirectory.dir("generated/agents").get().asFile
     val outputDir = layout.buildDirectory.dir("generated/resources/src/utils").get().asFile
+    val openapiFile = file("web/openapi.yaml")
 
     dependsOn(compileAgentsTask)
     inputs.dir(compiledDir)
+    inputs.file(openapiFile)
     outputs.dir(outputDir)
 
     doLast {
@@ -83,6 +85,16 @@ val generateResourcesTask = tasks.register("generateResources") {
                 scriptBuilder.appendLine("    \"\"\".trimIndent()")
                 scriptBuilder.appendLine()
             }
+        }
+
+        // Served by the docs server on :8080 in HTTP mode. Embedded so the standalone
+        // binary carries its own spec — web/openapi.yaml is not shipped next to it.
+        if (openapiFile.exists()) {
+            val yaml = openapiFile.readText().replace("$", "${"$"}{'$'}")
+            scriptBuilder.appendLine("    val openapiYaml = \"\"\"")
+            scriptBuilder.appendLine(yaml)
+            scriptBuilder.appendLine("    \"\"\".trimIndent()")
+            scriptBuilder.appendLine()
         }
 
         scriptBuilder.appendLine("}")

@@ -18,6 +18,7 @@ fun Application.module(bridge: FridaBridge) {
     println("[SERVER] Has embedded agent? ${EmbeddedScripts.agent.isNotEmpty()}")
 
     routing {
+        docsRoutes()
         get("/ping") {
             call.respondText("""{"status": "pong"}""", ContentType.Application.Json)
         }
@@ -52,6 +53,8 @@ fun startServer(bridge: FridaBridge) {
     val cmd = $$"kill -9 $(lsof -t -i:$$port) 2>/dev/null"
 
     system(cmd)
+
+    println("[SERVER] Swagger UI on http://127.0.0.1:$port/docs")
 
     embeddedServer(CIO, port = port, host = "127.0.0.1") {
         module(bridge)
