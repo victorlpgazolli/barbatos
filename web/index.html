@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barbatos: Multiplatform Runtime Debugger</title>
+    <title>Barbatos: Frida API and MCP Server for AI Agents & Debuggers.</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="hero">
         <div class="container">
             <h1>Barbatos</h1>
-            <p>Multiplatform Runtime Debugger & MCP Server.</p>
+            <p>Frida API and MCP Server for AI Agents & Debuggers.</p>
             <p class="quote"><i>"Understanding the language of systems, revealing hidden states, and reconciling the gap between developer and machine."</i></p>
             
             <img src="demo.gif" alt="Barbatos Demo" class="placeholder-img">
@@ -19,7 +19,7 @@
             <div class="install-box">
                 <p>Quick Installation</p>
                 <pre id="copy-box"><code>curl -sSL https://barbatos.victorlpgazolli.dev/install.sh | bash</code><span class="copy-badge">Copy</span></pre>
-                <p class="small">Recommended for macOS (ARM64), Linux (x64/ARM64), and WSL.</p>
+                <p class="small">Available for macOS (ARM64)</p>
             </div>
         </div>
     </div>
@@ -69,9 +69,11 @@
         <section id="architecture">
             <h2>Architecture Pipeline</h2>
             <div class="pipeline">
-                <div class="step">MCP Client</div>
+                <div class="step">MCP Client / Any http request</div>
                 <div class="arrow">↓</div>
                 <div class="step">Kotlin Multiplatform Bridge</div>
+                <div class="arrow">↓</div>
+                <div class="step">Frida Core</div>
                 <div class="arrow">↓</div>
                 <div class="step">Frida JS Agent</div>
                 <div class="arrow">↓</div>

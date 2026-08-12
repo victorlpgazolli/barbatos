@@ -31,6 +31,10 @@ on:
         description: 'Publish to Snapcraft Store'
         default: true
 
+env:
+  LINUX_IS_SUPPORTED: false
+  MACOS_IS_SUPPORTED: true
+
 jobs:
   setup-release:
     name: Setup Release
@@ -88,9 +92,8 @@ jobs:
     name: Build Linux x64
     runs-on: ubuntu-24.04
     needs: setup-release
-    if: |
-      (github.event_name == 'workflow_dispatch' && inputs.build-linux-x64 == true) ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: env.LINUX_IS_SUPPORTED && ((github.event_name == 'workflow_dispatch' && inputs.build-linux-x64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -104,9 +107,8 @@ jobs:
     name: Build Linux ARM64
     runs-on: ubuntu-24.04
     needs: setup-release
-    if: |
-      (github.event_name == 'workflow_dispatch' && inputs.build-linux-arm64 == true) ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: env.LINUX_IS_SUPPORTED && ((github.event_name == 'workflow_dispatch' && inputs.build-linux-arm64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -120,9 +122,8 @@ jobs:
     name: Build macOS ARM64
     runs-on: macos-15
     needs: setup-release
-    if: |
-      (github.event_name == 'workflow_dispatch' && inputs.build-macos-arm64 == true) ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    if: env.MACOS_IS_SUPPORTED && ((github.event_name == 'workflow_dispatch' && inputs.build-macos-arm64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

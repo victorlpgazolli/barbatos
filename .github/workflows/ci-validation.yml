@@ -19,6 +19,10 @@ on:
         description: 'Run Kotlin tests and Linux builds'
         default: 'false'
 
+env:
+  LINUX_IS_SUPPORTED: false
+  MACOS_IS_SUPPORTED: true
+
 jobs:
   detect-changes:
     name: Detect Changed Parts
@@ -44,7 +48,7 @@ jobs:
   kotlin-test-and-linux-build:
     name: Kotlin (${{ matrix.target }})
     needs: detect-changes
-    if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
+    if: env.LINUX_IS_SUPPORTED && (needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true'))
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -89,7 +93,7 @@ jobs:
   kotlin-macos-build:
     name: Kotlin (macOS ARM64)
     needs: detect-changes
-    if: needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')
+    if: env.MACOS_IS_SUPPORTED && (needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true'))
     runs-on: macos-15
     steps:
       - name: Checkout repository
