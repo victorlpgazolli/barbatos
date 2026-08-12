@@ -3,34 +3,33 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Kotlin-Multiplatform-7f52ff?style=flat-square&logo=kotlin" alt="Kotlin Multiplatform">
   <img src="https://img.shields.io/badge/Frida-16.x-ff1e56?style=flat-square" alt="Frida">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20WSL-000000?style=flat-square" alt="Platforms">
+  <img src="https://img.shields.io/badge/Platform-macOS-000000?style=flat-square" alt="Platforms">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
 </p>
 
 <p align="center">
-  <b>High-Performance Frida MCP Server for AI Agents & Debuggers.</b><br>
-  <i>"Consolidating runtime introspection into a single, native, cross-platform binary."</i>
+  <b>Frida API and MCP Server for AI Agents & Debuggers.</b><br>
+  <i>"Empowering AI Agents with dynamic instrumentation capabilities from Frida."</i>
 </p>
 
-<div align="center">
-Using Barbatos to explore an app's structure and inspect objects:
-<img src="web/demo.gif" alt="Barbatos Demo">
-</div>
+|Using barbatos MCP server to explore an app's structure and inspect objects:|API documentation:|
+|---|---|
+|<img src="web/demo.gif" alt="Barbatos Demo">|<img width="1100" src="web/swagger-preview.png" /> |
 
 ---
 
 ## Technical Transformation
 
-Barbatos has evolved from a dual-stack v1 prototype (Kotlin TUI + Python Bridge) into a unified v2 **Kotlin Multiplatform (KMP) Native Bridge**. This transition eliminates the need for Python runtimes, reduces the binary footprint, and significantly improves communication latency.
+Barbatos has evolved from a dual-stack v1 prototype (Kotlin TUI + Python Bridge) into a unified v2 **Kotlin Multiplatform (KMP) Native Bridge**. This transition eliminates the need for Python runtimes, reduces the binary footprint, and significantly improves communication latency. In the process Linux and Windows support was dropped, but we plan to reintroduce them in future releases.
 
 ## Key Features
 
-*   **Unified Native Binary:** Single executable for macOS and Linux. No dependencies, no setup.
+*   **Unified Native Binary:** Single executable for macOS. No dependencies, no setup.
 *   **JSON-RPC 2.0 API:** Standardized interface over HTTP/Post for consistent integration.
-*   **Class Discovery:** Real-time enumeration of loaded Java/Kotlin/ObjC classes.
+*   **Class Discovery:** Real-time enumeration of loaded Java/Kotlin classes.
 *   **Deep Inspection:** Recursive traversal of object hierarchies (Fields, Maps, Collections).
 *   **Method Hooking:** Intercept execution flow and modify behavior in real-time.
-*   **AI-First Design:** Optimized for Model Context Protocol (MCP) and autonomous debugging agents.
+*   **AI-First Design:** Optimized for Model Context Protocol (MCP) or API consumption by AI agents.
 
 ---
 
@@ -75,6 +74,7 @@ curl -X POST http://127.0.0.1:8080/rpc \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "method": "listClasses", "params": {"search_param": "MainActivity"}, "id": 1}'
 ```
+[click here to see full swagger doc >](https://barbatos.victorlpgazolli.dev/openapi)
 
 ---
 
