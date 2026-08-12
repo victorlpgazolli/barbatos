@@ -18,9 +18,6 @@
 
 ---
 
-## Technical Transformation
-
-Barbatos has evolved from a dual-stack v1 prototype (Kotlin TUI + Python Bridge) into a unified v2 **Kotlin Multiplatform (KMP) Native Bridge**. This transition eliminates the need for Python runtimes, reduces the binary footprint, and significantly improves communication latency. In the process Linux and Windows support was dropped, but we plan to reintroduce them in future releases.
 
 ## Key Features
 
@@ -32,6 +29,21 @@ Barbatos has evolved from a dual-stack v1 prototype (Kotlin TUI + Python Bridge)
 *   **AI-First Design:** Optimized for Model Context Protocol (MCP) or API consumption by AI agents.
 
 ---
+
+## Installation
+
+### macOS
+```bash
+curl -sSL https://barbatos.victorlpgazolli.dev/install.sh | bash
+
+# or using asdf
+asdf plugin add barbatos git@github.com:victorlpgazolli/barbatos.git
+```
+
+## Technical Details
+
+Barbatos has evolved from a dual-stack v1 prototype (Kotlin TUI + Python Bridge) into a unified v2 **Kotlin Multiplatform (KMP) Native Bridge**. This transition eliminates the need for Python runtimes, reduces the binary footprint, and significantly improves communication latency. In the process Linux and Windows support was dropped, but we plan to reintroduce them in future releases.
+
 
 ## Architecture
 
