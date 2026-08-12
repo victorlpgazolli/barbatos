@@ -31,14 +31,8 @@ case "$OS" in
         fi
         ;;
     Linux)
-        if [ "$ARCH" = "x86_64" ]; then
-            PLATFORM="linux-x64"
-        elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-            PLATFORM="linux-arm64"
-        else
-            echo -e "${RED}Error:${NC} Unsupported Linux architecture: $ARCH"
-            exit 1
-        fi
+        echo -e "${RED}Error:${NC} Linux is not supported"
+        exit 1
         ;;
     *)
         echo -e "${RED}Error:${NC} Unsupported operating system: $OS"
@@ -81,7 +75,7 @@ if [ "$OS" = "Darwin" ]; then
 fi
 
 # 6. Ensure executability
-chmod +x "$BIN_DIR/barbatos" "$BIN_DIR/barbatos-bridge"
+chmod +x "$BIN_DIR/barbatos"
 
 # 7. Configure PATH or create symbolic link in ~/.local/bin
 LOCAL_BIN="$HOME/.local/bin"
@@ -106,7 +100,6 @@ if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
 fi
 mkdir -p "$LOCAL_BIN"
 ln -sf "$BIN_DIR/barbatos" "$LOCAL_BIN/barbatos"
-ln -sf "$BIN_DIR/barbatos-bridge" "$LOCAL_BIN/barbatos-bridge"
 echo -e "\n${GREEN}Success:${NC} Created symbolic links in $LOCAL_BIN."
 
 echo -e "\n${BLUE}==>${NC} Run 'barbatos' to start debugging!"
