@@ -44,7 +44,7 @@ jobs:
   kotlin-test-and-linux-build:
     name: Kotlin (${{ matrix.target }})
     needs: detect-changes
-    if: ${{ vars.LINUX_IS_SUPPORTED == 'true' }} && (needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true'))
+    if: ${{ vars.LINUX_IS_SUPPORTED == 'true' && (needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')) }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -89,7 +89,7 @@ jobs:
   kotlin-macos-build:
     name: Kotlin (macOS ARM64)
     needs: detect-changes
-    if: ${{ vars.MACOS_IS_SUPPORTED == 'true' }} && (needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true'))
+    if: ${{ vars.MACOS_IS_SUPPORTED == 'true' && (needs.detect-changes.outputs.kotlin == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.kotlin == 'true')) }}
     runs-on: macos-15
     steps:
       - name: Checkout repository

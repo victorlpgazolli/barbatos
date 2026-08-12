@@ -103,8 +103,8 @@ jobs:
     name: Build Linux ARM64
     runs-on: ubuntu-24.04
     needs: setup-release
-    if: ${{ vars.LINUX_IS_SUPPORTED == 'true' }} && ((github.event_name == 'workflow_dispatch' && inputs.build-linux-arm64 == true) ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
+    if: ${{ vars.LINUX_IS_SUPPORTED == 'true' && ((github.event_name == 'workflow_dispatch' && inputs.build-linux-arm64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -118,8 +118,8 @@ jobs:
     name: Build macOS ARM64
     runs-on: macos-15
     needs: setup-release
-    if: ${{ vars.MACOS_IS_SUPPORTED == 'true' }} && ((github.event_name == 'workflow_dispatch' && inputs.build-macos-arm64 == true) ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')))
+    if: ${{ vars.MACOS_IS_SUPPORTED == 'true' && ((github.event_name == 'workflow_dispatch' && inputs.build-macos-arm64 == true) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
