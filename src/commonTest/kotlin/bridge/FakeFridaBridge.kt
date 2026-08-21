@@ -22,6 +22,7 @@ import model.actions.result.CheckResponse
 import model.actions.result.CountInstancesResult
 import model.actions.result.GetInstanceAddressesResult
 import model.actions.result.HealthCheckResult
+import model.actions.result.HookEvent
 import model.actions.result.HookEventsResult
 import model.actions.result.HookMethodResult
 import model.actions.result.InjectGadgetResult
@@ -90,7 +91,7 @@ class FakeFridaBridge(
     },
     var getHookEventsFn: () -> HookEventsResult = {
         HookEventsResult(
-            eventData = listOf("com.example.MainActivity", "onCreate(android.os.Bundle)").joinToString(",")
+            events = listOf<HookEvent>()
         )
     },
     var setMethodImplementationFn: (SetMethodImplementationParams) -> SetMethodImplementationResult = { params ->

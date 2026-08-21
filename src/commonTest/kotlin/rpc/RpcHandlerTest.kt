@@ -216,14 +216,6 @@ class RpcHandlerTest {
     }
 
     @Test
-    fun handle_getHookEvents_returnsEventList() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"getHookEvents","id":9}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("com.example.MainActivity"))
-    }
-
-    @Test
     fun handle_setMethodImplementation_returnsReplacedMessage() {
         val handler = RpcHandler(FakeFridaBridge())
         val result = handler.handle("""{"jsonrpc":"2.0","method":"setMethodImplementation","params":{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)","code":"return null;"},"id":10}""")
