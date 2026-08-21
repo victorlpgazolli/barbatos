@@ -5,39 +5,41 @@ FRIDA_VERSION="17.9.1" # Use a specific version
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=${1:-$(uname -m)}
 
-echo "Setting up Frida Devkit for $PLATFORM/$ARCH..."
+TARGET_OS=${1:-$(uname -s | tr '[:upper:]' '[:lower:]')}
+TARGET_ARCH=${2:-$(uname -m)}
+TARGET_DIR=${3:-"src/nativeInterop/cinterop"}
 
-if [ "$PLATFORM" == "darwin" ]; then
-    if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-        DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-macos-arm64.tar.xz"
-    else
-        DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-macos-x86_64.tar.xz"
-    fi
-elif [ "$PLATFORM" == "linux" ]; then
-    if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-        DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-linux-arm64.tar.xz"
-    else
-        DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-linux-x86_64.tar.xz"
-    fi
+if [ "$TARGET_OS" == "darwin" ] || [ "$TARGET_OS" == "macos" ]; then
+    PLATFORM="macos"
+elif [ "$TARGET_OS" == "linux" ]; then
+    PLATFORM="linux"
 else
-    echo "Unsupported platform: $PLATFORM"
+    echo "OS not supported: $TARGET_OS"
+    exit 1
+fi
+if [[ "$TARGET_ARCH" == "arm64" || "$TARGET_ARCH" == "aarch64" ]]; then
+    ARCH="arm64"
+elif [[ "$TARGET_ARCH" == "x86_64" || "$TARGET_ARCH" == "amd64" ]]; then
+    ARCH="x86_64"
+else
+    echo "Architecture not supported: $TARGET_ARCH"
     exit 1
 fi
 
+echo "Setting up Frida Devkit for $PLATFORM/$ARCH..."
+DEVKIT_NAME="frida-core-devkit-${FRIDA_VERSION}-${PLATFORM}-${ARCH}.tar.xz"
 URL="https://github.com/frida/frida/releases/download/${FRIDA_VERSION}/${DEVKIT_NAME}"
-TARGET_DIR="src/nativeInterop/cinterop"
 
+if [ -f "$TARGET_DIR/libfrida-core.a" ]; then
+    echo "Frida Devkit already exists in $TARGET_DIR. Skipping download."
+    exit 0
+fi
 echo "Downloading Frida Devkit from $URL..."
+mkdir -p "$TARGET_DIR"
 curl -L "$URL" -o "${DEVKIT_NAME}"
 
 echo "Extracting to $TARGET_DIR..."
-mkdir -p "$TARGET_DIR"
 tar -xf "${DEVKIT_NAME}" -C "$TARGET_DIR"
-
-# Rename headers to match our .def file if necessary
-mv "$TARGET_DIR/frida-core.h" "$TARGET_DIR/frida-core.h.tmp" 2>/dev/null || true
-mv "$TARGET_DIR/frida-core.h.tmp" "$TARGET_DIR/frida-core.h" 2>/dev/null || true
-
 
 rm "${DEVKIT_NAME}"
 echo "Frida Devkit setup complete."

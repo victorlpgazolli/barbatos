@@ -1,4 +1,7 @@
 import java.io.File
+import org.jetbrains.kotlin.konan.target.Family
+import org.jetbrains.kotlin.konan.target.Architecture
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     kotlin("multiplatform") version "2.3.21"
@@ -12,30 +15,19 @@ repositories {
     gradlePluginPortal()
 }
 
-
-val downloadFridaDevkitTask = tasks.register<Exec>("downloadFridaDevkit") {
-    group = "setup"
-    description = "Download Frida Devkit for the current platform"
-    val targetArch = project.findProperty("fridaArch")?.toString() ?: ""
-
-    if (targetArch.isNotEmpty()) {
-        commandLine("./scripts/download_frida_devkit.sh", targetArch)
-    } else {
-        commandLine("./scripts/download_frida_devkit.sh")
-    }
-
-    // Only run if the devkit headers/libs are missing
-    outputs.file("src/nativeInterop/cinterop/frida-core.h")
-    outputs.file("src/nativeInterop/cinterop/libfrida-core.a")
-}
-
 val installAgentsDependenciesTask = tasks.register("installAgentsDependencies") {
     doLast {
-        exec {
-            commandLine("npm", "ci")
+        val outputDir = layout.buildDirectory.dir("generated/agents").get().asFile
+        outputDir.mkdirs()
+        val hasCompiledAgent = outputDir.listFiles().size > 0
+        if (hasCompiledAgent.not()) {
+            exec {
+                commandLine("npm", "ci")
+            }
         }
     }
 }
+
 val compileAgentsTask = tasks.register("compileAgents") {
     dependsOn(installAgentsDependenciesTask)
     val inputDir = file("src/commonMain/resources")
@@ -49,8 +41,16 @@ val compileAgentsTask = tasks.register("compileAgents") {
         inputDir.walkTopDown().filter { it.isFile && it.extension == "js" }.forEach { file ->
             println("Compiling ${file.name}...")
             val outputFile = File(outputDir, file.name)
-            exec {
-                commandLine("npx", "frida-compile", file.absolutePath, "-o", outputFile.absolutePath)
+            if (outputFile.exists().not()) {
+                exec {
+                    commandLine(
+                        "npx",
+                        "frida-compile",
+                        file.absolutePath,
+                        "-o",
+                        outputFile.absolutePath
+                    )
+                }
             }
         }
     }
@@ -87,8 +87,6 @@ val generateResourcesTask = tasks.register("generateResources") {
             }
         }
 
-        // Served by the docs server on :8080 in HTTP mode. Embedded so the standalone
-        // binary carries its own spec — web/openapi.yaml is not shipped next to it.
         if (openapiFile.exists()) {
             val yaml = openapiFile.readText().replace("$", "${"$"}{'$'}")
             scriptBuilder.appendLine("    val openapiYaml = \"\"\"")
@@ -101,22 +99,23 @@ val generateResourcesTask = tasks.register("generateResources") {
         ktFile.writeText(scriptBuilder.toString())
     }
 }
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
     dependsOn(generateResourcesTask)
 }
 
 tasks.matching { it.name == "prepareKotlinIdeaImport" }.configureEach {
     dependsOn(generateResourcesTask)
-    dependsOn(downloadFridaDevkitTask)
+    // 2. O IDE agora depende de todas as tasks de download dinâmicas para indexar o CInterop corretamente
+    dependsOn(tasks.withType<Exec>().matching { it.name.startsWith("downloadFridaDevkit") })
 }
 
 tasks.matching { it.name == "build" || it.name == "assemble" }.configureEach {
     dependsOn(generateResourcesTask)
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.CInteropProcess>().configureEach {
-    dependsOn(downloadFridaDevkitTask)
-}
+// 3. A configuração global do CInteropProcess foi removida, pois será injetada por target.
+
 kotlin {
     macosArm64 {
         binaries {
@@ -164,6 +163,24 @@ kotlin {
             executable {
                 entryPoint = "main"
                 baseName = "barbatos"
+                val libgccPath = System.getenv("LIBGCC_PATH")
+                linkerOpts(
+                    "-L/usr/lib/x86_64-linux-gnu",
+                    "-L/usr/x86_64-linux-gnu/lib",
+                    "--allow-shlib-undefined",
+                    "-lssl", "-lcrypto",
+                    "-lssh",
+                    "-lbrotlidec",
+                    "-lgssapi_krb5",
+                    "-lidn2",
+                    "-lldap", "-llber",
+                    "-lnghttp2",
+                    "-lpsl",
+                    "-lrtmp",
+                    "-lzstd",
+                    "-lz",
+                    if (libgccPath != null && libgccPath.isNotEmpty()) libgccPath else "-lgcc"
+                )
             }
         }
         compilations.getByName("main") {
@@ -171,6 +188,44 @@ kotlin {
         }
     }
 
+    targets.withType<KotlinNativeTarget> {
+        val targetName = this.name
+        val konanTarget = this.konanTarget
+
+        val fridaOs = when (konanTarget.family) {
+            Family.LINUX -> "linux"
+            Family.OSX -> "macos"
+            else -> throw GradleException("Frida do not support target: ${konanTarget.family}")
+        }
+
+        val fridaArch = when (konanTarget.architecture) {
+            Architecture.X64 -> "x86_64"
+            Architecture.ARM64 -> "arm64"
+            else -> throw GradleException("Arch not supported: ${konanTarget.architecture}")
+        }
+
+        val devkitDir = layout.buildDirectory.dir("frida-devkit/$fridaOs-$fridaArch").get().asFile
+
+        val downloadTask = tasks.register<Exec>("downloadFridaDevkit${targetName.replaceFirstChar { it.uppercase() }}") {
+            group = "setup"
+            description = "Download Frida Devkit for $fridaOs $fridaArch"
+            commandLine("./scripts/download_frida_devkit.sh", fridaOs, fridaArch, devkitDir.absolutePath)
+            outputs.dir(devkitDir)
+        }
+
+        compilations.getByName("main") {
+            cinterops.getByName("frida") {
+                tasks.named(interopProcessingTaskName).configure {
+                    dependsOn(downloadTask)
+                }
+                compilerOpts("-I${devkitDir.absolutePath}")
+            }
+        }
+
+        binaries.withType<org.jetbrains.kotlin.gradle.plugin.mpp.Executable> {
+            linkerOpts("-L${devkitDir.absolutePath}", "-lfrida-core", "-lresolv", "-lpthread")
+        }
+    }
 
     @OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
@@ -235,7 +290,6 @@ fun registerRpcTask(taskName: String, methodName: String, params: Map<String, An
         group = "barbatos-rpc"
         description = "Execute JSON-RPC method $methodName via curl"
 
-        // Use standard Exec configuration instead of setting commandLine inside doFirst
         executable = "curl"
 
         argumentProviders.add(CommandLineArgumentProvider {
