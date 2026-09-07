@@ -1,6 +1,8 @@
 import bridge.NativeFridaBridge
+import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 
 fun main(args: Array<String>) {
+    KotlinLoggingConfiguration.logStartupMessage = false
 
     val bridge = NativeFridaBridge()
 

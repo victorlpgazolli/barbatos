@@ -25,6 +25,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.error
 import io.modelcontextprotocol.kotlin.sdk.types.success
 import rpc.RpcHandler
 import model.bridge.FridaBridge
+import platform.posix.fprintf
+import platform.posix.stderr
 import platform.posix.system
 import utils.EmbeddedScripts
 
@@ -147,7 +149,7 @@ fun startServer(mcpServer: Server) {
     system(cmd)
 
 
-    println("[SERVER] MCP Streamable HTTP endpoint on http://127.0.0.1:$port/mcp")
+    fprintf(stderr, "[SERVER] MCP Streamable HTTP endpoint on http://127.0.0.1:$port/mcp\n")
 
     val connector = EngineConnectorBuilder()
     connector.host = "127.0.0.1"
