@@ -12,6 +12,8 @@ import utils.decodeToOrThrow
 
 data class HandlerResult(val body: String, val statusCode: Int)
 
+data class StreamToolResult(val content: String, val isError: Boolean)
+
 class RpcHandler(private val bridge: FridaBridge) {
     val jsonParser = Json {
         ignoreUnknownKeys = true
@@ -111,6 +113,28 @@ class RpcHandler(private val bridge: FridaBridge) {
         }
     }
 
+    /**
+     * Runs a streaming method (e.g. `listClassesStream`) through [handleStream] and
+     * accumulates every emitted line so it can be returned as a single MCP tool result.
+     */
+    suspend fun streamToolResult(method: String, params: JsonElement?): StreamToolResult {
+        val requestJson = jsonParser.encodeToString(
+            RpcRequest.serializer(),
+            RpcRequest(method = method, params = params)
+        )
+        val lines = mutableListOf<String>()
+        handleStream(requestJson) { line -> lines.add(line) }
+        val content = lines.joinToString("\n")
+        return StreamToolResult(content = content, isError = lines.any { isErrorLine(it) })
+    }
+
+    private fun isErrorLine(line: String): Boolean = try {
+        jsonParser.decodeFromString<RpcErrorResponse>(line).error
+        true
+    } catch (e: Exception) {
+        false
+    }
+
     public fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
             COUNT_INSTANCES.name -> {
@@ -176,6 +200,13 @@ class RpcHandler(private val bridge: FridaBridge) {
     }
 
     companion object {
+        internal val LIST_CLASSES_STREAM = ActionDescriptor.create<ListClassesParams>(
+            name = "listClassesStream",
+            description = "Search the classes loaded on the device and stream the matches. " +
+                "Filters by search_param (substring, case-insensitive) and optionally app_package, with offset/limit pagination. " +
+                "Requires an active Frida session. " +
+                "Returns a stream of chunks; each chunk is a JSON object with a \"list\" array of matching class names.",
+        ).copy(isStreamingOutput = true)
         internal val COUNT_INSTANCES = ActionDescriptor.create<CountInstancesParams>(
             name = "countInstances",
             description = "Count the number of live instances of a Java/Kotlin class currently on the Android heap. " +
@@ -274,6 +305,7 @@ class RpcHandler(private val bridge: FridaBridge) {
         )
 
         public val tools = listOf(
+            LIST_CLASSES_STREAM,
             COUNT_INSTANCES,
             INSPECT_CLASS,
             LIST_INSTANCES,

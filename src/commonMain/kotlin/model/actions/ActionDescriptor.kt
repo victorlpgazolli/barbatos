@@ -19,6 +19,7 @@ data class ActionDescriptor(
     val description: String,
     @SerialName("inputSchema")
     val scheme: JsonSchema = jsonSchema { },
+    val isStreamingOutput: Boolean = false,
 ) {
     val mcpScheme: ToolSchema
         get() {

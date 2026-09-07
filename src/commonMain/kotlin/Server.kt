@@ -59,12 +59,24 @@ fun createMcpServer(bridge: FridaBridge): Server {
                 inputSchema = tool.mcpScheme,
             ) { request ->
                 val result = try {
-                    CallToolResult.success(
-                        rpcHandler.processMethod(
+                    if (tool.isStreamingOutput) {
+                        val streamResult = rpcHandler.streamToolResult(
                             method = tool.name,
                             params = request.arguments
-                        ).toString()
-                    )
+                        )
+                        if (streamResult.isError) {
+                            CallToolResult.error(streamResult.content)
+                        } else {
+                            CallToolResult.success(streamResult.content)
+                        }
+                    } else {
+                        CallToolResult.success(
+                            rpcHandler.processMethod(
+                                method = tool.name,
+                                params = request.arguments
+                            ).toString()
+                        )
+                    }
                 } catch (e: Exception) {
                     CallToolResult.error(
                         "${tool.name} failed: ${e.message}"
