@@ -7,6 +7,10 @@ import kotlinx.schema.json.encodeToJsonObject
 import kotlinx.schema.json.jsonSchema
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import model.actions.params.ActionParam
 
 @Serializable
@@ -17,9 +21,14 @@ data class ActionDescriptor(
     val scheme: JsonSchema = jsonSchema { },
 ) {
     val mcpScheme: ToolSchema
-        get() = ToolSchema(
-            properties = scheme.encodeToJsonObject()
-        )
+        get() {
+            val encoded = scheme.encodeToJsonObject()
+            return ToolSchema(
+                properties = encoded["properties"] as? JsonObject,
+                required = (encoded["required"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+                defs = encoded["\$defs"] as? JsonObject,
+            )
+        }
     companion object {
         inline fun <reified Param : ActionParam> create(
             name: String,
