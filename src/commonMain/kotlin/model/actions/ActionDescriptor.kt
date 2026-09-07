@@ -1,7 +1,9 @@
 package model.actions
 
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.schema.generator.json.jsonSchemaOf
 import kotlinx.schema.json.JsonSchema
+import kotlinx.schema.json.encodeToJsonObject
 import kotlinx.schema.json.jsonSchema
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -14,6 +16,10 @@ data class ActionDescriptor(
     @SerialName("inputSchema")
     val scheme: JsonSchema = jsonSchema { },
 ) {
+    val mcpScheme: ToolSchema
+        get() = ToolSchema(
+            properties = scheme.encodeToJsonObject()
+        )
     companion object {
         inline fun <reified Param : ActionParam> create(
             name: String,
