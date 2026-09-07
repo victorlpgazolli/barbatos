@@ -28,12 +28,12 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
     private var session: CPointer<FridaSession>? = null
     private var script: CPointer<FridaScript>? = null
 
-    override val jsonParser = Json {
+    actual override val jsonParser = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
-    override val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    actual override val fridaCoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     init {
         frida_init()
@@ -50,11 +50,11 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
     }
 
-    override fun pingJava(): String = try { invokeRpc("pingjava") } catch (e: Exception) { "error: ${e.message}" }
+    actual override fun pingJava(): String = try { invokeRpc("pingjava") } catch (e: Exception) { "error: ${e.message}" }
 
-    override fun testRpc(): String = try { invokeRpc("testrpc") } catch (e: Exception) { "error: ${e.message}" }
+    actual override fun testRpc(): String = try { invokeRpc("testrpc") } catch (e: Exception) { "error: ${e.message}" }
 
-    override fun listClassesStream(
+    actual override fun listClassesStream(
         params: ListClassesParams,
         onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit,
         onComplete: () -> Unit
@@ -101,24 +101,24 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
     }
 
-    override fun countInstances(params: CountInstancesParams): CountInstancesResult {
+    actual override fun countInstances(params: CountInstancesParams): CountInstancesResult {
         val jsonResult = invokeRpc("countinstances", listOf(params.className))
         return CountInstancesResult(
             count = jsonResult.toIntOrNull() ?: -1
         )
     }
 
-    override fun inspectClass(params: InspectClassParams): InspectClassResult {
+    actual override fun inspectClass(params: InspectClassParams): InspectClassResult {
         val jsonResult = invokeRpc("inspectclass", listOf(params.className))
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun listInstances(params: ListInstancesParams): ListInstancesResult {
+    actual override fun listInstances(params: ListInstancesParams): ListInstancesResult {
         val jsonResult = invokeRpc("listinstances", listOf(params.className))
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult {
+    actual override fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult {
         val jsonResult = invokeRpc(
             "inspectinstance",
             listOf(
@@ -130,7 +130,7 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         return jsonParser.decodeFromString(jsonResult)
     }
 
-    override fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult {
+    actual override fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult {
         val safeValue = params.newValue.replace("\"", "\\\"")
         return SetFieldValueResult(
             status = invokeRpc(
@@ -140,19 +140,19 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         )
     }
 
-    override fun hookMethod(params: HookParams): HookMethodResult {
+    actual override fun hookMethod(params: HookParams): HookMethodResult {
         return HookMethodResult(
             status = invokeRpc("hookmethod", listOf(params.className, params.methodSig))
         )
     }
 
-    override fun getHookEvents(): HookEventsResult {
+    actual override fun getHookEvents(): HookEventsResult {
         val jsonResult = invokeRpc("gethookevents")
         val events: List<HookEvent> = jsonParser.decodeFromString(jsonResult)
         return HookEventsResult(events = events)
     }
 
-    override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult {
+    actual override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult {
         val escapedCode = params.code.replace("\"", "\\\"").replace("\n", "\\n")
         return SetMethodImplementationResult(
             status = invokeRpc(
@@ -162,21 +162,21 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         )
     }
 
-    override fun runOnce(params: RunOnceParams): RunOnceResult {
+    actual override fun runOnce(params: RunOnceParams): RunOnceResult {
         val escapedCode = params.code.replace("\"", "\\\"").replace("\n", "\\n")
         return RunOnceResult(
             status = invokeRpc("runonce", listOf(params.className, params.methodSig, escapedCode))
         )
     }
 
-    override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult {
+    actual override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult {
         val jsonResult = invokeRpc("getinstanceaddresses", listOf(params.className))
         return GetInstanceAddressesResult(
             addresses = jsonParser.decodeFromString(jsonResult)
         )
     }
 
-    override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult {
+    actual override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult {
         memScoped {
             val error = allocPointerTo<GError>()
 
@@ -270,7 +270,7 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         return PrepareEnvResult("Attached to ${params.target}, ready to receive commands")
     }
 
-    override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult {
+    actual override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult {
         val adb = AdbManagerImpl()
         val devices = try { adb.listDevices() } catch (e: Exception) { emptyList() }
         if (devices.isEmpty()) {
@@ -437,7 +437,7 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
     }
 
-    override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
+    actual override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
         val adbManager = AdbManagerImpl()
         val jdwpManager = JdwpManagerImpl(adbManager)
         val home = platform.posix.getenv("HOME")?.toKString() ?: "/tmp"
@@ -458,7 +458,7 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         )
     }
 
-    override fun healthCheck(): HealthCheckResult {
+    actual override fun healthCheck(): HealthCheckResult {
         val checks = mutableMapOf<String, CheckResponse>()
         val adb = AdbManagerImpl()
         var serial: String? = null
@@ -574,7 +574,7 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         return FridaRpcManager.pendingResponses.remove(reqId)!!
     }
 
-    override fun close() {
+    actual override fun close() {
         fridaCoroutineScope.cancel()
         script?.let { g_object_unref(it) }
         session?.let { g_object_unref(it) }

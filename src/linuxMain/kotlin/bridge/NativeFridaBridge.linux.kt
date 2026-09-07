@@ -34,12 +34,12 @@ import model.bridge.FridaBridge
 
 @Suppress("EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA_WARNING")
 actual class NativeFridaBridge : FridaBridge, AutoCloseable {
-    override val jsonParser: Json
+    actual override val jsonParser: Json
         get() = TODO("Not yet implemented")
-    override val fridaCoroutineScope: CoroutineScope
+    actual override val fridaCoroutineScope: CoroutineScope
         get() = TODO("Not yet implemented")
 
-    override fun listClassesStream(
+    actual override fun listClassesStream(
         params: ListClassesParams,
         onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit,
         onComplete: () -> Unit
@@ -47,71 +47,71 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         TODO("Not yet implemented")
     }
 
-    override fun pingJava(): String {
+    actual override fun pingJava(): String {
         TODO("Not yet implemented")
     }
 
-    override fun testRpc(): String {
+    actual override fun testRpc(): String {
         TODO("Not yet implemented")
     }
 
-    override fun countInstances(params: CountInstancesParams): CountInstancesResult {
+    actual override fun countInstances(params: CountInstancesParams): CountInstancesResult {
         TODO("Not yet implemented")
     }
 
-    override fun inspectClass(params: InspectClassParams): InspectClassResult {
+    actual override fun inspectClass(params: InspectClassParams): InspectClassResult {
         TODO("Not yet implemented")
     }
 
-    override fun listInstances(params: ListInstancesParams): ListInstancesResult {
+    actual override fun listInstances(params: ListInstancesParams): ListInstancesResult {
         TODO("Not yet implemented")
     }
 
-    override fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult {
+    actual override fun inspectInstance(params: InspectInstanceParams): InspectInstanceResult {
         TODO("Not yet implemented")
     }
 
-    override fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult {
+    actual override fun setFieldValue(params: SetFieldValueParams): SetFieldValueResult {
         TODO("Not yet implemented")
     }
 
-    override fun hookMethod(params: HookParams): HookMethodResult {
+    actual override fun hookMethod(params: HookParams): HookMethodResult {
         TODO("Not yet implemented")
     }
 
-    override fun getHookEvents(): HookEventsResult {
+    actual override fun getHookEvents(): HookEventsResult {
         TODO("Not yet implemented")
     }
 
-    override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult {
+    actual override fun setMethodImplementation(params: SetMethodImplementationParams): SetMethodImplementationResult {
         TODO("Not yet implemented")
     }
 
-    override fun runOnce(params: RunOnceParams): RunOnceResult {
+    actual override fun runOnce(params: RunOnceParams): RunOnceResult {
         TODO("Not yet implemented")
     }
 
-    override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult {
+    actual override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult {
         TODO("Not yet implemented")
     }
 
-    override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult {
+    actual override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult {
         TODO("Not yet implemented")
     }
 
-    override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult {
+    actual override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult {
         TODO("Not yet implemented")
     }
 
-    override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
+    actual override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
         TODO("Not yet implemented")
     }
 
-    override fun healthCheck(): HealthCheckResult {
+    actual override fun healthCheck(): HealthCheckResult {
         TODO("Not yet implemented")
     }
 
-    override fun close() {
+    actual override fun close() {
         TODO("Not yet implemented")
     }
 }
