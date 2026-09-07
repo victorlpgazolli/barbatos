@@ -281,6 +281,7 @@ kotlin {
                 implementation("io.ktor:ktor-client-mock:3.5.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
                 implementation("io.ktor:ktor-server-test-host:3.5.0")
+                implementation("io.modelcontextprotocol:kotlin-sdk-testing:0.15.0")
             }
         }
     }
