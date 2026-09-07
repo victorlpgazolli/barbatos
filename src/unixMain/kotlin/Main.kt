@@ -1,17 +1,4 @@
 import bridge.NativeFridaBridge
-import io.ktor.client.request.invoke
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.ContentBlock
-import io.modelcontextprotocol.kotlin.sdk.types.Implementation
-import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import kotlinx.serialization.json.JsonNull.content
-import mcp.McpHandler
-import platform.posix.fprintf
-import platform.posix.stderr
-import rpc.RpcHandler
 
 fun main(args: Array<String>) {
 
@@ -30,51 +17,8 @@ fun main(args: Array<String>) {
     }
 
 
-    val mcpServer = Server(
-        serverInfo = Implementation(
-            name = "barbatos",
-            version = "2.x"
-        ),
-        options = ServerOptions(
-            capabilities = ServerCapabilities(
-                tools = ServerCapabilities.Tools(
-                    listChanged = true,
-                ),
-                resources = ServerCapabilities.Resources(
-                    listChanged = true,
-                ),
-                prompts = ServerCapabilities.Prompts(
-                    listChanged = true
-                )
-            ),
-        )
-    )
+    val mcpServer = createMcpServer(bridge)
 
-
-    val rpcHandler = RpcHandler(bridge)
-
-
-    mcpServer.apply {
-        RpcHandler.tools.forEach { tool ->
-            addTool(
-                name = tool.name,
-                description = tool.description,
-                inputSchema = tool.mcpScheme,
-            ) {  request ->
-                CallToolResult(
-                    content = listOf(
-                        TextContent(
-                            text = rpcHandler.processMethod(
-                                method = tool.name,
-                                params = request.arguments
-                            ).toString()
-                        )
-                    )
-                )
-
-            }
-        }
-    }
     try {
         startServer(mcpServer)
     } catch (e: Exception) {

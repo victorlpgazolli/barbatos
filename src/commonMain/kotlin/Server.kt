@@ -10,15 +10,72 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.request.*
+import io.ktor.server.engine.EngineConnectorBuilder
 import io.ktor.util.logging.LogLevel
 import io.ktor.util.logging.Logger
 import io.ktor.utils.io.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
+import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.error
+import io.modelcontextprotocol.kotlin.sdk.types.success
 import rpc.RpcHandler
 import model.bridge.FridaBridge
 import platform.posix.system
 import utils.EmbeddedScripts
+
+fun createMcpServer(bridge: FridaBridge): Server {
+    val mcpServer = Server(
+        serverInfo = Implementation(
+            name = "barbatos",
+            version = "2.x"
+        ),
+        options = ServerOptions(
+            capabilities = ServerCapabilities(
+                tools = ServerCapabilities.Tools(
+                    listChanged = true,
+                ),
+                resources = ServerCapabilities.Resources(
+                    listChanged = true,
+                ),
+                prompts = ServerCapabilities.Prompts(
+                    listChanged = true
+                )
+            ),
+        )
+    )
+
+    val rpcHandler = RpcHandler(bridge)
+
+    mcpServer.apply {
+        RpcHandler.tools.forEach { tool ->
+            addTool(
+                name = tool.name,
+                description = tool.description,
+                inputSchema = tool.mcpScheme,
+            ) { request ->
+                val result = try {
+                    CallToolResult.success(
+                        rpcHandler.processMethod(
+                            method = tool.name,
+                            params = request.arguments
+                        ).toString()
+                    )
+                } catch (e: Exception) {
+                    CallToolResult.error(
+                        "${tool.name} failed: ${e.message}"
+                    )
+                }
+                result
+            }
+        }
+    }
+    return mcpServer
+}
 
 fun Application.module(bridge: FridaBridge) {
     val rpcHandler = RpcHandler(bridge)
@@ -78,7 +135,19 @@ fun startServer(mcpServer: Server) {
     system(cmd)
 
 
-    embeddedServer(CIO, environment = environment) {
+    println("[SERVER] MCP Streamable HTTP endpoint on http://127.0.0.1:$port/mcp")
+
+    val connector = EngineConnectorBuilder()
+    connector.host = "127.0.0.1"
+    connector.port = port
+
+    embeddedServer(
+        CIO,
+        environment = environment,
+        configure = {
+            connectors.add(connector)
+        },
+    ) {
         mcpStreamableHttp {
             mcpServer
         }
