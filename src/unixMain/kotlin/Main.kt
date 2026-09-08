@@ -1,58 +1,62 @@
 import bridge.NativeFridaBridge
-import mcp.McpHandler
-import platform.posix.fprintf
-import platform.posix.stderr
-import rpc.RpcHandler
+import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 
 fun main(args: Array<String>) {
-    val isMock = args.contains("--mock")
-    val bridge = if (isMock) {
-        fprintf(stderr, "Using MockFridaBridge (Simulation Mode)\n")
-        error("invalid state - mock not implemented")
-    } else {
-        NativeFridaBridge()
+    KotlinLoggingConfiguration.logStartupMessage = false
+
+    when {
+        args.contains("mcp") || args.contains("--mcp") -> runMcp()
+        args.contains("rpc") || args.contains("--rpc") -> runRpc()
+        else -> printHelp()
     }
-    
-    if (args.contains("mcp") || args.contains("--mcp")) {
-        // IMPORTANT: Redirect all system logs to stderr to keep stdout clean for JSON-RPC
-        fprintf(stderr, "Starting Barbatos MCP Server (Stdio Mode)...\n")
-        fprintf(stderr, "Note: This transport is synchronous/blocking in v1.\n")
-        val rpcHandler = RpcHandler(bridge)
+}
 
-        val mcpHandler = McpHandler {
-            rpcHandler.processMethod(it.name, it.arguments)
-        }
-
-        while (true) {
-            val line = readlnOrNull() ?: break
-            if (line.isBlank()) continue
-
-            fprintf(stderr, ">> %s\n", line)
-            platform.posix.fflush(platform.posix.stderr)
-            
-            try {
-                val response = mcpHandler.handle(line)
-                if (response != null) {
-                    fprintf(stderr, "<< %s\n", response)
-                    platform.posix.fflush(platform.posix.stderr)
-                    println(response)
-                    platform.posix.fflush(platform.posix.stdout)
-                }
-            } catch (e: Exception) {
-                val error = """{"jsonrpc": "2.0", "error": {"code": -32603, "message": "Fatal: ${e.message}"}, "id": null}"""
-                println(error)
-                platform.posix.fflush(platform.posix.stdout)
-                fprintf(stderr, "MCP Loop Error: %s\n", e.message)
-                platform.posix.fflush(platform.posix.stderr)
-            }
-        }
-    } else {
-        println("Starting KMP Bridge (HTTP Mode) on port 8080...")
-        try {
-            startServer(bridge)
-        } catch (e: Exception) {
-            println("[SERVER] fatal error: ${e.message}")
-            bridge.close()
-        }
+private fun runMcp() {
+    val bridge = NativeFridaBridge()
+    try {
+        startServer(createMcpServer(bridge))
+    } catch (e: Exception) {
+        println("[SERVER] fatal error: ${e.message}")
+        bridge.close()
     }
+}
+
+private fun runRpc() {
+    val bridge = NativeFridaBridge()
+    println("Starting Barbatos (HTTP JSON-RPC mode) on port 8080...")
+    try {
+        startServer(bridge)
+    } catch (e: Exception) {
+        println("[SERVER] fatal error: ${e.message}")
+        bridge.close()
+    }
+}
+
+private fun printHelp() {
+    println(
+        """
+        Barbatos — Android Frida bridge
+
+        USAGE
+          barbatos [mode]
+
+        MODES
+          (no arguments)   Show this help
+          mcp              Serve the Model Context Protocol (MCP) over Streamable HTTP
+                           ->  http://127.0.0.1:8080/mcp
+                           For MCP clients: opencode, Claude Desktop, Cursor, MCP Inspector.
+          rpc              Serve the HTTP JSON-RPC 2.0 API
+                           ->  POST http://127.0.0.1:8080/rpc   (also /ping, /docs, /openapi.yaml)
+                           For curl, scripts and REST-based tooling.
+          help | --help | -h
+                           Show this help
+
+        NOTES
+          * A device must be connected via adb with a debuggable app in the foreground.
+          * Both modes listen on 127.0.0.1:8080 and are mutually exclusive
+            (starting one kills whatever occupies the port).
+          * Inspect and hook tools need a Frida session first: call
+            injectGadgetFromScratch before using them.
+        """.trimIndent()
+    )
 }

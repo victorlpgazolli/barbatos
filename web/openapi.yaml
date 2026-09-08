@@ -17,12 +17,14 @@ info:
 
     | Transport | How to start | Surface |
     |---|---|---|
-    | HTTP (this document) | `barbatos` | `GET /ping`, `POST /rpc`, `GET /docs`, `GET /openapi.yaml` |
-    | MCP over stdio | `barbatos mcp` | `initialize`, `tools/list`, `tools/call`, `prompts/list`, `resources/list` |
+    | HTTP (this document) | `barbatos rpc` | `GET /ping`, `POST /rpc`, `GET /docs`, `GET /openapi.yaml` |
+    | MCP over Streamable HTTP | `barbatos mcp` | `initialize`, `tools/list`, `tools/call`, `prompts/list`, `resources/list` |
+    | Help | `barbatos` | Prints usage and an overview of both transports |
 
-    Both transports dispatch into the same `RpcHandler.processMethod`, so every method
-    below is also reachable as an MCP tool — except `listClassesStream`, which is
-    HTTP-only because it streams. `tools/list` returns each method as
+    Both transports dispatch into the same `RpcHandler`, so every method
+    below is also reachable as an MCP tool. `listClassesStream` streams its chunks
+    over HTTP (`application/x-ndjson`) and, over MCP, returns the accumulated chunk
+    lines as the `tools/call` result. `tools/list` returns each method as
     `{name, description, inputSchema}`, where `inputSchema` is the JSON Schema generated
     from the corresponding `*Params` class.
 

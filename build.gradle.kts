@@ -4,8 +4,8 @@ import org.jetbrains.kotlin.konan.target.Architecture
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
-    kotlin("multiplatform") version "2.3.21"
-    kotlin("plugin.serialization") version "2.3.21"
+    kotlin("multiplatform") version "2.4.20"
+    kotlin("plugin.serialization") version "2.4.20"
     id("com.google.devtools.ksp") version "2.3.11"
 }
 
@@ -238,14 +238,15 @@ kotlin {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-                implementation("io.ktor:ktor-client-core:3.0.0")
-                implementation("io.ktor:ktor-network:3.0.0")
-                implementation("io.ktor:ktor-client-content-negotiation:3.0.0")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.0")
-                implementation("io.ktor:ktor-server-core:3.0.0")
-                implementation("io.ktor:ktor-server-cio:3.0.0")
-                implementation("io.ktor:ktor-server-content-negotiation:3.0.0")
+                implementation("io.ktor:ktor-client-core:3.5.0")
+                implementation("io.ktor:ktor-network:3.5.0")
+                implementation("io.ktor:ktor-client-content-negotiation:3.5.0")
+                implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.0")
+                implementation("io.ktor:ktor-server-core:3.5.0")
+                implementation("io.ktor:ktor-server-cio:3.5.0")
+                implementation("io.ktor:ktor-server-content-negotiation:3.5.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-schema-generator-json:0.6.0")
+                implementation("io.modelcontextprotocol:kotlin-sdk:0.15.0")
             }
         }
         val unixMain by creating {
@@ -255,7 +256,7 @@ kotlin {
         val linuxMain by creating {
             dependsOn(unixMain)
             dependencies {
-                implementation("io.ktor:ktor-client-curl:3.0.0")
+                implementation("io.ktor:ktor-client-curl:3.5.0")
             }
         }
 
@@ -270,16 +271,17 @@ kotlin {
         val macosArm64Main by getting {
             dependsOn(unixMain)
             dependencies {
-                implementation("io.ktor:ktor-client-darwin:3.0.0")
+                implementation("io.ktor:ktor-client-darwin:3.5.0")
             }
         }
 
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("io.ktor:ktor-client-mock:3.0.0")
+                implementation("io.ktor:ktor-client-mock:3.5.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-                implementation("io.ktor:ktor-server-test-host:3.0.0")
+                implementation("io.ktor:ktor-server-test-host:3.5.0")
+                implementation("io.modelcontextprotocol:kotlin-sdk-testing:0.15.0")
             }
         }
     }
@@ -373,6 +375,25 @@ tasks.register<Exec>("runDebug") {
 
     dependsOn(linkTask)
     commandLine(file(binaryPath).absolutePath)
+}
+
+tasks.register<Exec>("runDebugMcp") {
+    group = "application"
+    description = "Compile and run the bridge in mcp debug mode"
+
+    val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
+    val linkTask = if (isMac) "linkDebugExecutableMacosArm64" else "linkDebugExecutableLinuxX64"
+    val binaryPath = if (isMac) {
+        "build/bin/macosArm64/debugExecutable/barbatos.kexe"
+    } else {
+        "build/bin/linuxX64/debugExecutable/barbatos.kexe"
+    }
+
+    dependsOn(linkTask)
+    commandLine(
+        file(binaryPath).absolutePath,
+        "mcp"
+    )
 }
 
 tasks.register<Exec>("runMock") {

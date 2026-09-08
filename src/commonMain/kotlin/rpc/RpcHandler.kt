@@ -12,6 +12,8 @@ import utils.decodeToOrThrow
 
 data class HandlerResult(val body: String, val statusCode: Int)
 
+data class StreamToolResult(val content: String, val isError: Boolean)
+
 class RpcHandler(private val bridge: FridaBridge) {
     val jsonParser = Json {
         ignoreUnknownKeys = true
@@ -111,16 +113,30 @@ class RpcHandler(private val bridge: FridaBridge) {
         }
     }
 
+    /**
+     * Runs a streaming method (e.g. `listClassesStream`) through [handleStream] and
+     * accumulates every emitted line so it can be returned as a single MCP tool result.
+     */
+    suspend fun streamToolResult(method: String, params: JsonElement?): StreamToolResult {
+        val requestJson = jsonParser.encodeToString(
+            RpcRequest.serializer(),
+            RpcRequest(method = method, params = params)
+        )
+        val lines = mutableListOf<String>()
+        handleStream(requestJson) { line -> lines.add(line) }
+        val content = lines.joinToString("\n")
+        return StreamToolResult(content = content, isError = lines.any { isErrorLine(it) })
+    }
+
+    private fun isErrorLine(line: String): Boolean = try {
+        jsonParser.decodeFromString<RpcErrorResponse>(line).error
+        true
+    } catch (e: Exception) {
+        false
+    }
+
     public fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
-            DEBUG_PING.name -> {
-                val result = bridge.pingJava()
-                jsonParser.encodeToJsonElement(result)
-            }
-            TEST_RPC.name -> {
-                val result = bridge.testRpc()
-                jsonParser.encodeToJsonElement(result)
-            }
             COUNT_INSTANCES.name -> {
                 val decodedParams = decodeToOrThrow<CountInstancesParams>(params)
                 val result = bridge.countInstances(decodedParams)
@@ -170,19 +186,9 @@ class RpcHandler(private val bridge: FridaBridge) {
                 val res = bridge.getInstanceAddresses(decodedParams)
                 jsonParser.encodeToJsonElement(res)
             }
-            PREPARE_ENVIRONMENT.name -> {
-                val decodedParams = decodeToOrThrow<PrepareEnvParams>(params)
-                val result = bridge.prepareEnvironment(decodedParams)
-                jsonParser.encodeToJsonElement(result)
-            }
             INJECT_GADGET_FROM_SCRATCH.name -> {
                 val decodedParams = decodeToOrThrow<InjectGadgetParams>(params)
                 val result = bridge.injectGadgetFromScratch(decodedParams)
-                jsonParser.encodeToJsonElement(result)
-            }
-            INJECT_JDWP.name -> {
-                val decodedParams = decodeToOrThrow<InjectJdwpParams>(params)
-                val result = bridge.injectJdwp(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
             HEALTH_CHECK.name -> {
@@ -194,18 +200,13 @@ class RpcHandler(private val bridge: FridaBridge) {
     }
 
     companion object {
-        internal val DEBUG_PING = ActionDescriptor.create(
-            name = "debugPing",
-            description = "Ping the Frida Java bridge to verify the injected agent is alive and responding. " +
-                "Takes no parameters. Requires an active Frida session (call injectGadgetFromScratch first). " +
-                "Returns the string \"pong\" on success, or \"error: Frida script not loaded.\" if no session is active.",
-        )
-        internal val TEST_RPC = ActionDescriptor.create(
-            name = "testRpc",
-            description = "Test the JSON-RPC communication channel between the host and the Frida agent running inside the target process. " +
-                "Takes no parameters. Requires an active Frida session. " +
-                "Returns the string \"ok\" on success, or \"error: Frida script not loaded.\" if no session is active.",
-        )
+        internal val LIST_CLASSES_STREAM = ActionDescriptor.create<ListClassesParams>(
+            name = "listClassesStream",
+            description = "Search the classes loaded on the device and stream the matches. " +
+                "Filters by search_param (substring, case-insensitive) and optionally app_package, with offset/limit pagination. " +
+                "Requires an active Frida session. " +
+                "Returns a stream of chunks; each chunk is a JSON object with a \"list\" array of matching class names.",
+        ).copy(isStreamingOutput = true)
         internal val COUNT_INSTANCES = ActionDescriptor.create<CountInstancesParams>(
             name = "countInstances",
             description = "Count the number of live instances of a Java/Kotlin class currently on the Android heap. " +
@@ -283,15 +284,6 @@ class RpcHandler(private val bridge: FridaBridge) {
                 "Requires className. Requires an active Frida session. " +
                 "Returns a JSON object with an \"addresses\" array of strings in the format \"fully.qualified.ClassName@hexHash\" (e.g. \"LoginUiModel@2ec2d5e\").",
         )
-        internal val PREPARE_ENVIRONMENT = ActionDescriptor.create<PrepareEnvParams>(
-            name = "prepareEnvironment",
-            description = "Attach Frida to a running process and load the instrumentation agent. " +
-                "This is the low-level setup step — prefer injectGadgetFromScratch for a fully automated flow. " +
-                "Finds the target process by pid or package_name on the specified device (serial), attaches a Frida session, and loads the JavaScript agent. " +
-                "When target is \"Gadget\" or \"127.0.0.1\", connects to a remote Frida Gadget via TCP on port 27042 (used for the non-rooted/debuggable injection path). " +
-                "When serial is provided, uses frida_device_manager_get_device_by_id_sync to target the exact device (critical when multiple USB devices are connected). " +
-                "Returns a JSON object with a confirmation message on success.",
-        )
         internal val INJECT_GADGET_FROM_SCRATCH = ActionDescriptor.create<InjectGadgetParams>(
             name = "injectGadgetFromScratch",
             description = "Fully automated Frida injection into the frontmost Android application. This is the primary entry point — call this before using any inspection or hooking tools. " +
@@ -303,14 +295,6 @@ class RpcHandler(private val bridge: FridaBridge) {
                 "Returns a JSON object with \"status\" (\"completed\" or \"error\"), \"steps\" (array of {id, title, status} tracking each phase), and \"error_message\" (nullable). " +
                 "After a successful injection, all other tools (inspectClass, listInstances, hookMethod, etc.) become operational.",
         )
-        internal val INJECT_JDWP = ActionDescriptor.create<InjectJdwpParams>(
-            name = "injectJdwp",
-            description = "Inject Frida Gadget into a debuggable Android app via the JDWP (Java Debug Wire Protocol) interface. " +
-                "This is the low-level JDWP injection step — prefer injectGadgetFromScratch for a fully automated flow. " +
-                "Requires target (host address, e.g. \"127.0.0.1\"), port (JDWP port, e.g. 5005), and package_name (Android app package). " +
-                "Uses the Gadget library cached at ~/.cache/barbatos/frida-gadget.so. " +
-                "Returns a JSON object with \"status\" (\"ok\" or \"error\") and \"message\" describing the result.",
-        )
         internal val HEALTH_CHECK = ActionDescriptor.create(
             name = "healthCheck",
             description = "Run a comprehensive system health check covering ADB connectivity, device root status, frontmost app detection, Frida device enumeration, and active session state. " +
@@ -321,8 +305,7 @@ class RpcHandler(private val bridge: FridaBridge) {
         )
 
         public val tools = listOf(
-            DEBUG_PING,
-            TEST_RPC,
+            LIST_CLASSES_STREAM,
             COUNT_INSTANCES,
             INSPECT_CLASS,
             LIST_INSTANCES,
@@ -333,9 +316,7 @@ class RpcHandler(private val bridge: FridaBridge) {
             SET_METHOD_IMPLEMENTATION,
             RUN_ONCE,
             GET_INSTANCE_ADDRESSES,
-            PREPARE_ENVIRONMENT,
             INJECT_GADGET_FROM_SCRATCH,
-            INJECT_JDWP,
             HEALTH_CHECK,
         )
 
