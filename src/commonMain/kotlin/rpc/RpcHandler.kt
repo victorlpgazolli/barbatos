@@ -4,15 +4,29 @@ import model.bridge.FridaBridge
 import kotlinx.serialization.json.*
 import model.actions.ActionDescriptor
 import model.actions.params.*
-import model.rpc.RpcError
-import model.rpc.RpcErrorResponse
-import model.rpc.RpcRequest
-import model.rpc.RpcResponse
+import model.actions.result.ListClassesPartialResult
+import model.rpc.ApiError
+import model.rpc.ApiErrorResponse
 import utils.decodeToOrThrow
 
 data class HandlerResult(val body: String, val statusCode: Int)
 
 data class StreamToolResult(val content: String, val isError: Boolean)
+
+/**
+ * Converts a camelCase method name to the snake_case HTTP path segment, e.g.
+ * `injectGadgetFromScratch` -> `inject_gadget_from_scratch`.
+ */
+fun camelToSnake(name: String): String = buildString {
+    for (c in name) {
+        if (c.isUpperCase()) {
+            append('_')
+            append(c.lowercaseChar())
+        } else {
+            append(c)
+        }
+    }
+}
 
 class RpcHandler(private val bridge: FridaBridge) {
     val jsonParser = Json {
@@ -20,29 +34,23 @@ class RpcHandler(private val bridge: FridaBridge) {
         encodeDefaults = true
     }
 
-    fun isStreamMethod(requestJson: String): Boolean {
-        return try {
-            val req = jsonParser.decodeFromString<RpcRequest>(requestJson)
-            req.method == "listClassesStream"
-        } catch (e: Exception) {
-            false
-        }
-    }
+    fun isStreamMethod(method: String): Boolean = method == LIST_CLASSES_STREAM.name
 
-    suspend fun handleStream(requestJson: String, emit: suspend (String) -> Unit) {
-        val req = try {
-            jsonParser.decodeFromString<RpcRequest>(requestJson)
+    suspend fun handleStream(method: String, body: String?, emit: suspend (String) -> Unit) {
+        val params = try {
+            if (body.isNullOrBlank()) null else jsonParser.parseToJsonElement(body)
         } catch (e: Exception) {
-            val errorStr = jsonParser.encodeToString(
-                RpcErrorResponse.serializer(),
-                RpcErrorResponse(error = RpcError(-32700, "Parse error: ${e.message}"), id = null)
-            )
-            emit(errorStr)
+            emit(errorJson(-32700, "Parse error: ${e.message}"))
             return
         }
 
-        if (req.method == "listClassesStream") {
-            val p = req.params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
+        if (params != null && params !is JsonObject) {
+            emit(errorJson(-32700, "Parse error: expected a JSON object"))
+            return
+        }
+
+        if (method == LIST_CLASSES_STREAM.name) {
+            val p = params?.let { jsonParser.decodeFromJsonElement<ListClassesParams>(it) } ?: ListClassesParams()
 
             try {
                 bridge.listClassesStream(
@@ -53,62 +61,43 @@ class RpcHandler(private val bridge: FridaBridge) {
                         limit = p.limit,
                     ),
                     onChunk = { chunk ->
-                        val res = RpcResponse(
-                            result = jsonParser.encodeToJsonElement(chunk),
-                            id = req.id
-                        )
-                        val jsonStr = jsonParser.encodeToString(RpcResponse.serializer(), res)
-
-                        emit(jsonStr)
+                        emit(jsonParser.encodeToString(ListClassesPartialResult.serializer(), chunk))
                     },
                     onComplete = {}
                 )
             } catch (e: Exception) {
-                val errorStr = jsonParser.encodeToString(
-                    RpcErrorResponse.serializer(),
-                    RpcErrorResponse(
-                        error = RpcError(-32603, e.message ?: "Internal stream error"),
-                        id = req.id
-                    )
-                )
-                emit(errorStr)
+                emit(errorJson(-32603, e.message ?: "Internal stream error"))
             }
         }
     }
 
-    fun handle(requestJson: String): HandlerResult {
-        val req = try {
-            jsonParser.decodeFromString<RpcRequest>(requestJson)
+    /**
+     * Handles a single HTTP call to [method]. The body is the raw params object (no
+     * JSON-RPC envelope); the response is the plain result or an [ApiErrorResponse].
+     */
+    fun handle(method: String, body: String? = null): HandlerResult {
+        val params = try {
+            if (body.isNullOrBlank()) null else jsonParser.parseToJsonElement(body)
         } catch (e: Exception) {
-            return HandlerResult(
-                jsonParser.encodeToString(
-                    RpcErrorResponse.serializer(),
-                    RpcErrorResponse(
-                        error = RpcError(-32700, "Parse error: ${e.message}"),
-                        id = null
-                    )
-                ),
-                200
-            )
+            return HandlerResult(errorJson(-32700, "Parse error: ${e.message}"), 400)
+        }
+
+        if (params != null && params !is JsonObject) {
+            return HandlerResult(errorJson(-32700, "Parse error: expected a JSON object"), 400)
+        }
+
+        if (params == null && tools.any { it.name == method && it.scheme.required.isNotEmpty() }) {
+            return HandlerResult(errorJson(-32700, "Missing params"), 400)
         }
 
         return try {
-            val result = processMethod(req.method, req.params)
-            HandlerResult(
-                jsonParser.encodeToString(RpcResponse.serializer(), RpcResponse(result = result, id = req.id)),
-                200
-            )
+            val result = processMethod(method, params)
+            HandlerResult(result.toString(), 200)
         } catch (e: Exception) {
-            val code = if (e.message?.contains("not found") == true) -32601 else -32603
+            val notFound = e.message?.contains("not found") == true
             HandlerResult(
-                jsonParser.encodeToString(
-                    RpcErrorResponse.serializer(),
-                    RpcErrorResponse(
-                        error = RpcError(code, e.message ?: "Internal error"),
-                        id = req.id
-                    )
-                ),
-                200
+                errorJson(if (notFound) -32601 else -32603, e.message ?: "Internal error"),
+                if (notFound) 404 else 500
             )
         }
     }
@@ -118,22 +107,21 @@ class RpcHandler(private val bridge: FridaBridge) {
      * accumulates every emitted line so it can be returned as a single MCP tool result.
      */
     suspend fun streamToolResult(method: String, params: JsonElement?): StreamToolResult {
-        val requestJson = jsonParser.encodeToString(
-            RpcRequest.serializer(),
-            RpcRequest(method = method, params = params)
-        )
+        val body = params?.toString()
         val lines = mutableListOf<String>()
-        handleStream(requestJson) { line -> lines.add(line) }
+        handleStream(method, body) { line -> lines.add(line) }
         val content = lines.joinToString("\n")
         return StreamToolResult(content = content, isError = lines.any { isErrorLine(it) })
     }
 
     private fun isErrorLine(line: String): Boolean = try {
-        jsonParser.decodeFromString<RpcErrorResponse>(line).error
-        true
+        "error" in jsonParser.parseToJsonElement(line).jsonObject
     } catch (e: Exception) {
         false
     }
+
+    private fun errorJson(code: Int, message: String): String =
+        jsonParser.encodeToString(ApiErrorResponse.serializer(), ApiErrorResponse(ApiError(code, message)))
 
     public fun processMethod(method: String, params: JsonElement?): JsonElement {
         return when (method) {
@@ -187,7 +175,11 @@ class RpcHandler(private val bridge: FridaBridge) {
                 jsonParser.encodeToJsonElement(res)
             }
             INJECT_GADGET_FROM_SCRATCH.name -> {
-                val decodedParams = decodeToOrThrow<InjectGadgetParams>(params)
+                val decodedParams = if (params == null) {
+                    InjectGadgetParams()
+                } else {
+                    decodeToOrThrow<InjectGadgetParams>(params)
+                }
                 val result = bridge.injectGadgetFromScratch(decodedParams)
                 jsonParser.encodeToJsonElement(result)
             }
@@ -320,5 +312,6 @@ class RpcHandler(private val bridge: FridaBridge) {
             HEALTH_CHECK,
         )
 
+        internal val routeByPath: Map<String, ActionDescriptor> = tools.associateBy { camelToSnake(it.name) }
     }
 }

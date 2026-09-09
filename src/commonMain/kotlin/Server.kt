@@ -24,6 +24,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.error
 import io.modelcontextprotocol.kotlin.sdk.types.success
 import rpc.RpcHandler
+import rpc.camelToSnake
 import model.bridge.FridaBridge
 import platform.posix.fprintf
 import platform.posix.stderr
@@ -101,27 +102,37 @@ fun Application.module(bridge: FridaBridge) {
         get("/ping") {
             call.respondText("""{"status": "pong"}""", ContentType.Application.Json)
         }
-        post("/rpc") {
-            val body = call.receiveText()
+        RpcHandler.tools.forEach { tool ->
+            val path = "/v0/api/${camelToSnake(tool.name)}"
+            post(path) {
+                val body = call.receiveText()
 
-            if (rpcHandler.isStreamMethod(body)) {
-                val ndjsonType = ContentType.parse("application/x-ndjson")
-                call.respondBytesWriter(contentType = ndjsonType) {
-                    try {
-                        rpcHandler.handleStream(body) { line ->
-                            try {
-                                writeFully((line + "\n").encodeToByteArray())
-                                flush()
-                            } catch (e: Exception) {
-                                println("[SERVER] Client disconnected ${e.message}")
+                if (tool.isStreamingOutput) {
+                    val ndjsonType = ContentType.parse("application/x-ndjson")
+                    call.respondBytesWriter(contentType = ndjsonType) {
+                        try {
+                            rpcHandler.handleStream(tool.name, body) { line ->
+                                try {
+                                    writeFully((line + "\n").encodeToByteArray())
+                                    flush()
+                                } catch (e: Exception) {
+                                    println("[SERVER] Client disconnected ${e.message}")
+                                }
                             }
-                        }
-                    } catch (e: Exception) {}
+                        } catch (e: Exception) {}
+                    }
+                } else {
+                    val result = rpcHandler.handle(tool.name, body)
+                    call.respondText(result.body, ContentType.Application.Json, HttpStatusCode.fromValue(result.statusCode))
                 }
-            } else {
-                val result = rpcHandler.handle(body)
-                call.respondText(result.body, ContentType.Application.Json, HttpStatusCode.fromValue(result.statusCode))
             }
+        }
+        post("/v0/api/{path}") {
+            call.respondText(
+                """{"error":{"code":-32601,"message":"Method not found"}}""",
+                ContentType.Application.Json,
+                HttpStatusCode.NotFound
+            )
         }
     }
 }

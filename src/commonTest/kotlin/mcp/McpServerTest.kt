@@ -134,7 +134,8 @@ class McpServerTest {
             assertEquals(false, result.isError)
             val text = (result.content.first() as TextContent).text
             assertTrue(text.contains("com.example.MainActivity"), "Streamed chunks must include the matching class, got: $text")
-            assertTrue(text.contains("result"), "Each streamed chunk must be a JSON-RPC response envelope, got: $text")
+            assertTrue(text.contains("\"list\""), "Each streamed chunk must be a plain partial result, got: $text")
+            assertTrue(!text.contains("jsonrpc"), "Streamed chunks must not carry the JSON-RPC envelope, got: $text")
         } finally {
             connection.client.close()
         }

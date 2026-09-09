@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
-  title: Barbatos JSON-RPC Bridge API
-  version: 2.0.0-alpha02
+  title: Barbatos REST API
+  version: 2.0.0-alpha03
   description: |
     HTTP transport of the barbatos bridge. The binary drives a Frida agent injected into
-    an Android process and exposes it over JSON-RPC 2.0.
+    an Android process and exposes it over plain HTTP endpoints.
 
-    Started with `barbatos` (no arguments) — binds `127.0.0.1:8080` and kills whatever
-    already holds the port. There is no authentication: the server is loopback-only.
+    Started with `barbatos rpc` (no arguments otherwise) — binds `127.0.0.1:8080` and kills
+    whatever already holds the port. There is no authentication: the server is loopback-only.
 
     This spec is served by the bridge itself: **<http://127.0.0.1:8080/docs>** renders it,
     `GET /openapi.yaml` returns it raw. Both are embedded in the binary at build time, so
@@ -17,57 +17,54 @@ info:
 
     | Transport | How to start | Surface |
     |---|---|---|
-    | HTTP (this document) | `barbatos rpc` | `GET /ping`, `POST /rpc`, `GET /docs`, `GET /openapi.yaml` |
+    | HTTP (this document) | `barbatos rpc` | `GET /ping`, `POST /v0/api/*`, `GET /docs`, `GET /openapi.yaml` |
     | MCP over Streamable HTTP | `barbatos mcp` | `initialize`, `tools/list`, `tools/call`, `prompts/list`, `resources/list` |
     | Help | `barbatos` | Prints usage and an overview of both transports |
 
-    Both transports dispatch into the same `RpcHandler`, so every method
-    below is also reachable as an MCP tool. `listClassesStream` streams its chunks
-    over HTTP (`application/x-ndjson`) and, over MCP, returns the accumulated chunk
-    lines as the `tools/call` result. `tools/list` returns each method as
+    Both transports dispatch into the same `RpcHandler`, so every endpoint below is also
+    reachable as an MCP tool (camelCase tool name). `listClassesStream` streams its chunks
+    over HTTP (`application/x-ndjson`) and, over MCP, returns the accumulated chunk lines
+    as the `tools/call` result. `tools/list` returns each method as
     `{name, description, inputSchema}`, where `inputSchema` is the JSON Schema generated
     from the corresponding `*Params` class.
 
-    ### JSON-RPC method contract
+    ### Endpoint contract
 
-    Every method is invoked via `POST /rpc`. `params` keys are the wire names
-    (`@SerialName`), which differ from the Kotlin property names where noted.
+    Every endpoint is `POST /v0/api/<snake_case method>` and takes the params object as
+    the raw JSON body (no envelope). The response is the plain result object. Parameterless
+    endpoints accept an empty body.
 
-    | Method | Parameters schema | Required params | Result schema |
+    | Endpoint | Parameters schema | Required params | Result schema |
     |---|---|---|---|
-    | **debugPing** | (none) | — | String — `"pong"` |
-    | **testRpc** | (none) | — | String — `"ok"` |
-    | **healthCheck** | (none) | — | `HealthCheckResult` |
-    | **getHookEvents** | (none) | — | `HookEventsResult` |
-    | **countInstances** | `CountInstancesParams` | `className` | `CountInstancesResult` |
-    | **inspectClass** | `InspectClassParams` | `className` | `InspectClassResult` |
-    | **listInstances** | `ListInstancesParams` | `className` | `ListInstancesResult` |
-    | **getInstanceAddresses** | `GetInstanceAddressesParams` | `className` | `GetInstanceAddressesResult` |
-    | **inspectInstance** | `InspectInstanceParams` | `className`, `id` | `InspectInstanceResult` |
-    | **setFieldValue** | `SetFieldValueParams` | all | `StatusResult` |
-    | **hookMethod** | `HookParams` | `className`, `methodSig` | `StatusResult` |
-    | **setMethodImplementation** | `SetMethodImplementationParams` | all | `StatusResult` |
-    | **runOnce** | `RunOnceParams` | all | `StatusResult` |
-    | **prepareEnvironment** | `PrepareEnvParams` | `package_name` | `StatusResult` |
-    | **injectGadgetFromScratch** | `InjectGadgetParams` | (none) | `InjectGadgetResult` |
-    | **injectJdwp** | `InjectJdwpParams` | all | `StatusResult` |
-    | **listClassesStream** | `ListClassesParams` | (none) | NDJSON stream — see `POST /rpc` |
+    | **/v0/api/count_instances** | `CountInstancesParams` | `className` | `CountInstancesResult` |
+    | **/v0/api/inspect_class** | `InspectClassParams` | `className` | `InspectClassResult` |
+    | **/v0/api/list_instances** | `ListInstancesParams` | `className` | `ListInstancesResult` |
+    | **/v0/api/get_instance_addresses** | `GetInstanceAddressesParams` | `className` | `GetInstanceAddressesResult` |
+    | **/v0/api/inspect_instance** | `InspectInstanceParams` | `className`, `id` | `InspectInstanceResult` |
+    | **/v0/api/set_field_value** | `SetFieldValueParams` | all | `StatusResult` |
+    | **/v0/api/hook_method** | `HookParams` | `className`, `methodSig` | `StatusResult` |
+    | **/v0/api/set_method_implementation** | `SetMethodImplementationParams` | all | `StatusResult` |
+    | **/v0/api/run_once** | `RunOnceParams` | all | `StatusResult` |
+    | **/v0/api/get_hook_events** | (none) | — | `HookEventsResult` |
+    | **/v0/api/inject_gadget_from_scratch** | `InjectGadgetParams` | (none) | `InjectGadgetResult` |
+    | **/v0/api/health_check** | (none) | — | `HealthCheckResult` |
+    | **/v0/api/list_classes_stream** | `ListClassesParams` | (none) | NDJSON stream — see below |
+
+    Params keys are the wire names (`@SerialName`), which differ from the Kotlin property
+    names where noted.
 
     ### Session lifecycle
 
-    Call **injectGadgetFromScratch** first — it detects the foreground app, picks the
-    rooted (frida-server over USB) or debuggable (Gadget over JDWP) path, and attaches.
-    Every method other than `healthCheck` needs that active session; without one the
-    bridge answers `"error: Frida script not loaded."`.
-
-    `prepareEnvironment` and `injectJdwp` are the low-level steps of that same flow and
-    are exposed for manual recovery.
+    Call **POST /v0/api/inject_gadget_from_scratch** first — it detects the foreground app,
+    picks the rooted (frida-server over USB) or debuggable (Gadget over JDWP) path, and
+    attaches. Every endpoint other than `health_check` needs that active session; without
+    one the bridge answers `"error: Frida script not loaded."`.
 
     ### Error handling
 
-    `POST /rpc` always answers `200`, including for errors — check for an `error` member
-    in the body. Codes: `-32700` malformed JSON, `-32601` unknown method
-    (the message contains `not found`), `-32603` anything thrown by the bridge.
+    Non-success responses carry a body of the shape `{"error":{"code":<int>,"message":...}}`
+    with a real HTTP status: `400` malformed body (`-32700`), `404` unknown endpoint
+    (`-32601`), `500` anything thrown by the bridge (`-32603`).
 
 servers:
   - url: http://127.0.0.1:8080
@@ -78,7 +75,7 @@ paths:
       summary: Liveness probe
       description: |
         Verifies the HTTP server is up. Does not touch the Frida session — it answers
-        even when no injection has happened yet. Use `healthCheck` to probe ADB, root
+        even when no injection has happened yet. Use `health_check` to probe ADB, root
         status and session state.
       responses:
         '200':
@@ -92,253 +89,324 @@ paths:
                   status:
                     type: string
                     example: pong
-  /rpc:
+  /docs:
+    get:
+      summary: Swagger UI
+      responses:
+        '200':
+          description: HTML docs page rendering this spec
+  /openapi.yaml:
+    get:
+      summary: Raw OpenAPI spec
+      responses:
+        '200':
+          description: This spec as embedded in the binary
+  /v0/api/health_check:
     post:
-      summary: JSON-RPC 2.0 endpoint
+      summary: healthCheck — probe ADB, root, frontmost app and session
       description: |
-        Single entry point for all debugger operations.
-
-        When `method` is `listClassesStream` the response is **NDJSON**
-        (`application/x-ndjson`): one `RpcResponse` per line, each carrying a
-        `ListClassesPartialResult` chunk in `result`, sharing the request `id`. The
-        stream ends when the connection closes; there is no terminating sentinel. A
-        failure mid-stream emits a single `RpcErrorResponse` line.
-
-        Every other method returns a single `application/json` object.
+        Callable without an active session. Returns `overall` ("ok" or "degraded") plus a
+        `checks` map covering adb, android_root, android_frontmost_app, frida_device,
+        frida_connection and session.
+      responses:
+        '200':
+          description: Health check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResult'
+              examples:
+                ok:
+                  value:
+                    overall: ok
+                    checks:
+                      adb:
+                        status: ok
+                        message: adb available
+                      android_root:
+                        status: skipped
+                        message: Not checked
+                    recommendation: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/inject_gadget_from_scratch:
+    post:
+      summary: injectGadgetFromScratch — start a session (call this first)
+      description: |
+        Detects the foreground app, picks the rooted or debuggable injection path and
+        attaches. Every field of the body is optional.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InjectGadgetParams'
+            examples:
+              default:
+                value:
+                  with_logs: true
+                  limit: 100
+                  serial: null
+      responses:
+        '200':
+          description: Injection outcome with per-step status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InjectGadgetResult'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/count_instances:
+    post:
+      summary: countInstances — how many live instances on the heap?
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RpcRequest'
+              $ref: '#/components/schemas/CountInstancesParams'
             examples:
-              injectGadgetFromScratch:
-                summary: injectGadgetFromScratch — start a session (call this first)
+              default:
                 value:
-                  jsonrpc: "2.0"
-                  id: 1
-                  method: injectGadgetFromScratch
-                  params:
-                    with_logs: true
-                    limit: 100
-                    serial: null
-              healthCheck:
-                summary: healthCheck — probe ADB, root, frontmost app and session
-                value:
-                  jsonrpc: "2.0"
-                  id: 2
-                  method: healthCheck
-                  params: {}
-              debugPing:
-                summary: debugPing — is the injected agent alive?
-                value:
-                  jsonrpc: "2.0"
-                  id: 3
-                  method: debugPing
-                  params: {}
-              testRpc:
-                summary: testRpc — is the JSON-RPC channel to the agent working?
-                value:
-                  jsonrpc: "2.0"
-                  id: 4
-                  method: testRpc
-                  params: {}
-              listClassesStream:
-                summary: listClassesStream — search loaded classes (NDJSON response)
-                value:
-                  jsonrpc: "2.0"
-                  id: 5
-                  method: listClassesStream
-                  params:
-                    search_param: MyClass
-                    app_package: com.example.myapp
-                    offset: 0
-                    limit: 200
-              inspectClass:
-                summary: inspectClass — list a class's fields and methods
-                value:
-                  jsonrpc: "2.0"
-                  id: 6
-                  method: inspectClass
-                  params:
-                    className: com.example.MyClass
-              countInstances:
-                summary: countInstances — how many live instances on the heap?
-                value:
-                  jsonrpc: "2.0"
-                  id: 7
-                  method: countInstances
-                  params:
-                    className: com.example.MyClass
-              listInstances:
-                summary: listInstances — get instance ids for a class
-                value:
-                  jsonrpc: "2.0"
-                  id: 8
-                  method: listInstances
-                  params:
-                    className: com.example.MyClass
-              getInstanceAddresses:
-                summary: getInstanceAddresses — memory addresses of live instances
-                value:
-                  jsonrpc: "2.0"
-                  id: 9
-                  method: getInstanceAddresses
-                  params:
-                    className: com.example.MyClass
-              inspectInstance:
-                summary: inspectInstance — read a live object's field values
-                value:
-                  jsonrpc: "2.0"
-                  id: 10
-                  method: inspectInstance
-                  params:
-                    className: com.example.MyClass
-                    id: "0"
-                    offset: 0
-                    limit: 50
-              setFieldValue:
-                summary: setFieldValue — mutate a field at runtime
-                value:
-                  jsonrpc: "2.0"
-                  id: 11
-                  method: setFieldValue
-                  params:
-                    className: com.example.MyClass
-                    id: "0"
-                    fieldName: myField
-                    type: String
-                    newValue: patched
-              hookMethod:
-                summary: hookMethod — record every call to a method
-                value:
-                  jsonrpc: "2.0"
-                  id: 12
-                  method: hookMethod
-                  params:
-                    className: com.example.MyClass
-                    methodSig: myMethod
-              getHookEvents:
-                summary: getHookEvents — drain the calls recorded so far
-                value:
-                  jsonrpc: "2.0"
-                  id: 13
-                  method: getHookEvents
-                  params: {}
-              setMethodImplementation:
-                summary: setMethodImplementation — replace a method for the session
-                value:
-                  jsonrpc: "2.0"
-                  id: 14
-                  method: setMethodImplementation
-                  params:
-                    className: com.example.MyClass
-                    methodSig: myMethod
-                    code: "console.log('[barbatos] intercepted', args); return true;"
-              runOnce:
-                summary: runOnce — replace a method for a single call, then restore
-                value:
-                  jsonrpc: "2.0"
-                  id: 15
-                  method: runOnce
-                  params:
-                    className: com.example.MyClass
-                    methodSig: myMethod
-                    code: "console.log('[barbatos] one-shot', args); return true;"
-              prepareEnvironment:
-                summary: prepareEnvironment — attach manually (low-level)
-                value:
-                  jsonrpc: "2.0"
-                  id: 16
-                  method: prepareEnvironment
-                  params:
-                    pid: null
-                    package_name: com.example.myapp
-                    target: Gadget
-                    serial: null
-              injectJdwp:
-                summary: injectJdwp — inject the Gadget over JDWP (low-level)
-                value:
-                  jsonrpc: "2.0"
-                  id: 17
-                  method: injectJdwp
-                  params:
-                    target: 127.0.0.1
-                    port: 5005
-                    package_name: com.example.myapp
+                  className: com.example.MyClass
       responses:
         '200':
-          description: |
-            JSON-RPC response (success or error). Errors are also returned with status
-            `200` — inspect the body.
-
-            `application/x-ndjson` is returned only for `listClassesStream`: one
-            `RpcResponse` per line, not a JSON array.
+          description: Instance count
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/RpcResponse'
-                  - $ref: '#/components/schemas/RpcErrorResponse'
+                $ref: '#/components/schemas/CountInstancesResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/inspect_class:
+    post:
+      summary: inspectClass — list a class's fields and methods
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectClassParams'
+      responses:
+        '200':
+          description: Class structure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectClassResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/list_instances:
+    post:
+      summary: listInstances — get instance ids for a class
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListInstancesParams'
+      responses:
+        '200':
+          description: Live instances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListInstancesResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/get_instance_addresses:
+    post:
+      summary: getInstanceAddresses — memory addresses of live instances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetInstanceAddressesParams'
+      responses:
+        '200':
+          description: Addresses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetInstanceAddressesResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/inspect_instance:
+    post:
+      summary: inspectInstance — read a live object's field values
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectInstanceParams'
+      responses:
+        '200':
+          description: Field values with pagination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectInstanceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/set_field_value:
+    post:
+      summary: setFieldValue — mutate a field at runtime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetFieldValueParams'
+      responses:
+        '200':
+          description: Status result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/hook_method:
+    post:
+      summary: hookMethod — record every call to a method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookParams'
+      responses:
+        '200':
+          description: Status result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/set_method_implementation:
+    post:
+      summary: setMethodImplementation — replace a method for the session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMethodImplementationParams'
+      responses:
+        '200':
+          description: Status result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/run_once:
+    post:
+      summary: runOnce — replace a method for a single call, then restore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunOnceParams'
+      responses:
+        '200':
+          description: Status result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/get_hook_events:
+    post:
+      summary: getHookEvents — drain the calls recorded so far
+      description: Takes no parameters. The body may be empty.
+      responses:
+        '200':
+          description: Hook events accumulated since the last call
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookEventsResult'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v0/api/list_classes_stream:
+    post:
+      summary: listClassesStream — search loaded classes (NDJSON response)
+      description: |
+        Streams matching class names as NDJSON (`application/x-ndjson`): one plain
+        `ListClassesPartialResult` object (`{"list": [...]}`) per line. The stream ends
+        when the connection closes; there is no terminating sentinel. A failure mid-stream
+        emits a single `ApiError` line.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListClassesParams'
+            examples:
+              default:
+                value:
+                  search_param: MyClass
+                  app_package: com.example.myapp
+                  offset: 0
+                  limit: 200
+      responses:
+        '200':
+          description: NDJSON stream of chunks, one per line
+          content:
             application/x-ndjson:
               schema:
-                $ref: '#/components/schemas/RpcResponse'
+                $ref: '#/components/schemas/ListClassesPartialResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
+  responses:
+    BadRequest:
+      description: Malformed JSON body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Unknown endpoint
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    InternalError:
+      description: The bridge threw while processing the request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
   schemas:
-    # -------------------------
-    # JSON-RPC base envelopes
-    # -------------------------
-    RpcRequest:
-      type: object
-      required: [method]
-      properties:
-        jsonrpc:
-          type: string
-          default: "2.0"
-        id:
-          description: |
-            Echoed back on the response. Any JSON value; omit it only if you do not
-            need to correlate the reply.
-          example: 1
-        method:
-          type: string
-          description: Name of the method to invoke.
-        params:
-          type: object
-          description: |
-            Method-specific parameters (see the contract table). Omit for methods that
-            take none; omitting it for a method that requires params fails with
-            `Missing params` (`-32603`).
-      description: Unknown members are ignored.
-
-    RpcResponse:
-      type: object
-      required: [jsonrpc, result, id]
-      properties:
-        jsonrpc:
-          type: string
-          example: "2.0"
-        id:
-          description: The `id` from the request, or `null`.
-          example: 1
-        result:
-          description: Result of the invoked method (see the contract table).
-
-    RpcErrorResponse:
-      type: object
-      required: [jsonrpc, error, id]
-      properties:
-        jsonrpc:
-          type: string
-          example: "2.0"
-        id:
-          description: The `id` from the request, or `null` when it could not be parsed.
-          example: 1
-          nullable: true
-        error:
-          $ref: '#/components/schemas/JsonRpcError'
-
-    JsonRpcError:
+    ApiError:
       type: object
       required: [code, message]
       properties:
@@ -346,19 +414,16 @@ components:
           type: integer
           enum: [-32700, -32601, -32603]
           description: |
-            `-32700` parse error, `-32601` method not found, `-32603` internal error.
+            `-32700` malformed body, `-32601` unknown endpoint, `-32603` internal error.
         message:
           type: string
-        data:
-          description: Always absent on this bridge.
-          nullable: true
 
     # -------------------------
     # Parameter schemas
     # -------------------------
     ListClassesParams:
       type: object
-      description: Used only by `listClassesStream`. Every field has a default.
+      description: Used only by `list_classes_stream`. Every field has a default.
       properties:
         search_param:
           type: string
@@ -412,7 +477,7 @@ components:
           type: string
         id:
           type: string
-          description: Instance id returned by `listInstances`.
+          description: Instance id returned by `list_instances`.
         offset:
           type: integer
           default: 0
@@ -428,7 +493,7 @@ components:
           type: string
         id:
           type: string
-          description: Instance id returned by `listInstances`.
+          description: Instance id returned by `list_instances`.
         fieldName:
           type: string
         type:
@@ -478,29 +543,6 @@ components:
             Same contract as `SetMethodImplementationParams.code`, but the original
             implementation is restored after the first call.
 
-    PrepareEnvParams:
-      type: object
-      required: [package_name]
-      properties:
-        pid:
-          type: integer
-          nullable: true
-          description: Target pid. When omitted the process is resolved by `package_name`.
-        package_name:
-          type: string
-        target:
-          type: string
-          nullable: true
-          description: |
-            `Gadget` or `127.0.0.1` connects to a remote Frida Gadget over TCP on port
-            27042 (the non-rooted/debuggable path). Otherwise attaches over USB.
-        serial:
-          type: string
-          nullable: true
-          description: |
-            Device serial from `adb devices`. Required when several devices are
-            connected, otherwise the wrong one may be picked.
-
     InjectGadgetParams:
       type: object
       description: Every field is optional.
@@ -516,29 +558,14 @@ components:
           nullable: true
           description: Device serial from `adb devices`.
 
-    InjectJdwpParams:
-      type: object
-      required: [target, port, package_name]
-      properties:
-        target:
-          type: string
-          description: Host address.
-          example: 127.0.0.1
-        port:
-          type: integer
-          description: Forwarded JDWP port.
-          example: 5005
-        package_name:
-          type: string
-
     # -------------------------
     # Result schemas
     # -------------------------
     StatusResult:
       type: object
       description: |
-        Shared shape of `setFieldValue`, `hookMethod`, `setMethodImplementation`,
-        `runOnce`, `prepareEnvironment` and `injectJdwp`.
+        Shared shape of `set_field_value`, `hook_method`, `set_method_implementation` and
+        `run_once`.
       required: [status]
       properties:
         status:
@@ -592,7 +619,7 @@ components:
       properties:
         id:
           type: string
-          description: Pass this to `inspectInstance` and `setFieldValue`.
+          description: Pass this to `inspect_instance` and `set_field_value`.
         handle:
           type: string
         summary:
@@ -635,7 +662,7 @@ components:
         childId:
           type: string
           nullable: true
-          description: Pass to `inspectInstance` to drill into a nested object.
+          description: Pass to `inspect_instance` to drill into a nested object.
         childClassName:
           type: string
           nullable: true
@@ -649,7 +676,7 @@ components:
     HookEventsResult:
       type: object
       description: |
-        Drains the events recorded by `hookMethod` since the previous call. Empty until
+        Drains the events recorded by `hook_method` since the previous call. Empty until
         a hooked method is invoked.
       required: [events]
       properties:
@@ -766,7 +793,7 @@ components:
     ListClassesPartialResult:
       type: object
       description: |
-        One NDJSON chunk of `listClassesStream`, carried in `RpcResponse.result`.
+        One NDJSON chunk of `list_classes_stream`.
       required: [list]
       properties:
         list:
