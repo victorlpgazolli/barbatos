@@ -10,7 +10,7 @@
 
 ## Technical Architecture
 - **Multiplatform**: Logic in `src/commonMain`, platform-specific entry and Frida bindings in `src/unixMain`.
-- **API**: Ktor-based JSON-RPC 2.0 server on port 8080.
+- **API**: Ktor-based HTTP server on port 8080. REST endpoints under `/v0/api/*` in RPC mode; JSON-RPC 2.0 over Streamable HTTP in MCP mode.
 - **Frida Integration**: Kotlin Native CInterop mapped to `libfrida-core.a`.
 - **Mocking**: `MockFridaBridge` used for all unit tests to simulate Frida behavior without devices.
 
@@ -18,11 +18,13 @@
 - **Language**: All code and documentation must be in **English**.
 - **TDD**: New endpoints must have corresponding test cases in `RpcHandlerTest.kt`.
 - **RPC Protocol**:
-    - Always return **HTTP 200** for application-level errors (method not found, etc.).
-    - Use standard JSON-RPC 2.0 error codes:
+    - HTTP transport (`barbatos rpc`): one `POST /v0/api/<snake_case>` per method. The body is the params object and the response is the plain result — no `jsonrpc`/`id` envelope.
+    - Errors use real HTTP statuses: `400` malformed body, `404` unknown endpoint, `500` internal error, with a body of `{"error":{"code","message"}}`.
+    - Keep standard JSON-RPC error codes in the `error` body for traceability:
         - `-32700`: Parse error
         - `-32601`: Method not found
         - `-32603`: Internal error
+    - The MCP transport keeps JSON-RPC 2.0 semantics and forwards application-level errors as non-error MCP results.
 - **Style**:
     - Use `HandlerResult` for robust HTTP response handling in the server.
     - Prefer interface-driven design (`FridaBridge`).
@@ -30,7 +32,7 @@
     - No emojis in commit messages or code.
 
 ## File Structure
-- `src/commonMain/kotlin/rpc/`: JSON-RPC models and handler logic.
+- `src/commonMain/kotlin/rpc/`: HTTP and MCP handler logic (models + dispatch).
 - `src/commonMain/kotlin/bridge/`: Bridge interfaces and mocks.
 - `src/unixMain/kotlin/bridge/`: Real Frida Core implementation.
 - `src/commonMain/resources/`: Frida JS agents.

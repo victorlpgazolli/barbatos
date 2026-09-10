@@ -22,7 +22,7 @@
 ## Key Features
 
 *   **Unified Native Binary:** Single executable for macOS. No dependencies, no setup.
-*   **JSON-RPC 2.0 API:** Standardized interface over HTTP/Post for consistent integration.
+*   **REST API:** One `POST /v0/api/<snake_case>` endpoint per operation — the params object as the body, the plain result back, no JSON-RPC envelope.
 *   **Class Discovery:** Real-time enumeration of loaded Java/Kotlin classes.
 *   **Deep Inspection:** Recursive traversal of object hierarchies (Fields, Maps, Collections).
 *   **Method Hooking:** Intercept execution flow and modify behavior in real-time.
@@ -51,7 +51,7 @@ Barbatos uses a streamlined pipeline for zero-latency runtime interaction:
 
 ```mermaid
 graph TD
-    A[MCP Client / Any http request] -->|JSON-RPC| B[KMP Native Bridge]
+    A[MCP Client / Any http request] -->|REST / JSON-RPC| B[KMP Native Bridge]
     B -->|CInterop| D[Frida Core]
     D -->|Injection| E[Frida JS Agent]
     E -->|ART/ObjC| F[Target App]
@@ -78,13 +78,13 @@ make run
 ```
 
 ### API Usage
-The bridge exposes a JSON-RPC 2.0 endpoint at `http://127.0.0.1:8080/rpc`.
+The bridge exposes one REST endpoint per operation at `http://127.0.0.1:8080/v0/api/<snake_case>`.
 
 ```bash
-# Example: List loaded classes
-curl -X POST http://127.0.0.1:8080/rpc \
+# Example: Search loaded classes (NDJSON stream)
+curl -X POST http://127.0.0.1:8080/v0/api/list_classes_stream \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "method": "listClasses", "params": {"search_param": "MainActivity"}, "id": 1}'
+  -d '{"search_param": "MainActivity"}'
 ```
 [click here to see full swagger doc >](https://barbatos.victorlpgazolli.dev/openapi)
 

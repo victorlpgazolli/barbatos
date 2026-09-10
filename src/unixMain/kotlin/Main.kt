@@ -23,7 +23,7 @@ private fun runMcp() {
 
 private fun runRpc() {
     val bridge = NativeFridaBridge()
-    println("Starting Barbatos (HTTP JSON-RPC mode) on port 8080...")
+    println("Starting Barbatos (HTTP REST mode) on port 8080...")
     try {
         startServer(bridge)
     } catch (e: Exception) {
@@ -45,8 +45,9 @@ private fun printHelp() {
           mcp              Serve the Model Context Protocol (MCP) over Streamable HTTP
                            ->  http://127.0.0.1:8080/mcp
                            For MCP clients: opencode, Claude Desktop, Cursor, MCP Inspector.
-          rpc              Serve the HTTP JSON-RPC 2.0 API
-                           ->  POST http://127.0.0.1:8080/rpc   (also /ping, /docs, /openapi.yaml)
+          rpc              Serve the HTTP REST API (one endpoint per method)
+                           ->  POST http://127.0.0.1:8080/v0/api/<snake_case>
+                           (also GET /ping, /docs, /openapi.yaml)
                            For curl, scripts and REST-based tooling.
           help | --help | -h
                            Show this help
@@ -55,8 +56,6 @@ private fun printHelp() {
           * A device must be connected via adb with a debuggable app in the foreground.
           * Both modes listen on 127.0.0.1:8080 and are mutually exclusive
             (starting one kills whatever occupies the port).
-          * Inspect and hook tools need a Frida session first: call
-            injectGadgetFromScratch before using them.
         """.trimIndent()
     )
 }

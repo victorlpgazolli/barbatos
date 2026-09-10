@@ -36,7 +36,8 @@ private val swaggerUiHtml = """
 """.trimIndent()
 
 /**
- * Swagger UI for the JSON-RPC bridge, served off the same port as `/rpc`.
+ * OpenAPI documentation for the REST API, served off the same port as the
+ * /v0/api endpoints.
  *
  * Installed by [module], so it only exists in HTTP mode — `barbatos mcp` never builds a
  * routing tree.

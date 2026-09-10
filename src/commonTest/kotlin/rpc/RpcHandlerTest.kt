@@ -7,43 +7,56 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.int
+import kotlinx.serialization.json.JsonObject
 import model.actions.result.CheckResponse
 import model.actions.result.CountInstancesResult
 import model.actions.result.HealthCheckResult
-import model.rpc.RpcErrorResponse
-import model.rpc.RpcResponse
+import model.rpc.ApiErrorResponse
 
 /**
  * Unit tests for RpcHandler.
  *
- * All tests call RpcHandler.handle() / handleStream() / isStreamMethod() directly.
+ * All tests call RpcHandler.handle() / handleStream() / processMethod() directly.
  * No Ktor, no HTTP layer involved.
  */
 class RpcHandlerTest {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    // ─── camelToSnake / route table ───────────────────────────────────────────
+
+    @Test
+    fun camelToSnake_convertsCamelCaseMethods() {
+        assertEquals("inject_gadget_from_scratch", camelToSnake("injectGadgetFromScratch"))
+        assertEquals("get_instance_addresses", camelToSnake("getInstanceAddresses"))
+        assertEquals("set_method_implementation", camelToSnake("setMethodImplementation"))
+        assertEquals("list_classes_stream", camelToSnake("listClassesStream"))
+        assertEquals("health_check", camelToSnake("healthCheck"))
+        assertEquals("count_instances", camelToSnake("countInstances"))
+        assertEquals("run_once", camelToSnake("runOnce"))
+    }
+
+    @Test
+    fun routeByPath_coversAllTools() {
+        val handler = RpcHandler(FakeFridaBridge())
+        assertEquals(RpcHandler.tools.size, RpcHandler.routeByPath.size)
+        RpcHandler.tools.forEach { tool ->
+            assertTrue(RpcHandler.routeByPath.containsKey(camelToSnake(tool.name)), "Missing route for ${tool.name}")
+        }
+    }
+
     // ─── isStreamMethod ───────────────────────────────────────────────────────
 
     @Test
     fun isStreamMethod_returnsTrue_forListClassesStream() {
         val handler = RpcHandler(FakeFridaBridge())
-        assertTrue(handler.isStreamMethod("""{"jsonrpc":"2.0","method":"listClassesStream","id":1}"""))
+        assertTrue(handler.isStreamMethod("listClassesStream"))
     }
 
     @Test
     fun isStreamMethod_returnsFalse_forNonStreamMethod() {
         val handler = RpcHandler(FakeFridaBridge())
-        assertFalse(handler.isStreamMethod("""{"jsonrpc":"2.0","method":"healthCheck","id":1}"""))
-    }
-
-    @Test
-    fun isStreamMethod_returnsFalse_forInvalidJson() {
-        val handler = RpcHandler(FakeFridaBridge())
-        assertFalse(handler.isStreamMethod("not-json"))
+        assertFalse(handler.isStreamMethod("healthCheck"))
     }
 
     // ─── handle — parse errors ────────────────────────────────────────────────
@@ -51,18 +64,19 @@ class RpcHandlerTest {
     @Test
     fun handle_returnsParseError_onInvalidJson() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("not-json")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
+        val result = handler.handle("healthCheck", "not-json")
+        val err = json.decodeFromString<ApiErrorResponse>(result.body)
         assertEquals(-32700, err.error.code)
-        assertTrue(err.id == null || err.id is JsonNull || err.id.toString() == "null", "ID should be null")
+        assertEquals(400, result.statusCode)
     }
 
     @Test
-    fun handle_returnsParseError_onEmptyBody() {
+    fun handle_returnsBadRequest_onEmptyBody_forMethodRequiringParams() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
+        val result = handler.handle("countInstances")
+        val err = json.decodeFromString<ApiErrorResponse>(result.body)
         assertEquals(-32700, err.error.code)
+        assertEquals(400, result.statusCode)
     }
 
     // ─── handle — method not found ────────────────────────────────────────────
@@ -70,18 +84,10 @@ class RpcHandlerTest {
     @Test
     fun handle_returnsMethodNotFound_onUnknownMethod() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"unknownMethod","id":1}""")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
+        val result = handler.handle("unknownMethod")
+        val err = json.decodeFromString<ApiErrorResponse>(result.body)
         assertEquals(-32601, err.error.code)
-        assertEquals(1, err.id?.jsonPrimitive?.int)
-    }
-
-    @Test
-    fun handle_preservesId_onMethodNotFound() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"nope","id":99}""")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
-        assertEquals(99, err.id?.jsonPrimitive?.int)
+        assertEquals(404, result.statusCode)
     }
 
     // ─── handle — bridge throws → internal error ──────────────────────────────
@@ -90,54 +96,23 @@ class RpcHandlerTest {
     fun handle_returnsInternalError_whenBridgeThrows() {
         val bridge = FakeFridaBridge(countInstancesFn = { throw RuntimeException("bridge failure") })
         val handler = RpcHandler(bridge)
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"countInstances","params":{"className":"com.example.MainActivity"},"id":5}""")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
+        val result = handler.handle("countInstances", """{"className":"com.example.MainActivity"}""")
+        val err = json.decodeFromString<ApiErrorResponse>(result.body)
         assertEquals(-32603, err.error.code)
+        assertEquals(500, result.statusCode)
         assertTrue(err.error.message.contains("bridge failure"))
     }
 
-    // ─── handle — missing params → internal error ─────────────────────────────
+    // ─── handle — success responses have no envelope ──────────────────────────
 
     @Test
-    fun handle_returnsInternalError_whenParamsMissing_countInstances() {
+    fun handle_successResponse_isPlainResult() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"countInstances","id":1}""")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
-        assertEquals(-32603, err.error.code)
-    }
-
-    @Test
-    fun handle_returnsInternalError_whenParamsMissing_inspectClass() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"inspectClass","id":1}""")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
-        assertEquals(-32603, err.error.code)
-    }
-
-    @Test
-    fun handle_returnsInternalError_whenParamsMissing_hookMethod() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"hookMethod","id":1}""")
-        val err = json.decodeFromString<RpcErrorResponse>(result.body)
-        assertEquals(-32603, err.error.code)
-    }
-
-    // ─── handle — id types preserved ─────────────────────────────────────────
-
-    @Test
-    fun handle_preservesNumericId_inSuccessResponse() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"healthCheck","id":42}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertEquals(42, res.id?.jsonPrimitive?.int)
-    }
-
-    @Test
-    fun handle_preservesStringId_inSuccessResponse() {
-        val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"healthCheck","id":"req-abc"}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertEquals("req-abc", res.id?.jsonPrimitive?.content)
+        val result = handler.handle("countInstances", """{"className":"com.example.MainActivity"}""")
+        assertEquals(200, result.statusCode)
+        assertFalse(result.body.contains("jsonrpc"))
+        assertFalse(result.body.contains("\"id\""))
+        assertTrue(result.body.contains("count"))
     }
 
     // ─── handle — each method happy path ─────────────────────────────────────
@@ -145,103 +120,108 @@ class RpcHandlerTest {
     @Test
     fun handle_countInstances_returnsCount() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"countInstances","params":{"className":"com.example.MainActivity"},"id":3}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("5"))
+        val result = handler.handle("countInstances", """{"className":"com.example.MainActivity"}""")
+        assertEquals(200, result.statusCode)
+        assertTrue(result.body.contains("5"))
     }
 
     @Test
     fun handle_countInstances_returnsZero_forUnknownClass() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"countInstances","params":{"className":"com.unknown.Class"},"id":3}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("0"))
+        val result = handler.handle("countInstances", """{"className":"com.unknown.Class"}""")
+        assertTrue(result.body.contains("0"))
     }
 
     @Test
     fun handle_inspectClass_returnsMethods() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"inspectClass","params":{"className":"com.example.MainActivity"},"id":4}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("methods"))
-        assertTrue(res.result.toString().contains("onCreate"))
+        val result = handler.handle("inspectClass", """{"className":"com.example.MainActivity"}""")
+        assertTrue(result.body.contains("methods"))
+        assertTrue(result.body.contains("onCreate"))
     }
 
     @Test
     fun handle_listInstances_returnsTotalCount() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"listInstances","params":{"className":"com.example.MainActivity"},"id":5}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("totalCount"))
+        val result = handler.handle("listInstances", """{"className":"com.example.MainActivity"}""")
+        assertTrue(result.body.contains("totalCount"))
     }
 
     @Test
     fun handle_inspectInstance_returnsAttributes() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"inspectInstance","params":{"className":"com.example.MainActivity","id":"123"},"id":6}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("attributes"))
-        assertTrue(res.result.toString().contains("mCount"))
+        val result = handler.handle("inspectInstance", """{"className":"com.example.MainActivity","id":"123"}""")
+        assertTrue(result.body.contains("attributes"))
+        assertTrue(result.body.contains("mCount"))
     }
 
     @Test
     fun handle_setFieldValue_returnsSuccessMessage() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"setFieldValue","params":{"className":"com.example.MainActivity","id":"123","fieldName":"mCount","type":"int","newValue":"10"},"id":7}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("Success"))
-        assertTrue(res.result.toString().contains("mCount"))
+        val result = handler.handle("setFieldValue", """{"className":"com.example.MainActivity","id":"123","fieldName":"mCount","type":"int","newValue":"10"}""")
+        assertTrue(result.body.contains("Success"))
+        assertTrue(result.body.contains("mCount"))
     }
 
     @Test
     fun handle_hookMethod_returnsHookedMessage() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"hookMethod","params":{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)"},"id":8}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("Hooked"))
+        val result = handler.handle("hookMethod", """{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)"}""")
+        assertTrue(result.body.contains("Hooked"))
     }
 
     @Test
     fun handle_setMethodImplementation_returnsReplacedMessage() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"setMethodImplementation","params":{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)","code":"return null;"},"id":10}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("Implementation replaced"))
+        val result = handler.handle("setMethodImplementation", """{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)","code":"return null;"}""")
+        assertTrue(result.body.contains("Implementation replaced"))
     }
 
     @Test
     fun handle_runOnce_returnsScriptExecuted() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"runOnce","params":{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)","code":"console.log('hi');"},"id":11}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("Script executed"))
+        val result = handler.handle("runOnce", """{"className":"com.example.MainActivity","methodSig":"onCreate(android.os.Bundle)","code":"console.log('hi');"}""")
+        assertTrue(result.body.contains("Script executed"))
     }
 
     @Test
     fun handle_getInstanceAddresses_returnsAddressList() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"getInstanceAddresses","params":{"className":"com.example.MainActivity"},"id":12}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("0x123"))
-        assertTrue(res.result.toString().contains("0x456"))
+        val result = handler.handle("getInstanceAddresses", """{"className":"com.example.MainActivity"}""")
+        assertTrue(result.body.contains("0x123"))
+        assertTrue(result.body.contains("0x456"))
+    }
+
+    @Test
+    fun handle_injectGadgetFromScratch_withoutBody_usesDefaults() {
+        val handler = RpcHandler(FakeFridaBridge())
+        val result = handler.handle("injectGadgetFromScratch")
+        val res = json.decodeFromString<JsonObject>(result.body)
+        assertEquals(200, result.statusCode)
+        assertTrue(res.containsKey("steps"))
     }
 
     @Test
     fun handle_injectGadgetFromScratch_returnsStatus() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"injectGadgetFromScratch","params":{"with_logs":true,"limit":100},"id":14}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("status"))
-        assertTrue(res.result.toString().contains("completed"))
+        val result = handler.handle("injectGadgetFromScratch", """{"with_logs":true,"limit":100}""")
+        assertTrue(result.body.contains("status"))
+        assertTrue(result.body.contains("completed"))
     }
 
     @Test
     fun handle_healthCheck_returnsOverall() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"healthCheck","id":16}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("overall"))
-        assertTrue(res.result.toString().contains("ok"))
+        val result = handler.handle("healthCheck")
+        assertTrue(result.body.contains("overall"))
+        assertTrue(result.body.contains("ok"))
+    }
+
+    @Test
+    fun handle_getHookEvents_returnsEvents() {
+        val handler = RpcHandler(FakeFridaBridge())
+        val result = handler.handle("getHookEvents")
+        assertTrue(result.body.contains("events"))
     }
 
     // ─── handle — custom bridge response ──────────────────────────────────────
@@ -252,24 +232,22 @@ class RpcHandlerTest {
             HealthCheckResult("degraded", mapOf("bridge" to CheckResponse("error", "down")))
         })
         val handler = RpcHandler(bridge)
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"healthCheck","id":1}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("degraded"))
+        val result = handler.handle("healthCheck")
+        assertTrue(result.body.contains("degraded"))
     }
 
     @Test
     fun handle_countInstances_returnsCustomCount_whenBridgeOverridden() {
         val bridge = FakeFridaBridge(countInstancesFn = { _ -> CountInstancesResult(42) })
         val handler = RpcHandler(bridge)
-        val result = handler.handle("""{"jsonrpc":"2.0","method":"countInstances","params":{"className":"any.Class"},"id":1}""")
-        val res = json.decodeFromString<RpcResponse>(result.body)
-        assertTrue(res.result.toString().contains("42"))
+        val result = handler.handle("countInstances", """{"className":"any.Class"}""")
+        assertTrue(result.body.contains("42"))
     }
 
     // ─── handleStream ─────────────────────────────────────────────────────────
 
     @Test
-    fun handleStream_emitsChunks_forListClassesStream() {
+    fun handleStream_emitsPlainChunks_forListClassesStream() {
         val bridge = FakeFridaBridge(
             listClassesStreamFn = { _, onChunk, onComplete ->
                 runBlocking {
@@ -283,12 +261,15 @@ class RpcHandlerTest {
 
         runBlocking {
             handler.handleStream(
-                """{"jsonrpc":"2.0","method":"listClassesStream","params":{"search_param":"Main"},"id":1}"""
+                "listClassesStream",
+                """{"search_param":"Main"}"""
             ) { line -> emitted.add(line) }
         }
 
         assertTrue(emitted.isNotEmpty(), "Should emit at least one chunk or error message via stream")
         assertTrue(emitted.any { it.contains("com.example.MainActivity") }, "Should emit MainActivity")
+        assertTrue(emitted.none { it.contains("jsonrpc") }, "Chunks must not carry the JSON-RPC envelope")
+        assertTrue(emitted.any { it.contains("\"list\"") }, "Chunk must be the plain partial result")
     }
 
     @Test
@@ -296,7 +277,7 @@ class RpcHandlerTest {
         val handler = RpcHandler(FakeFridaBridge())
         val emitted = mutableListOf<String>()
         runBlocking {
-            handler.handleStream("not-json") { line -> emitted.add(line) }
+            handler.handleStream("listClassesStream", "not-json") { line -> emitted.add(line) }
         }
         assertEquals(1, emitted.size)
         assertTrue(emitted[0].contains("-32700"))
@@ -313,7 +294,8 @@ class RpcHandlerTest {
         val emitted = mutableListOf<String>()
         runBlocking {
             handler.handleStream(
-                """{"jsonrpc":"2.0","method":"listClassesStream","id":1}"""
+                "listClassesStream",
+                """{"search_param":"Main"}"""
             ) { line -> emitted.add(line) }
         }
         assertTrue(emitted.any { it.contains("-32603") })

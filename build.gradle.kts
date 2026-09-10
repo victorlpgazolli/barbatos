@@ -287,10 +287,13 @@ kotlin {
     }
 }
 
+fun snakeCase(methodName: String): String =
+    methodName.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
+
 fun registerRpcTask(taskName: String, methodName: String, params: Map<String, Any?> = emptyMap()) {
     tasks.register<Exec>(taskName) {
         group = "barbatos-rpc"
-        description = "Execute JSON-RPC method $methodName via curl"
+        description = "Execute method $methodName via curl"
 
         executable = "curl"
 
@@ -323,16 +326,15 @@ fun registerRpcTask(taskName: String, methodName: String, params: Map<String, An
 
             listOf(
                 "-s", "--connect-timeout", "5", "--max-time", "15",
-                "-X", "POST", "http://localhost:8080/rpc",
+                "-X", "POST", "http://localhost:8080/v0/api/${snakeCase(methodName)}",
                 "-H", "Content-Type: application/json",
-                "-d", """{"jsonrpc":"2.0","method":"$methodName","params":$paramsJson,"id":1}"""
+                "-d", paramsJson
             )
         })
     }
 }
 
 // Exploration Tools
-registerRpcTask("rpcListClasses", "listClasses", mapOf("search_param" to "", "app_package" to "", "offset" to 0, "limit" to 200))
 registerRpcTask("rpcListClassesStream", "listClassesStream", mapOf("search_param" to "", "app_package" to "", "offset" to 0, "limit" to 200))
 registerRpcTask("rpcCountInstances", "countInstances", mapOf("className" to ""))
 registerRpcTask("rpcInspectClass", "inspectClass", mapOf("className" to ""))
@@ -350,16 +352,8 @@ registerRpcTask("rpcHookMethod", "hookMethod", mapOf("className" to "", "methodS
 registerRpcTask("rpcGetHookEvents", "getHookEvents")
 
 // Environment Tools
-registerRpcTask("rpcPrepareEnvironment", "prepareEnvironment", mapOf("target" to "Gadget"))
 registerRpcTask("rpcInjectGadgetFromScratch", "injectGadgetFromScratch")
-registerRpcTask("rpcInjectJdwp", "injectJdwp", mapOf("target" to "127.0.0.1", "port" to 5005, "package_name" to ""))
 registerRpcTask("rpcHealthCheck", "healthCheck")
-
-// iOS Specific Tools
-registerRpcTask("rpcPatchAndInstallIosApp", "patchAndInstallIosApp", mapOf("appPath" to ""))
-registerRpcTask("rpcCheckIosJailbreakStatus", "checkIosJailbreakStatus", mapOf("serial" to ""))
-registerRpcTask("rpcInjectJailbrokenIos", "injectJailbrokenIos", mapOf("serial" to ""))
-registerRpcTask("rpcCheckIosDeployStatus", "checkIosDeployStatus")
 
 tasks.register<Exec>("runDebug") {
     group = "application"
