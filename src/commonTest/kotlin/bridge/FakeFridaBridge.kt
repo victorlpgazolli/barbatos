@@ -62,8 +62,6 @@ class FakeFridaBridge(
         }
         onComplete()
     },
-    var pingJavaFn: () -> String = { "Mock: Java OK" },
-    var testRpcFn: () -> String = { "Mock: RPC OK" },
     var countInstancesFn: (CountInstancesParams) -> CountInstancesResult = { params ->
         CountInstancesResult(if (params.className == "com.example.MainActivity") 5 else 0)
     },
@@ -109,9 +107,6 @@ class FakeFridaBridge(
     var injectGadgetFromScratchFn: (InjectGadgetParams) -> InjectGadgetResult = { _ ->
         InjectGadgetResult("completed", listOf(InjectionStep("1", "Step 1", "completed")))
     },
-    var injectJdwpFn: (InjectJdwpParams) -> InjectJdwpResult = { _ ->
-        InjectJdwpResult("Success")
-    },
     var healthCheckFn: () -> HealthCheckResult = {
         HealthCheckResult("ok", mapOf("bridge" to CheckResponse("ok", "Bridge is running")))
     },
@@ -130,10 +125,6 @@ class FakeFridaBridge(
         onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit,
         onComplete: () -> Unit
     ) = listClassesStreamFn(params, onChunk, onComplete)
-
-    override fun pingJava(): String = pingJavaFn()
-
-    override fun testRpc(): String = testRpcFn()
 
     override fun countInstances(params: CountInstancesParams): CountInstancesResult = countInstancesFn(params)
 
@@ -158,8 +149,6 @@ class FakeFridaBridge(
     override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult = prepareEnvironmentFn(params)
 
     override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult = injectGadgetFromScratchFn(params)
-
-    override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult = injectJdwpFn(params)
 
     override fun healthCheck(): HealthCheckResult = healthCheckFn()
 

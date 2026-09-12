@@ -6,7 +6,7 @@ info:
     HTTP transport of the barbatos bridge. The binary drives a Frida agent injected into
     an Android process and exposes it over plain HTTP endpoints.
 
-    Started with `barbatos rpc` (no arguments otherwise) — binds `127.0.0.1:8080` and kills
+    Started with `barbatos http` — binds `127.0.0.1:8080` and kills
     whatever already holds the port. There is no authentication: the server is loopback-only.
 
     This spec is served by the bridge itself: **<http://127.0.0.1:8080/docs>** renders it,
@@ -17,8 +17,8 @@ info:
 
     | Transport | How to start | Surface |
     |---|---|---|
-    | HTTP (this document) | `barbatos rpc` | `GET /ping`, `POST /v0/api/*`, `GET /docs`, `GET /openapi.yaml` |
-    | MCP over Streamable HTTP | `barbatos mcp` | `initialize`, `tools/list`, `tools/call`, `prompts/list`, `resources/list` |
+    | HTTP | `barbatos http` | `GET /ping`, `POST /v0/api/*`, `GET /docs`, `GET /openapi.yaml` |
+    | MCP compliant streamable HTTP | `barbatos mcp` | `initialize`, `tools/list`, `tools/call`, `prompts/list`, `resources/list` |
     | Help | `barbatos` | Prints usage and an overview of both transports |
 
     Both transports dispatch into the same `RpcHandler`, so every endpoint below is also
@@ -104,6 +104,8 @@ paths:
   /v0/api/health_check:
     post:
       summary: healthCheck — probe ADB, root, frontmost app and session
+      x-cli-name: health-check
+      operationId: |
       description: |
         Callable without an active session. Returns `overall` ("ok" or "degraded") plus a
         `checks` map covering adb, android_root, android_frontmost_app, frida_device,
@@ -132,6 +134,8 @@ paths:
   /v0/api/inject_gadget_from_scratch:
     post:
       summary: injectGadgetFromScratch — start a session (call this first)
+      x-cli-name: inject-gadget-from-scratch
+      operationId: |
       description: |
         Detects the foreground app, picks the rooted or debuggable injection path and
         attaches. Every field of the body is optional.
@@ -144,8 +148,6 @@ paths:
             examples:
               default:
                 value:
-                  with_logs: true
-                  limit: 100
                   serial: null
       responses:
         '200':
@@ -159,6 +161,8 @@ paths:
   /v0/api/count_instances:
     post:
       summary: countInstances — how many live instances on the heap?
+      x-cli-name: count-instances
+      operationId: countInstances
       requestBody:
         required: true
         content:
@@ -183,6 +187,8 @@ paths:
   /v0/api/inspect_class:
     post:
       summary: inspectClass — list a class's fields and methods
+      x-cli-name: inspect-class
+      operationId: inspectClass
       requestBody:
         required: true
         content:
@@ -203,6 +209,8 @@ paths:
   /v0/api/list_instances:
     post:
       summary: listInstances — get instance ids for a class
+      x-cli-name: list-instances
+      operationId: listInstances
       requestBody:
         required: true
         content:
@@ -222,6 +230,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/get_instance_addresses:
     post:
+      x-cli-name: get-instance-addresses
+      operationId: getInstanceAddresses
       summary: getInstanceAddresses — memory addresses of live instances
       requestBody:
         required: true
@@ -242,6 +252,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/inspect_instance:
     post:
+      x-cli-name: inspect-instance
+      operationId: inspectInstance
       summary: inspectInstance — read a live object's field values
       requestBody:
         required: true
@@ -262,6 +274,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/set_field_value:
     post:
+      x-cli-name: set-field-value
+      operationId: setFieldValue
       summary: setFieldValue — mutate a field at runtime
       requestBody:
         required: true
@@ -282,6 +296,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/hook_method:
     post:
+      x-cli-name: hook-method
+      operationId: hookMethod
       summary: hookMethod — record every call to a method
       requestBody:
         required: true
@@ -302,6 +318,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/set_method_implementation:
     post:
+      x-cli-name: set-method-implementation
+      operationId: setMethodImplementation
       summary: setMethodImplementation — replace a method for the session
       requestBody:
         required: true
@@ -322,6 +340,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/run_once:
     post:
+      x-cli-name: run-once
+      operationId: runOnce
       summary: runOnce — replace a method for a single call, then restore
       requestBody:
         required: true
@@ -342,6 +362,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/get_hook_events:
     post:
+      x-cli-name: get-hook-events
+      operationId: getHookEvents
       summary: getHookEvents — drain the calls recorded so far
       description: Takes no parameters. The body may be empty.
       responses:
@@ -355,6 +377,8 @@ paths:
           $ref: '#/components/responses/InternalError'
   /v0/api/list_classes_stream:
     post:
+      x-cli-name: list-classes-stream
+      operationId: listClassesStream
       summary: listClassesStream — search loaded classes (NDJSON response)
       description: |
         Streams matching class names as NDJSON (`application/x-ndjson`): one plain
@@ -372,8 +396,6 @@ paths:
                 value:
                   search_param: MyClass
                   app_package: com.example.myapp
-                  offset: 0
-                  limit: 200
       responses:
         '200':
           description: NDJSON stream of chunks, one per line
@@ -432,12 +454,6 @@ components:
         app_package:
           type: string
           default: ""
-        offset:
-          type: integer
-          default: 0
-        limit:
-          type: integer
-          default: 200
 
     InspectClassParams:
       type: object
@@ -478,12 +494,6 @@ components:
         id:
           type: string
           description: Instance id returned by `list_instances`.
-        offset:
-          type: integer
-          default: 0
-        limit:
-          type: integer
-          default: 50
 
     SetFieldValueParams:
       type: object
@@ -547,12 +557,6 @@ components:
       type: object
       description: Every field is optional.
       properties:
-        with_logs:
-          type: boolean
-          default: true
-        limit:
-          type: integer
-          default: 100
         serial:
           type: string
           nullable: true

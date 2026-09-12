@@ -27,8 +27,6 @@ expect class NativeFridaBridge() : FridaBridge, AutoCloseable {
     override val jsonParser: Json
     override val fridaCoroutineScope: CoroutineScope
     override fun listClassesStream(params: ListClassesParams, onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit, onComplete: () -> Unit)
-    override fun pingJava(): String
-    override fun testRpc(): String
     override fun countInstances(params: CountInstancesParams): CountInstancesResult
     override fun inspectClass(params: InspectClassParams): InspectClassResult
     override fun listInstances(params: ListInstancesParams): ListInstancesResult
@@ -41,7 +39,6 @@ expect class NativeFridaBridge() : FridaBridge, AutoCloseable {
     override fun getInstanceAddresses(params: GetInstanceAddressesParams): GetInstanceAddressesResult
     override fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult
     override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult
-    override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult
     override fun healthCheck(): HealthCheckResult
     override fun close(): Unit
 }

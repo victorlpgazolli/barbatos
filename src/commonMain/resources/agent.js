@@ -397,13 +397,9 @@ rpc.exports = {
         }
     },
 
-    inspectinstance: function(id, offset, limit) {
+    inspectinstance: function(id) {
         var attributes = [];
-        offset = parseInt(offset, 10);
-        if (isNaN(offset)) offset = 0;
-        
-        limit = parseInt(limit, 10);
-        if (isNaN(limit)) limit = 50;
+
         try {
             Java.perform(function() {
                 var instance = instanceCache[id];
@@ -432,13 +428,8 @@ rpc.exports = {
                 // 2. If it's a collection-like thing, show its items first
                 if (isMap) {
                     var entrySet = Java.cast(instance, Java.use("java.util.Map")).entrySet().iterator();
-                    var skipped = 0;
-                    while (entrySet.hasNext() && skipped < offset) {
-                        entrySet.next();
-                        skipped++;
-                    }
                     var count = 0;
-                    while (entrySet.hasNext() && count < limit) {
+                    while (entrySet.hasNext()) {
                         var entry = Java.cast(entrySet.next(), Java.use("java.util.Map$Entry"));
                         var key = entry.getKey();
                         var val = entry.getValue();
@@ -459,31 +450,15 @@ rpc.exports = {
                             value: valStr, 
                             childId: childId, 
                             childClassName: childClassName,
-                            isPagination: false
                         });
                         count++;
                     }
-                    if (entrySet.hasNext()) {
-                         attributes.push({ 
-                             name: "...", 
-                             type: "Action", 
-                             value: "Show more items", 
-                             childId: id, // Pass the same instance ID to expand more
-                             isPagination: true,
-                             nextOffset: offset + limit
-                         });
-                    }
                 } else if (isCollection) {
                     var iterator = Java.cast(instance, Java.use("java.util.Collection")).iterator();
-                    var skipped = 0;
-                    while (iterator.hasNext() && skipped < offset) {
-                        iterator.next();
-                        skipped++;
-                    }
                     var count = 0;
-                    while (iterator.hasNext() && count < limit) {
+                    while (iterator.hasNext()) {
                         var val = iterator.next();
-                        var name = "[" + (offset + count) + "]";
+                        var name = "[" + count + "]";
                         var valStr = val !== null ? javaToString(val) : "null";
                         
                         var childId = null;
@@ -504,20 +479,10 @@ rpc.exports = {
                         });
                         count++;
                     }
-                    if (iterator.hasNext()) {
-                        attributes.push({ 
-                            name: "...", 
-                            type: "Action", 
-                            value: "Show more items", 
-                            childId: id, 
-                            isPagination: true,
-                            nextOffset: offset + limit
-                        });
-                    }
                 } else if (isArray) {
                     var len = Java.use("java.lang.reflect.Array").getLength(instance);
-                    var end = Math.min(len, offset + limit);
-                    for (var i = offset; i < end; i++) {
+                    var end = len;
+                    for (var i = 0; i < end; i++) {
                         var val = Java.use("java.lang.reflect.Array").get(instance, i);
                         var name = "[" + i + "]";
                         var valStr = val !== null ? javaToString(val) : "null";
@@ -536,62 +501,47 @@ rpc.exports = {
                             value: valStr, 
                             childId: childId, 
                             childClassName: childClassName,
-                            isPagination: false
                         });
-                    }
-                    if (len > end) {
-                         attributes.push({ 
-                             name: "...", 
-                             type: "Action", 
-                             value: "Show more items", 
-                             childId: id, 
-                             isPagination: true,
-                             nextOffset: offset + limit
-                         });
                     }
                 }
 
-                // 3. Only show regular fields on the FIRST page (offset 0)
-                if (offset === 0) {
-                    var fields = classDef.getDeclaredFields();
-                    console.log("[SCRIPT] Inspecting fields of class: " + classDef.$className + ", total fields: " + fields.length);
-                    for (var i = 0; i < fields.length; i++) {
-                        var field = fields[i];
-                        field.setAccessible(true);
-                        var name = field.getName();
-                        var type = field.getType().getSimpleName();
-                        var valStr = "unknown";
-                        var childId = null;
-                        var childClassName = null;
-                        try {
-                            var fieldVal = field.get(instance);
-                            if (fieldVal !== null) {
-                                valStr = javaToString(fieldVal);
-                                var isBasicType = ["int", "long", "boolean", "byte", "short", "float", "double", "string", "charsequence", "char"].indexOf(type.toLowerCase()) !== -1;
-                                if (!isBasicType) {
-                                    childId = fieldVal.hashCode().toString();
-                                    instanceCache[childId] = fieldVal;
-                                    try {
-                                        childClassName = fieldVal.getClass().getName();
-                                    } catch(e) {
-                                      childClassName = field.getType().getName();
-                                    }
+                var fields = classDef.getDeclaredFields();
+                console.log("[SCRIPT] Inspecting fields of class: " + classDef.$className + ", total fields: " + fields.length);
+                for (var i = 0; i < fields.length; i++) {
+                    var field = fields[i];
+                    field.setAccessible(true);
+                    var name = field.getName();
+                    var type = field.getType().getSimpleName();
+                    var valStr = "unknown";
+                    var childId = null;
+                    var childClassName = null;
+                    try {
+                        var fieldVal = field.get(instance);
+                        if (fieldVal !== null) {
+                            valStr = javaToString(fieldVal);
+                            var isBasicType = ["int", "long", "boolean", "byte", "short", "float", "double", "string", "charsequence", "char"].indexOf(type.toLowerCase()) !== -1;
+                            if (!isBasicType) {
+                                childId = fieldVal.hashCode().toString();
+                                instanceCache[childId] = fieldVal;
+                                try {
+                                    childClassName = fieldVal.getClass().getName();
+                                } catch(e) {
+                                  childClassName = field.getType().getName();
                                 }
-                            } else {
-                               valStr = "null";
                             }
-                        } catch(fe) {
-                            valStr = "error";
+                        } else {
+                           valStr = "null";
                         }
-                        attributes.push({ 
-                            name: name, 
-                            type: childClassName || type, 
-                            value: valStr, 
-                            childId: childId, 
-                            childClassName: childClassName,
-                            isPagination: false
-                        });
+                    } catch(fe) {
+                        valStr = "error";
                     }
+                    attributes.push({
+                        name: name,
+                        type: childClassName || type,
+                        value: valStr,
+                        childId: childId,
+                        childClassName: childClassName,
+                    });
                 }
             });
             return { attributes: attributes };

@@ -6,7 +6,7 @@ fun main(args: Array<String>) {
 
     when {
         args.contains("mcp") || args.contains("--mcp") -> runMcp()
-        args.contains("rpc") || args.contains("--rpc") -> runRpc()
+        args.contains("http") || args.contains("--http") -> runHttp()
         else -> printHelp()
     }
 }
@@ -21,7 +21,7 @@ private fun runMcp() {
     }
 }
 
-private fun runRpc() {
+private fun runHttp() {
     val bridge = NativeFridaBridge()
     println("Starting Barbatos (HTTP REST mode) on port 8080...")
     try {
@@ -45,7 +45,7 @@ private fun printHelp() {
           mcp              Serve the Model Context Protocol (MCP) over Streamable HTTP
                            ->  http://127.0.0.1:8080/mcp
                            For MCP clients: opencode, Claude Desktop, Cursor, MCP Inspector.
-          rpc              Serve the HTTP REST API (one endpoint per method)
+          http              Serve the HTTP REST API (one endpoint per method)
                            ->  POST http://127.0.0.1:8080/v0/api/<snake_case>
                            (also GET /ping, /docs, /openapi.yaml)
                            For curl, scripts and REST-based tooling.

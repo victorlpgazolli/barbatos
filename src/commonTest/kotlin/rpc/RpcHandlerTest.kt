@@ -204,7 +204,7 @@ class RpcHandlerTest {
     @Test
     fun handle_injectGadgetFromScratch_returnsStatus() {
         val handler = RpcHandler(FakeFridaBridge())
-        val result = handler.handle("injectGadgetFromScratch", """{"with_logs":true,"limit":100}""")
+        val result = handler.handle("injectGadgetFromScratch", """{}""")
         assertTrue(result.body.contains("status"))
         assertTrue(result.body.contains("completed"))
     }

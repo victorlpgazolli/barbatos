@@ -111,8 +111,6 @@ class McpServerTest {
             val properties = requireNotNull(listClassesStream.inputSchema.properties) { "listClassesStream must declare input schema properties" }
             assertTrue(properties.containsKey("search_param"))
             assertTrue(properties.containsKey("app_package"))
-            assertTrue(properties.containsKey("offset"))
-            assertTrue(properties.containsKey("limit"))
         } finally {
             connection.client.close()
         }
