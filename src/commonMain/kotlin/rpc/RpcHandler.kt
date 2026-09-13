@@ -29,7 +29,7 @@ fun camelToSnake(name: String): String = buildString {
 }
 
 class RpcHandler(private val bridge: FridaBridge) {
-    val jsonParser = Json {
+    private val jsonParser = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }

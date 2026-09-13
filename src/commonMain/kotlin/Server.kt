@@ -99,9 +99,6 @@ fun Application.module(bridge: FridaBridge) {
 
     routing {
         docsRoutes()
-        get("/ping") {
-            call.respondText("""{"status": "pong"}""", ContentType.Application.Json)
-        }
         RpcHandler.tools.forEach { tool ->
             val path = "/v0/api/${camelToSnake(tool.name)}"
             post(path) {
@@ -119,7 +116,9 @@ fun Application.module(bridge: FridaBridge) {
                                     println("[SERVER] Client disconnected ${e.message}")
                                 }
                             }
-                        } catch (e: Exception) {}
+                        } catch (e: Exception) {
+                            println("[SERVER] Error handling streaming tool ${tool.name}: ${e.message}")
+                        }
                     }
                 } else {
                     val result = rpcHandler.handle(tool.name, body)
@@ -137,8 +136,8 @@ fun Application.module(bridge: FridaBridge) {
     }
 }
 
-fun startServer(bridge: FridaBridge) {
-    val port = 8080
+fun startServer(bridge: FridaBridge, port: Int?) {
+    val port = port ?: 8080
 
     val cmd = $$"kill -9 $(lsof -t -i:$$port) 2>/dev/null"
 
@@ -152,8 +151,8 @@ fun startServer(bridge: FridaBridge) {
 }
 
 
-fun startServer(mcpServer: Server) {
-    val port = 8080
+fun startServer(mcpServer: Server, port: Int?) {
+    val port = port ?: 8080
 
     val cmd = $$"kill -9 $(lsof -t -i:$$port) 2>/dev/null"
 
