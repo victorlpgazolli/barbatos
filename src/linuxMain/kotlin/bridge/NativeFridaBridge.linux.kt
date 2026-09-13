@@ -47,14 +47,6 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         TODO("Not yet implemented")
     }
 
-    actual override fun pingJava(): String {
-        TODO("Not yet implemented")
-    }
-
-    actual override fun testRpc(): String {
-        TODO("Not yet implemented")
-    }
-
     actual override fun countInstances(params: CountInstancesParams): CountInstancesResult {
         TODO("Not yet implemented")
     }
@@ -100,10 +92,6 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
     }
 
     actual override fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult {
-        TODO("Not yet implemented")
-    }
-
-    actual override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
         TODO("Not yet implemented")
     }
 

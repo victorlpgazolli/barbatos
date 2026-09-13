@@ -50,10 +50,6 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
         }
     }
 
-    actual override fun pingJava(): String = try { invokeRpc("pingjava") } catch (e: Exception) { "error: ${e.message}" }
-
-    actual override fun testRpc(): String = try { invokeRpc("testrpc") } catch (e: Exception) { "error: ${e.message}" }
-
     actual override fun listClassesStream(
         params: ListClassesParams,
         onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit,
@@ -123,8 +119,6 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
             "inspectinstance",
             listOf(
                 params.id,
-                params.offset.toString(),
-                params.limit.toString(),
             )
         )
         return jsonParser.decodeFromString(jsonResult)
@@ -435,27 +429,6 @@ actual class NativeFridaBridge : FridaBridge, AutoCloseable {
             }
             InjectGadgetResult("error", steps, errorMessage = e.message)
         }
-    }
-
-    actual override fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult {
-        val adbManager = AdbManagerImpl()
-        val jdwpManager = JdwpManagerImpl(adbManager)
-        val home = platform.posix.getenv("HOME")?.toKString() ?: "/tmp"
-        val libraryPath = "$home/.cache/barbatos/frida-gadget.so"
-        val serial = if (params.target == "127.0.0.1" || params.target == "localhost") "" else params.target
-
-        val result = jdwpManager.load(
-            target = params.target,
-            port = params.port,
-            libraryPath = libraryPath,
-            breakOn = null,
-            packageName = params.packageName,
-            serial = serial,
-        )
-        return InjectJdwpResult(
-            status = "Success".takeIf { result.isSuccess }
-                ?: "Error: ${result.exceptionOrNull()?.message}",
-        )
     }
 
     actual override fun healthCheck(): HealthCheckResult {

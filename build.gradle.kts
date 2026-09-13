@@ -290,7 +290,7 @@ kotlin {
 fun snakeCase(methodName: String): String =
     methodName.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
 
-fun registerRpcTask(taskName: String, methodName: String, params: Map<String, Any?> = emptyMap()) {
+fun registerTask(taskName: String, methodName: String, params: Map<String, Any?> = emptyMap()) {
     tasks.register<Exec>(taskName) {
         group = "barbatos-rpc"
         description = "Execute method $methodName via curl"
@@ -335,25 +335,25 @@ fun registerRpcTask(taskName: String, methodName: String, params: Map<String, An
 }
 
 // Exploration Tools
-registerRpcTask("rpcListClassesStream", "listClassesStream", mapOf("search_param" to "", "app_package" to "", "offset" to 0, "limit" to 200))
-registerRpcTask("rpcCountInstances", "countInstances", mapOf("className" to ""))
-registerRpcTask("rpcInspectClass", "inspectClass", mapOf("className" to ""))
-registerRpcTask("rpcListInstances", "listInstances", mapOf("className" to ""))
-registerRpcTask("rpcInspectInstance", "inspectInstance", mapOf("className" to "", "id" to "", "offset" to 0, "limit" to 50))
-registerRpcTask("rpcGetInstanceAddresses", "getInstanceAddresses", mapOf("className" to ""))
+registerTask("httpListClassesStream", "listClassesStream", mapOf("search_param" to "", "app_package" to "", "offset" to 0, "limit" to 200))
+registerTask("httpCountInstances", "countInstances", mapOf("className" to ""))
+registerTask("httpInspectClass", "inspectClass", mapOf("className" to ""))
+registerTask("httpListInstances", "listInstances", mapOf("className" to ""))
+registerTask("httpInspectInstance", "inspectInstance", mapOf("className" to "", "id" to "", "offset" to 0, "limit" to 50))
+registerTask("httpGetInstanceAddresses", "getInstanceAddresses", mapOf("className" to ""))
 
 // Modification Tools
-registerRpcTask("rpcSetFieldValue", "setFieldValue", mapOf("className" to "", "id" to "", "fieldName" to "", "type" to "", "newValue" to ""))
-registerRpcTask("rpcSetMethodImplementation", "setMethodImplementation", mapOf("className" to "", "methodSig" to "", "code" to ""))
-registerRpcTask("rpcRunOnce", "runOnce", mapOf("className" to "", "methodSig" to "", "code" to ""))
+registerTask("httpSetFieldValue", "setFieldValue", mapOf("className" to "", "id" to "", "fieldName" to "", "type" to "", "newValue" to ""))
+registerTask("httpSetMethodImplementation", "setMethodImplementation", mapOf("className" to "", "methodSig" to "", "code" to ""))
+registerTask("httpRunOnce", "runOnce", mapOf("className" to "", "methodSig" to "", "code" to ""))
 
 // Monitoring Tools
-registerRpcTask("rpcHookMethod", "hookMethod", mapOf("className" to "", "methodSig" to ""))
-registerRpcTask("rpcGetHookEvents", "getHookEvents")
+registerTask("httpHookMethod", "hookMethod", mapOf("className" to "", "methodSig" to ""))
+registerTask("httpGetHookEvents", "getHookEvents")
 
 // Environment Tools
-registerRpcTask("rpcInjectGadgetFromScratch", "injectGadgetFromScratch")
-registerRpcTask("rpcHealthCheck", "healthCheck")
+registerTask("httpInjectGadgetFromScratch", "injectGadgetFromScratch")
+registerTask("httpHealthCheck", "healthCheck")
 
 tasks.register<Exec>("runDebug") {
     group = "application"

@@ -10,8 +10,6 @@ interface FridaBridge {
     val fridaCoroutineScope: CoroutineScope
     // Methods will be added here as we migrate endpoints
     fun listClassesStream(params: ListClassesParams, onChunk: suspend (partialResult: ListClassesPartialResult) -> Unit, onComplete: () -> Unit)
-    fun pingJava(): String
-    fun testRpc(): String
     fun countInstances(params: CountInstancesParams): CountInstancesResult
     fun inspectClass(params: InspectClassParams): InspectClassResult
     fun listInstances(params: ListInstancesParams): ListInstancesResult
@@ -26,7 +24,6 @@ interface FridaBridge {
 
     fun prepareEnvironment(params: PrepareEnvParams): PrepareEnvResult
     fun injectGadgetFromScratch(params: InjectGadgetParams): InjectGadgetResult
-    fun injectJdwp(params: InjectJdwpParams): InjectJdwpResult
     fun healthCheck(): HealthCheckResult
     fun close(): Unit
 }

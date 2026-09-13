@@ -29,7 +29,7 @@ fun camelToSnake(name: String): String = buildString {
 }
 
 class RpcHandler(private val bridge: FridaBridge) {
-    val jsonParser = Json {
+    private val jsonParser = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
@@ -57,8 +57,6 @@ class RpcHandler(private val bridge: FridaBridge) {
                     ListClassesParams(
                         searchParam = p.searchParam,
                         appPackage = p.appPackage,
-                        offset = p.offset,
-                        limit = p.limit,
                     ),
                     onChunk = { chunk ->
                         emit(jsonParser.encodeToString(ListClassesPartialResult.serializer(), chunk))
@@ -195,7 +193,7 @@ class RpcHandler(private val bridge: FridaBridge) {
         internal val LIST_CLASSES_STREAM = ActionDescriptor.create<ListClassesParams>(
             name = "listClassesStream",
             description = "Search the classes loaded on the device and stream the matches. " +
-                "Filters by search_param (substring, case-insensitive) and optionally app_package, with offset/limit pagination. " +
+                "Filters by search_param (substring, case-insensitive) and optionally app_package" +
                 "Requires an active Frida session. " +
                 "Returns a stream of chunks; each chunk is a JSON object with a \"list\" array of matching class names.",
         ).copy(isStreamingOutput = true)
@@ -226,9 +224,9 @@ class RpcHandler(private val bridge: FridaBridge) {
             name = "inspectInstance",
             description = "Deep-inspect a specific live object instance on the Android heap. " +
                 "Retrieves the current runtime values of all fields, including their types, string representations, and child object references for further drill-down. " +
-                "Requires className and id (obtained from listInstances). Supports pagination via offset and limit (default: offset=0, limit=50). " +
+                "Requires className and id (obtained from listInstances)." +
                 "Requires an active Frida session. " +
-                "Returns a JSON object with an \"attributes\" array where each entry has: name, type, value (string representation), childId (nullable, for navigating into nested objects), childClassName (nullable), isPagination (boolean), and nextOffset (integer).",
+                "Returns a JSON object with an \"attributes\" array where each entry has: name, type, value (string representation), childId (nullable, for navigating into nested objects), childClassName (nullable)",
         )
         internal val SET_FIELD_VALUE = ActionDescriptor.create<SetFieldValueParams>(
             name = "setFieldValue",

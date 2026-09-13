@@ -1,31 +1,46 @@
 import bridge.NativeFridaBridge
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
+import platform.posix.exit
 
 fun main(args: Array<String>) {
     KotlinLoggingConfiguration.logStartupMessage = false
 
+    val port = args.indexOf("-p").takeIf { it != -1 }?.let {
+        args.getOrNull(it + 1)?.toIntOrNull()
+    }
+
     when {
-        args.contains("mcp") || args.contains("--mcp") -> runMcp()
-        args.contains("rpc") || args.contains("--rpc") -> runRpc()
-        else -> printHelp()
+        args.contains("mcp") -> runMcp(port)
+        args.contains("http") -> runHttp(port)
+        args.contains("help") || args.contains("--help") || args.contains("-h") -> printHelp()
+        else -> {
+            printHelp()
+            exit(0)
+        }
     }
 }
 
-private fun runMcp() {
+private fun runMcp(port: Int?) {
     val bridge = NativeFridaBridge()
     try {
-        startServer(createMcpServer(bridge))
+        startServer(
+            mcpServer = createMcpServer(bridge),
+            port = port
+        )
     } catch (e: Exception) {
         println("[SERVER] fatal error: ${e.message}")
         bridge.close()
     }
 }
 
-private fun runRpc() {
+private fun runHttp(port: Int?) {
     val bridge = NativeFridaBridge()
-    println("Starting Barbatos (HTTP REST mode) on port 8080...")
+    println("Starting Barbatos (HTTP REST mode) on port $port...")
     try {
-        startServer(bridge)
+        startServer(
+            bridge = bridge,
+            port = port
+        )
     } catch (e: Exception) {
         println("[SERVER] fatal error: ${e.message}")
         bridge.close()
@@ -42,13 +57,12 @@ private fun printHelp() {
 
         MODES
           (no arguments)   Show this help
-          mcp              Serve the Model Context Protocol (MCP) over Streamable HTTP
-                           ->  http://127.0.0.1:8080/mcp
-                           For MCP clients: opencode, Claude Desktop, Cursor, MCP Inspector.
-          rpc              Serve the HTTP REST API (one endpoint per method)
-                           ->  POST http://127.0.0.1:8080/v0/api/<snake_case>
-                           (also GET /ping, /docs, /openapi.yaml)
-                           For curl, scripts and REST-based tooling.
+          mcp              Serve the Model Context Protocol (MCP) over Streamable HTTP -> http://127.0.0.1:8080/mcp
+               -p          Specify the port to listen on (default: 8080)
+
+          http             Serve the HTTP REST API (one endpoint per method) -> POST http://127.0.0.1:8080/v0/api/<snake_case>
+               -p          Specify the port to listen on (default: 8080)
+
           help | --help | -h
                            Show this help
 

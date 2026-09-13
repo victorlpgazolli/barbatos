@@ -14,6 +14,4 @@ data class InstanceAttribute(
     val value: String,
     val childId: String? = null,
     val childClassName: String? = null,
-    val isPagination: Boolean = false,
-    val nextOffset: Int = 0
 )
