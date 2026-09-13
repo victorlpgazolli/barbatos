@@ -17,7 +17,7 @@ info:
 
     | Transport | How to start | Surface |
     |---|---|---|
-    | HTTP | `barbatos http` | `GET /ping`, `POST /v0/api/*`, `GET /docs`, `GET /openapi.yaml` |
+    | HTTP | `barbatos http` | `POST /v0/api/*`, `GET /docs`, `GET /openapi.yaml` |
     | MCP compliant streamable HTTP | `barbatos mcp` | `initialize`, `tools/list`, `tools/call`, `prompts/list`, `resources/list` |
     | Help | `barbatos` | Prints usage and an overview of both transports |
 
@@ -70,25 +70,6 @@ servers:
   - url: http://127.0.0.1:8080
     description: Local bridge server (loopback only, no auth)
 paths:
-  /ping:
-    get:
-      summary: Liveness probe
-      description: |
-        Verifies the HTTP server is up. Does not touch the Frida session — it answers
-        even when no injection has happened yet. Use `health_check` to probe ADB, root
-        status and session state.
-      responses:
-        '200':
-          description: Bridge is operational
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [status]
-                properties:
-                  status:
-                    type: string
-                    example: pong
   /docs:
     get:
       summary: Swagger UI
